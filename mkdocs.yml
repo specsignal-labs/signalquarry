@@ -1,5 +1,6 @@
 site_name: SignalQuarry
 site_description: Agent-first strategy research — honest backtests and Alpaca paper forward tests.
+site_url: https://specsignal-labs.github.io/signalquarry/
 repo_url: https://github.com/specsignal-labs/signalquarry
 edit_uri: ""
 strict: true
