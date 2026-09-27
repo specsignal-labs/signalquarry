@@ -22,6 +22,7 @@ from signalquarry._internal.contracts.spec import StrategySpecV1
 from signalquarry._internal.data.dataset import Dataset, truncated, with_pending_session
 from signalquarry._internal.data.synthetic import synthetic_dataset
 from signalquarry._internal.engine.run import is_options, simulate
+from signalquarry._internal.options.chains import session_checkpoints
 from signalquarry._internal.paper.brokers.fake import FakeBroker
 from signalquarry._internal.paper.brokers.fake_options import FakeOptionsVenue, at
 from signalquarry._internal.paper.journal import Journal
@@ -139,7 +140,7 @@ def _options(
         if number % REARM_EVERY == 0:
             venue.now = at(session, time(9, 31))
             kernel.arm(reason="parity")
-        for moment in (time(9, 35), time(15, 55)):
+        for _, moment in session_checkpoints(session):
             venue.now = at(session, moment)
             kernel.poll()
         venue.end_of_day(session)

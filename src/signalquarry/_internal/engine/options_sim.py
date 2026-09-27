@@ -8,8 +8,9 @@ Per session ``D`` (after ``lookback`` completed sessions):
    the open). ``open`` resolves a selector with the shared resolver and sells at the
    bid floored to the tick, less the spread haircut; ``close`` buys back at the ask
    raised to the tick, plus the haircut. Opens need cash collateral for puts.
-2. CLOSE checkpoint (15:55): the same with spot = D's close; opens after the entry
-   cutoff are refused.
+2. CLOSE checkpoint (15:55, or 12:55 on an NYSE 1pm early close — see
+   ``signalquarry._internal.calendar.nyse``): the same with spot = D's close; opens
+   after the entry cutoff are refused.
 3. EXPIRY at D's close: a leg expiring on or before D is assigned when in the money by
    at least $0.01 (put: buy 100 shares at the strike; call: sell them), otherwise it
    expires. Early assignment is not modelled.
@@ -40,7 +41,12 @@ from signalquarry._internal.engine.backtest import (
     _state_or_raise,
     _Views,
 )
-from signalquarry._internal.options.chains import ChainModel, RecordedChain, realized_sigma
+from signalquarry._internal.options.chains import (
+    ChainModel,
+    RecordedChain,
+    realized_sigma,
+    session_checkpoints,
+)
 from signalquarry._internal.options.contracts import OptionsError, Quote, quote_violations
 from signalquarry._internal.options.resolver import (
     EntryPlan,
@@ -57,7 +63,6 @@ from signalquarry.sdk.strategy import Params, StrategyDef
 
 NEW_YORK = ZoneInfo("America/New_York")
 CASH = Decimal("0.01")
-CHECKPOINTS = (("open", time(9, 35)), ("close", time(15, 55)))
 
 
 @dataclass
@@ -140,7 +145,7 @@ def run_options_backtest(
             if (underlying, session) in split_dates and (wheel.shares or wheel.leg):
                 raise EngineError(f"CORPORATE_ACTION_UNSUPPORTED:{underlying} split while the wheel is open")
         chains: dict[str, ChainModel | RecordedChain] = {}  # the last checkpoint's chains mark the close
-        for checkpoint, moment in CHECKPOINTS:
+        for checkpoint, moment in session_checkpoints(session):
             field = "open" if checkpoint == "open" else "close"
             spots: dict[str, Decimal] = {}
             chains = {}

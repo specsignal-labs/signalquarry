@@ -11,17 +11,36 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from statistics import NormalDist
 
 import numpy as np
 
+from signalquarry._internal.calendar.nyse import is_half_day
 from signalquarry._internal.options.contracts import OptionsError, Quote, contract, parse_occ
 from signalquarry._internal.options.resolver import Candidate
 
 _N = NormalDist()
 RATE = 0.04
+
+OPEN_CHECKPOINT = time(9, 35)
+_NORMAL_CLOSE_CHECKPOINT = time(15, 55)
+_HALF_DAY_CLOSE_CHECKPOINT = time(12, 55)
+
+
+def session_checkpoints(session: date) -> tuple[tuple[str, time], tuple[str, time]]:
+    """The (open, close) checkpoint moments for `session`.
+
+    Both are 5 minutes before the exchange's actual session close, so that quotes
+    are never modelled at the closing bell itself. The close checkpoint moves from
+    15:55 to 12:55 on an NYSE 1pm early close (``_internal.calendar.nyse``); every
+    other checkpoint concern (holiday sessions in a synthetic or demo dataset, dates
+    outside the calendar's tracked range) falls back to the ordinary full session,
+    since ``is_half_day`` only ever answers "yes, definitely a half day".
+    """
+    close = _HALF_DAY_CLOSE_CHECKPOINT if is_half_day(session) else _NORMAL_CLOSE_CHECKPOINT
+    return (("open", OPEN_CHECKPOINT), ("close", close))
 
 
 def black_scholes(
