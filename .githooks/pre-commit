@@ -1,0 +1,14 @@
+#!/bin/sh
+# SignalQuarry pre-commit hook. Enable once per clone:
+#     git config core.hooksPath .githooks
+# 1. Architecture changes (modules added/removed/renamed, import contracts) need a design-doc
+#    change: docs/design/ARCHITECTURE.md or an ADR. Acknowledge exceptions with
+#    SIGNALQUARRY_ARCH_OK=1 git commit ...
+# 2. Generated docs (including the code-derived architecture graphs) must be fresh.
+set -e
+PYTHON="${SIGNALQUARRY_PYTHON:-uv run --quiet python}"
+$PYTHON tools/check_design_docs.py --staged
+if ! $PYTHON tools/gen_docs.py --check > /dev/null; then
+  echo "Generated docs are stale: run 'uv run python tools/gen_docs.py' and stage the result."
+  exit 1
+fi

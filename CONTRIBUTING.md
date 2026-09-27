@@ -33,6 +33,22 @@ Every source file starts with an SPDX license header. Engine changes must keep
 the golden tests and the backtest↔paper parity test green; benchmark with
 `uv run python tools/bench.py`.
 
+## Design docs
+
+`docs/design/ARCHITECTURE.md` must match the code. Its "Generated from the code" section
+(layers, direct imports, component inventory, command tree, plugin groups) is rebuilt by
+`uv run python tools/gen_docs.py`. Adding, removing or renaming a framework module, or
+changing the import contracts, must come with an edit to that page or an ADR in
+`docs/adr/`. Enable the hook that checks both before each commit:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+CI runs the same check over every pull request. When a change needs no design update, add
+the trailer `Architecture: unchanged` to a commit message (or `SIGNALQUARRY_ARCH_OK=1` for
+the local hook).
+
 ## Sign-off (DCO)
 
 Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/).
