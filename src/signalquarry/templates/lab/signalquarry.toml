@@ -1,0 +1,18 @@
+# Strategy lab: several independently transferable families.
+[project]
+name = "{{project}}"
+
+[lab]
+package_prefix = "{{package}}"   # family packages are <prefix>_<family>
+# Repository or host names nothing in the lab may mention (e.g. your showcase repository).
+forbidden_references = []
+
+[data]
+provider = "alpaca"          # your own keys; `sqy check` always runs offline on synthetic data
+
+[strategies]
+src_dirs = ["families/*/src"]
+modules = ["{{package}}_drill.drill.strategy"]   # add each strategy module here (tools/new_family.py does)
+
+[evidence]
+layout = "per_family"        # families/<family>/evidence/, chained in evidence/project_index.jsonl

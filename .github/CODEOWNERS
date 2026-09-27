@@ -1,0 +1,6 @@
+* @specsignal-labs/maintainers
+/src/signalquarry/_internal/validation/ @specsignal-labs/maintainers
+/src/signalquarry/_internal/paper/ @specsignal-labs/maintainers
+/src/signalquarry/schemas/ @specsignal-labs/maintainers
+/src/signalquarry/templates/ @specsignal-labs/maintainers
+/tools/leak_scan.py @specsignal-labs/maintainers

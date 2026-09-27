@@ -1,0 +1,1228 @@
+# SignalQuarry
+
+> Agent-first strategy research: honest backtests on Alpaca data and Alpaca paper forward tests. The framework owns time, data, fills and the evidence record; strategies are one pure `decide(ctx, params)` function plus `strategy.yaml`. No live-trading path exists.
+
+Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text offline.
+
+## Guides
+
+- [index](index.md): What SignalQuarry is and why its results can be trusted.
+- [quickstart](quickstart.md): Install, create a demo project and run the golden path.
+- [authoring](authoring.md): Write decide(ctx, params) and strategy.yaml; rules sqy check enforces.
+- [evidence](evidence.md): Claim ladder, trial ledger, freeze and sealed holdout, gates G1–G4, reports.
+- [data](data.md): Alpaca credentials, fetching and verifying data, point-in-time adjustment.
+- [paper](paper.md): Paper deployments, the arm step, run-once, journal, guards and scheduling.
+- [agents](agents.md): The JSON envelope, exit codes and human-only actions for coding agents.
+
+## Reference
+
+- [CLI reference](reference/cli.md): every command and option.
+- [Reason codes](reference/reason-codes.md): every status code and its remedy.
+
+## Commands
+
+- `sqy version`: Show framework, Python and platform versions.
+- `sqy doctor`: Check the environment, dependencies, cache and credentials.
+- `sqy commands`: List commands, reason codes and exit codes.
+- `sqy schema`: List bundled JSON schemas, or print one.
+- `sqy explain`: Explain a reason code and how to resolve it.
+- `sqy init`: Create a new strategy project.
+- `sqy check`: Run conformance, determinism and look-ahead checks.
+- `sqy data`: Fetch, verify and list recorded market data.
+- `sqy spec`: Freeze a strategy configuration (spec freeze).
+- `sqy evaluate`: Walk-forward, stress and holdout gates; sets the claim level.
+- `sqy trials`: List trials or (humans only) extend a family's budget.
+- `sqy holdout`: Seal a family's holdout early, or show seals and openings.
+- `sqy sweep`: Backtest a parameter grid (each point on real data is a trial); reports PBO.
+- `sqy backtest`: Backtest a strategy and write run artifacts.
+- `sqy evidence`: Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
+- `sqy commit`: Salted commitments to frozen strategies and journal heads (OpenTimestamps).
+- `sqy perf`: Paper performance snapshots: private captures, or a public feed (live_feed: allow).
+- `sqy docs`: Print llms.txt (or --full: every guide, the CLI reference and reason codes) for agents.
+- `sqy report`: Render the latest backtest and evaluation as report.md and equity.svg.
+- `sqy paper`: Alpaca paper forward tests: preflight, dry-run, run-once, status, halt.
+
+# SignalQuarry
+
+SignalQuarry turns a trading-strategy idea into an **honest** backtest on Alpaca
+data and then into an Alpaca **paper** forward test. It is built to be driven by
+your own coding agent: one CLI (`sqy`), one JSON envelope per command, a reason
+code for every outcome, and an `AGENTS.md` in every project.
+
+The framework owns time, data, fills and the evidence record. You (or your
+agent) write one pure function, `decide(ctx, params)`, and declare everything
+else in `strategy.yaml`. That split is what makes the results trustworthy:
+
+- **No look-ahead by structure.** `decide` sees only completed bars, adjusted
+  point-in-time, and no clock, files or network.
+- **Every trial counts.** Each configuration evaluated on real data is appended
+  to a hash-chained trial ledger; the deflated Sharpe ratio uses the count.
+- **A sealed holdout.** `sqy spec freeze` seals the most recent months; they can
+  be opened once per strategy family, after the walk-forward gates pass.
+- **Claims follow evidence.** Every envelope carries `evidence.claim_level`
+  (`none` → `in_sample` → `walk_forward` → `holdout_passed` → `paper_forward`).
+- **The same step in backtest and paper.** The paper runner reuses the
+  backtest's decide and sizing code; a parity test keeps them identical.
+
+SignalQuarry has **no live-trading path**. Passing tests, backtests or paper
+results never authorize live trading.
+
+Start with the [quickstart](quickstart.md).
+
+# Quickstart
+
+Requires Python 3.12+ on macOS or Linux.
+
+```bash
+pip install signalquarry
+sqy init my-lab --demo        # synthetic data: no credentials needed
+cd my-lab
+sqy check                     # contract, determinism and look-ahead checks
+sqy backtest --strategy sma-trend
+sqy spec freeze --strategy sma-trend
+sqy evaluate --strategy sma-trend
+sqy report --strategy sma-trend
+sqy paper dry-run --alias demo
+```
+
+On the demo, `sqy evaluate` is expected to exit with status 2 (`blocked`,
+`GATE_FAILED`): a trend filter on random synthetic prices should fail the walk-forward
+and stress gates, and it does. That is the framework working, not an error.
+
+`sqy` prints a one-line summary in a terminal and the full JSON envelope when
+piped or with `--json`. Read `status`, `reason_codes`, `evidence` and
+`next_actions`; `sqy explain <CODE>` explains any reason code.
+
+Synthetic data proves nothing about markets; the demo's claim level stays `none`.
+For real data, create a project without `--demo`, add your Alpaca keys (see
+[Data](data.md)) and run `sqy data fetch --strategy <id>` before backtesting.
+
+## Using a coding agent
+
+Open the project in your agent (Claude Code, Codex, …). It reads `AGENTS.md`
+(`CLAUDE.md` points to it), which explains the golden path, the claim ladder and
+the stop conditions. Ask it for a hypothesis, not a result: "Test whether
+holding SPY only above its 150-day average reduces drawdowns." See
+[Working with agents](agents.md).
+
+# Writing a strategy
+
+A strategy is a directory with `strategy.py` and `strategy.yaml`, registered in
+`signalquarry.toml` under `[strategies] modules`.
+
+```python
+from decimal import Decimal
+from signalquarry.sdk import Ctx, Decision, Field, Params, strategy, ta
+
+
+class P(Params):
+    symbol: str = "SPY"
+    period: int = Field(200, ge=20, le=400)  # bounds document the search space
+    weight: Decimal = Field(Decimal("0.95"), ge=0, le=1)
+
+
+@strategy(params=P, lookback=lambda p: p.period)
+def decide(ctx: Ctx, p: P) -> Decision:
+    close = ctx.bars(p.symbol).close  # read-only; [-1] = last COMPLETED session
+    if close[-1] > ta.sma(close, p.period)[-1]:
+        return Decision.target({p.symbol: p.weight}, "PRICE_ABOVE_SMA")
+    return Decision.target({}, "PRICE_BELOW_SMA")
+```
+
+## The context
+
+- `ctx.bars(symbol)` returns exactly `lookback` completed sessions (`open`,
+  `high`, `low`, `close`, `volume`, `sessions` as read-only numpy arrays),
+  split-adjusted to the last completed session. There is no "today" bar.
+- `ctx.positions`, `ctx.weights`, `ctx.cash`, `ctx.equity` describe the account
+  before the decision; `ctx.state` is what you returned last time.
+- `ctx.decision_session` is the session the decision will trade in.
+
+## Decisions
+
+- `Decision.target({symbol: weight}, "CODE", state=...)` — weights are fractions
+  of equity, long only, each ≤ `limits.max_weight_per_symbol`, sum ≤ 1. An
+  unchanged, fully executed target does not trade again.
+- `Decision.hold("CODE", state=...)` — keep holdings.
+- `Decision.unavailable("CODE")` — no decision (the engine already returns
+  `INSUFFICIENT_HISTORY` and `STALE_OBSERVATIONS` for you).
+
+Every reason code you return must be declared in `strategy.yaml`; undeclared
+codes stop the run (`REASON_CODE_UNDECLARED`). State must be JSON-serializable
+and at most 16 KB.
+
+## Rules `sqy check` enforces
+
+- Imports: `signalquarry.sdk`, `numpy`, `pydantic`, pure standard-library modules
+  (`math`, `decimal`, `statistics`, `collections`, `dataclasses`, `enum`,
+  `functools`, `itertools`, `operator`, `typing`) and your own package.
+- No clock, randomness, files, network, environment or mutable globals.
+- Deterministic: the same inputs give the same decisions.
+- Look-ahead: perturbing every bar after the cutoff must not change decisions.
+
+## `strategy.yaml`
+
+Everything that affects results lives here and is hashed into the
+`configuration_hash`: `hypothesis` (statement and falsification), `data`
+(symbols, feed, staleness), `account` (cash or margin, initial cash),
+`execution` (next open, sizing, costs, minimum order), `params`, `reason_codes`,
+`limits`, `evaluation` (holdout months, walk-forward windows, trial budget) and
+`benchmark`. Run `sqy schema` for the bundled schemas.
+
+## Execution model
+
+Decisions are made before the open from bars through the previous session and
+executed at that session's open: sells before buys, symbols sorted, sized from
+prior-close marks. Cash accounts spend settled cash only (T+2 before
+2024-05-28, T+1 after). Costs are basis points plus per-share fees. Splits
+adjust holdings; dividends are credited on the payable date.
+
+Sell orders can also pay regulatory fees: `costs.sell_bps` (on sale notional, SEC
+Section 31 style), `costs.sell_per_share` and `costs.sell_per_order_max` (FINRA TAF
+style). They default to zero because the rates change; set the ones in force for the
+period you study.
+
+For capacity-sensitive strategies, `execution.fill: {model: volume_cap,
+max_volume_fraction: 0.01}` fills at most that share of each session's volume per
+symbol (equity only); the rest is retried next session with a `VOLUME_CAPPED` warning.
+The cap uses the fill session's volume: it models capacity, it never feeds a decision.
+Paper venues fill whole orders, so `check --parity` compares without it.
+
+## Options strategies (single leg)
+
+`kind: options_single_leg` specs add an `options` section (underlyings, quote rules,
+tick, per-contract fee, spread haircut, entry cutoff). The strategy is decorated with
+`@options_strategy` and returns selectors, never contract symbols:
+
+```python
+from signalquarry.sdk.options import OD, OptionsCtx, Strike, options_strategy, sell_call, sell_put
+
+
+@options_strategy(params=P, lookback=lambda p: p.trend_sessions)
+def decide(ctx: OptionsCtx, p: P):
+    leg = ctx.leg("QQQ")
+    if leg is not None:
+        if leg.captured_fraction is not None and leg.captured_fraction > p.take_profit:
+            return OD.close("QQQ", "TAKE_PROFIT")
+        return OD.hold("HOLD_LEG")
+    if ctx.wheel("QQQ").state == "flat":
+        return OD.open(sell_put("QQQ", dte=(7, 14), strike=Strike.otm("0.02")), "SELL_PUT")
+    return OD.open(sell_call("QQQ", dte=(7, 14), strike=Strike.otm("0.02")), "SELL_CALL")
+```
+
+The engine owns the wheel state machine (`flat → short_put → long_shares → covered_call`),
+resolves selectors with one resolver shared by simulation and paper (strike on the
+out-of-the-money side, then the earliest expiry; limit at the bid floored to the tick)
+and manages expiry and assignment. The backtest is a **low-evidence simulator**: option
+prices come from a Black-Scholes model with a spread, fills pay a spread haircut and a
+per-contract fee, decisions happen at the open and near the close, and early assignment
+is not modelled. Results are graded `low_evidence_options`; there is no holdout gate (so
+`spec freeze` seals no holdout for options and keeps all of the scarce history), and
+claims stay at `walk_forward` or below until a paper forward test passes G5.
+
+`sqy init <dir> --kind options` scaffolds a project around the reference wheel
+(`examples/wheel_reference/`): cash-secured puts, covered calls after assignment, trend-aware
+strikes, a take-profit buy-back and at most one entry per week.
+
+# Evidence, trials and claims
+
+## Claim ladder
+
+| claim_level | Earned by | You may say |
+|---|---|---|
+| `none` | synthetic data, or failed conformance | "The strategy runs." Nothing about performance. |
+| `in_sample` | a backtest on real data | "It performed X on the data it was developed on." |
+| `walk_forward` | frozen configuration + gates G1–G3 | "It held up out of sample in walk-forward tests." |
+| `holdout_passed` | G4 on the sealed holdout (once per family) | "It passed the sealed holdout once." |
+| `paper_forward` | clean paper sessions (0.2) | "It traded forward on a paper account for N sessions." |
+
+Always state `evidence.grade` (`synthetic`, `historical`, `paper`) with the claim.
+
+## Trials
+
+Every distinct configuration evaluated on real data is appended to
+`evidence/trials.jsonl` (hash-chained; CI rejects a ledger that shrinks). The
+project-wide count is the `N` of the deflated Sharpe ratio, so every idea you
+try raises the bar for all of them. Each family has a trial budget
+(`evaluation.trial_budget`); from 80% on, envelopes warn `TRIAL_BUDGET_NEARLY_USED`,
+and at the limit, runs stop with
+`TRIAL_BUDGET_EXHAUSTED` until a human records `sqy trials extend --reason ...`.
+
+`sqy evidence verify` checks every ledger and paper journal; with
+`--base <git ref>` it also fails if any of them changed other than by appending.
+New projects run both in `.github/workflows/check.yml`.
+
+### Several families in one repository
+
+A research lab that may sell strategy families separately sets
+
+```toml
+[evidence]
+layout = "per_family"            # family_root defaults to "families/{family}"
+```
+
+Each family's trials, freezes and holdout opening then live in
+`families/<family>/evidence/`, so a family can be transferred with its own
+verifiable history. Every family append is chained into
+`evidence/project_index.jsonl`, and the deflated Sharpe ratio still counts every
+family's trials. `sqy evidence verify` fails if a family log no longer ends where
+the index recorded it.
+
+`sqy init NAME --lab` creates such a lab: families under `families/`, a transfer-drill
+family, default-deny publication policies, checks for one family per commit and no
+cross-family imports, a family extractor that preserves tree hashes, a bundle leak
+scan, a data-room exporter and a guarded deploy script (see its `docs/design/LAB.md`).
+
+### Parameter sweeps
+
+`sqy sweep --strategy <id> --param period=50,100,150` backtests a grid (up to 200
+points). On real data every point is a recorded trial, and the sweep refuses to start
+if it would exceed the family's budget. The envelope reports the **probability of
+backtest overfitting** (PBO, by combinatorially symmetric cross-validation over the
+grid): the share of in-sample/out-of-sample splits in which the in-sample winner ranks
+at or below the median out of sample. A PBO near 0.5 means the "best" row is mostly
+luck. Choose one configuration by reasoning, freeze it, then evaluate.
+
+## Freeze and holdout
+
+`sqy spec freeze --strategy <id>` records the configuration hash, hypothesis and
+gate version, and seals the family's holdout (the last `holdout.months` months
+of data). Afterwards every command stops before the seal. `sqy evaluate
+--holdout` opens it **once per family**, only after G1–G3 pass; a second attempt
+returns `HOLDOUT_REUSED`. Commit before freezing: a dirty tree is recorded.
+`sqy holdout seal --strategy <id>` seals the family before you start exploring,
+which is stricter still; a later freeze reuses that seal.
+
+If the strategy depends on a model or dataset with a training cutoff (for example an
+LLM behind text-derived features), declare `evaluation.holdout.training_cutoff`: the
+holdout then starts the day after the cutoff whenever that is earlier than the last
+`months`, so the sealed period is data the model cannot have seen.
+
+## Gates
+
+| Gate | Criterion |
+|---|---|
+| G1 sample | ≥ 5 years of history and ≥ 30 rebalancing sessions |
+| G2 walk-forward | ≥ 6 out-of-sample folds; OOS PSR(0) ≥ 0.95 and DSR ≥ 0.95 using the project-wide trial count |
+| G3 stress | Sharpe at 2× costs and with a one-session delay each ≥ 0.5 × base; net return > 0 |
+| G4 holdout | Sharpe > 0 and max drawdown ≤ 1.5 × the worst walk-forward fold |
+
+The envelope's `oos` also reports `sharpe_annual_90`, a 90% moving-block bootstrap
+interval (20-session blocks, fixed seed) for the out-of-sample annual Sharpe. It is
+not a gate; a wide interval says the sample cannot pin the Sharpe down.
+
+When a gate fails, the answer is a new hypothesis, not looser gates.
+
+## Plugin gates
+
+Installed packages can add gates through the `signalquarry.gates` entry point (see
+`signalquarry.plugins`). They run after G1–G4, appear as `plugin:<name>` in the
+envelope's `gates`, and are add-only: a failing or broken plugin gate caps the claim at
+`in_sample`; a passing one unlocks nothing. `sqy doctor` lists what is installed.
+
+## Reports
+
+`sqy report --strategy <id>` renders `report.md` and `equity.svg` from run
+artifacts. The claim level and its permitted wording come first; every report
+ends with a hypothetical-results disclaimer.
+
+Report-section plugins (`signalquarry.report_sections`) append their own headed
+sections to `report.md`.
+
+## Publishing evidence
+
+Nothing is published by default. A family publishes only what its
+`publication/<family>.publication.yaml` allows:
+
+```yaml
+schema: signalquarry.publication/v1
+family: my-family
+family_label: Trend following
+commercial: true            # default; commercial families are category-tier
+tier: category              # category | results | rules
+backtest_results: deny      # only non-commercial results/rules tiers may allow
+forward: {resolution: weekly, lag_days: 14}
+strategies:
+  - {id: my-strategy, title: "Trend strategy A", summary: "...", assets: "US equities", deployment: my-alias}
+```
+
+`sqy evidence export --family my-family` writes a verifiable bundle (every file listed
+with its SHA-256; `sqy evidence verify --bundle DIR`). Commercial bundles carry the
+strategy profile and lagged period returns from the paper journal; positions, fills
+and exposure are always withheld. `--tier nda` adds full run results, the trial
+ledger and freezes for a private data room.
+
+## Commitments
+
+`sqy commit create --strategy <id>` (after `sqy spec freeze`) records salted
+digests of everything that determines results — spec, parameters, gates, freeze,
+dataset, holdout, ledger head and code tree — in `evidence/commitments/<family>/`.
+The salt stays in `$SIGNALQUARRY_CONFIG_DIR/salts/` (mode 0600, back it up), so the
+public record reveals nothing about the configuration. `--alias <deployment>`
+commits to a paper journal's head instead.
+
+With the OpenTimestamps client installed (`pip install 'signalquarry[ots]'`) each
+record is stamped (`<record>.ots`); otherwise its proof is `pending`. Later,
+`sqy commit reveal --id <id> --out opening.json` writes the private opening for a
+buyer under NDA, and `sqy commit verify --record <record> --reveal opening.json`
+proves the configuration was fixed when the timestamp says. A timestamp proves when
+a commitment existed, never a result.
+
+# Market data
+
+## Credentials
+
+Set `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`, or create
+`~/.config/signalquarry/credentials.toml` (permissions 0600):
+
+```toml
+[data]
+key_id = "..."
+secret_key = "..."
+
+[paper.demo]          # one table per paper deployment (see Paper trading)
+key_id = "..."
+secret_key = "..."
+```
+
+Values are never printed. `sqy doctor` reports which source was found (environment or file).
+As a last line of defense, every command scrubs the credential values it has seen
+(environment or file) from its output and error traces, replacing them with `[REDACTED]`.
+
+## Fetching
+
+```bash
+sqy data fetch --strategy sma-trend          # symbols and benchmark of the strategy
+sqy data fetch --symbols SPY,QQQ --start 2016-01-01 --feed sip
+sqy data verify                              # re-hash cached pages against every manifest
+sqy data ls
+```
+
+Bars are requested **raw** (`adjustment=raw`); splits and dividends come from
+the corporate-actions endpoint and are applied point-in-time by the engine, so
+no future dividend leaks into past prices. Every response page is stored
+byte-for-byte in `$SIGNALQUARRY_CACHE_DIR` (default `~/.cache/signalquarry`),
+content-addressed by SHA-256. The project commits only
+`data/manifests/*.json`: page hashes, coverage and the dataset identity — no
+prices (`redistributable: false`).
+
+The default feed is SIP. Decisions use bars through the previous session, which
+are older than 15 minutes when you decide, so free plans can use SIP too.
+
+Set `SIGNALQUARRY_OFFLINE=1` to forbid every network call (the project CI
+template does this).
+
+## Options coverage
+
+Alpaca's options history starts in February 2024. Check whether expired contracts and
+their daily bars are available for a month before relying on them:
+
+```
+sqy data probe options-coverage --underlying QQQ --month 2024-03
+```
+
+If no bars come back the envelope warns `OPTIONS_HISTORY_UNAVAILABLE`; options backtests
+keep using modelled prices, and a paper forward test is the primary evidence.
+
+To build real quote history from now on, record the chain each day (for example from
+the paper host's post-close timer or by hand):
+
+```
+sqy data record options --underlying QQQ --max-dte 60 --width 0.2
+```
+
+It stores the provider's raw snapshot pages (puts and calls within the strike window and
+expiration range) in the cache and writes a hash-only record under
+`data/options/QQQ/` to commit; `sqy data verify` re-hashes recorded chains and
+`sqy data ls` lists them. Backtests, evaluations and sweeps of options strategies on real
+data use a recorded session's bid and ask instead of modelled prices (the snapshot stands
+in for every checkpoint that session; contracts it lacks stay modelled) and warn
+`OPTIONS_RECORDED_CHAINS_USED:<sessions>`. Synthetic data never uses recordings. Results
+stay graded `low_evidence_options`.
+
+## Synthetic data
+
+Demo projects use deterministic synthetic symbols (`SYNA`, `SYNB`, `SYNC`,
+`SYNX`) with splits and dividends. Their grade is `synthetic` and the claim level
+stays `none`.
+
+# Paper trading
+
+Paper trading is the forward proof of a backtest. It runs on a dedicated
+Alpaca **paper** account; the adapter hard-codes the paper origin and there is
+no live path.
+
+## Other paper brokers
+
+`broker: plugin:<name>` uses a paper broker from an installed package (entry point
+`signalquarry.brokers`; `sqy doctor` lists them). The kernel refuses a broker that does not
+declare `paper_only = True` or lacks part of the paper broker interface, and every guard,
+the journal and the arm step apply unchanged. Equity deployments only; market data still
+comes from the project's data provider.
+
+## Parity first
+
+`sqy check --parity` replays the last 60 sessions of the synthetic check window through
+the real paper kernel against an in-memory venue and through the backtest, and fails
+unless orders, fills, positions, cash and journalled decisions (wheel events for
+options) agree. Costs, dividends and option spread haircuts are removed from both
+sides because a paper venue reproduces none of them. The project CI template runs it.
+
+## A deployment
+
+`paper/<alias>.paper.yaml`:
+
+```yaml
+schema: signalquarry.paper/v1
+alias: demo
+strategy: sma-trend
+broker: alpaca-paper          # or "simulated": offline dry-run only
+submission: disabled          # a human sets "enabled" after review
+expected_account_id_sha256:   # optional: refuse any other account
+denied_key_id_sha256: []      # keys of other deployments that must never be used here
+arm_days: 30
+isolation: process          # decide runs in a child process without credentials
+window: {start: "09:00", end: "09:25"}   # New York time, before the open
+guards:
+  max_daily_drawdown: "0.10"
+  max_clock_skew_seconds: 30
+  buy_price_buffer_bps: "50"
+```
+
+Keys go in `credentials.toml` under `[paper.<alias>]` (or
+`SIGNALQUARRY_PAPER_KEY_ID` / `SIGNALQUARRY_PAPER_SECRET_KEY`). Use one paper
+account per deployment.
+
+## Commands
+
+| Command | Who | What |
+|---|---|---|
+| `sqy paper preflight --alias A` | anyone | Read-only readiness checks. |
+| `sqy paper dry-run --alias A` | anyone | Decide and size the next session; submits nothing. |
+| `sqy paper arm --alias A --reason ...` | **human** | Type the alias to confirm; binds the frozen configuration and account. |
+| `sqy paper run-once --alias A` | scheduler | Reconcile, decide, submit market-on-open orders. Idempotent. |
+| `sqy paper status --alias A` | anyone | Journal state, sessions, pending orders. |
+| `sqy paper reconcile --alias A` | anyone | Finalize journaled orders and check positions. |
+| `sqy paper halt --alias A --reason ...` | anyone | Stop and cancel open orders; a human re-arms. |
+| `sqy paper schedule --alias A --target systemd` | anyone | Write scheduler templates for review. |
+| `sqy paper drift --alias A` | anyone | Replay sessions, measure slippage, shadow costs and dividends; gate G5. |
+| `sqy paper run --alias A` | service manager | Run `run-once` until done, retrying while busy or unavailable. |
+| `sqy paper backup --alias A` | anyone | Archive the journal and arm token with a hash manifest. |
+| `sqy paper verify-continuity --alias A --backup F` | anyone | Prove the live journal only grew since a backup. |
+
+## How a session runs
+
+1. Take the deployment lease; verify the journal's hash chain.
+2. Check the submission switch, the account, the arm token and the broker clock.
+3. Load bars through the previous session.
+4. Reconcile: finalize own orders from earlier runs, refuse unmanaged orders or
+   positions, halt on drift that fills and splits cannot explain.
+5. Decide and size with the backtest's own code; clip buys to settled cash.
+6. Journal each order **before** submitting it, with a deterministic client
+   order id, so a crash or network error is resolved by lookup, never by a
+   duplicate order.
+
+`run-once` exits 0 when done (or nothing to do), 75 to retry later, 69 when the
+broker or data is unavailable, and 2 or 78 when a human is needed.
+
+## Isolation
+
+With `isolation: process` (the default) the decide-and-size step runs in a child
+process that receives only the data it needs, with no broker or data credentials, an
+empty config directory, `SIGNALQUARRY_OFFLINE=1`, and CPU and memory limits; a
+strategy that exceeds them halts the deployment (`PAPER_STRATEGY_TIMEOUT`). This keeps
+keys out of strategy code's process, but it is **not a sandbox**: code running as the
+same OS user can read that user's files. Run paper deployments under a dedicated user.
+
+## Scheduling
+
+`sqy paper schedule` writes systemd (recommended, on a small VM), launchd,
+cron or GitHub Actions (demo only) templates that call `run-once` every 5
+minutes from 09:00 to 09:25 New York time. Review and install them yourself.
+The systemd target also writes a post-close timer (16:30 New York, weekdays) that runs
+`sqy commit create --alias A` to commit to the journal head, stamped with OpenTimestamps
+when the `ots` client is installed, and a weekly timer that runs `ots upgrade` on pending
+proofs. Allow egress to the OpenTimestamps calendars for those two units.
+
+## Drift and the forward gate (G5)
+
+`sqy paper drift` replays every journaled session through the engine with the
+inputs recorded that day and requires the same decision and orders (data that the
+provider has since revised is reported as unverifiable). It measures each fill
+against that session's open (adverse slippage in basis points) and keeps a shadow
+ledger: the model's costs and the dividends Alpaca paper does not credit, applied to
+the broker's equity. **G5** passes with at least 20 clean sessions (parity, orders
+final, no halt), no parity mismatch and mean adverse slippage within
+`guards.max_mean_slippage_bps` (default 25). With G5 passed for the current frozen
+configuration and a prior claim of `walk_forward` or better, exports report
+`paper_forward`.
+
+## A live feed for published strategies
+
+Non-commercial families whose publication policy sets `live_feed: allow` can publish
+a sanitized snapshot of a paper account: `sqy perf publish --alias A --out
+site/public/feeds/paper` writes `A/latest.json` (`signalquarry-public-performance/v1`,
+identified by its `snapshot_hash` and chained to the file it replaces through
+`previous_snapshot_hash`). It carries equity history, positions and fills
+without any account or order identifiers; figures that would need cash-flow data are
+marked unavailable. Commercial families never get a live feed; they publish lagged
+exports only.
+
+`sqy perf capture --alias A` records the same snapshot privately under
+`paper/A/captures/`, chained by `previous_snapshot_hash`; no publication policy is
+needed because nothing leaves the project. The NDA export (`sqy evidence export --tier
+nda`) carries the captures and the paper journal, with broker order ids withheld and the
+journal head and length kept so a recipient can match published commitments.
+
+## Options deployments
+
+A deployment of an `options_single_leg` strategy polls instead of running once before
+the open: `sqy paper run-once` performs one poll, and `sqy paper schedule` writes
+per-minute templates for the regular session (systemd, launchd or cron; not GitHub
+Actions). Each poll reconciles its own limit orders (cancelling entries left unfilled
+after `options.cancel_after_seconds`), applies assignment and expiration activities to
+the wheel state machine, checks broker positions against the wheels (a leg awaiting its
+expiration activity is retried until the close of the next weekday; anything else halts),
+then decides once per underlying with the same context and resolver as the simulator.
+Every entry plan must satisfy the plan invariants (strike side, DTE window, limit at the
+bid floored to the tick, collateral) before it is journaled and submitted. Quotes come
+from Alpaca's data API (the stock's latest quote and the option chain snapshots).
+`sqy perf capture` and `sqy perf publish` work for options deployments too (positions
+include the open leg and any assigned shares); `sqy paper reconcile` is equity-only.
+
+`sqy paper drift` evaluates **G5 for options** from the journal alone: option quotes are
+not journaled, so decisions cannot be replayed as they are for equities (the report says
+`decision_replay: not_available_for_options`). A session is clean when it was not halted
+and every order it placed reached a final state (plan invariants are enforced before any
+order is journaled). G5 passes with at least 20 clean sessions **and** at least one
+expiration or assignment applied from broker activities. Model costs are the
+per-contract fees.
+
+## Known differences from the backtest
+
+- Buys are clipped pre-open at a buffered prior close; the simulator clips at
+  the actual open. They differ only when cash binds.
+- Alpaca paper charges no commissions and omits dividends.
+- Market-on-open orders need whole shares.
+
+# Working with coding agents
+
+Every project has an `AGENTS.md` (and a `CLAUDE.md` that imports it) written for
+agents. It covers the golden path, authoring rules, the claim ladder, stop
+conditions and what agents must never do.
+
+## The envelope
+
+Each command prints one JSON object on stdout (`schema: signalquarry.cli/v1`):
+`status`, `reason_codes`, `summary`, `data`, `metrics`, `evidence`
+(`grade`, `claim_level`, `holdout`, `trial`), `artifacts` (path, sha256, kind),
+`warnings` and `next_actions` (command + why). `sqy commands` lists every
+command, reason code and exit code; `sqy docs --llms` prints this documentation
+for an agent's context.
+
+`data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
+written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
+with kind `data`, warning `DATA_MOVED_TO_ARTIFACT`); `--detail full` keeps it inline
+(for example `sqy --detail full docs --llms --full`).
+
+Long commands report progress on **stderr** as one JSON object per line
+(`{"type": "progress", "stage": "fetch" | "check" | "sweep" | "evaluate", ...}`) in JSON
+mode or with `SIGNALQUARRY_PROGRESS=1`. Progress is advisory; only the stdout envelope
+counts.
+
+| Exit | Status | Agent should |
+|---|---|---|
+| 0 | ok | continue |
+| 1 | error | `INTERNAL_ERROR`: report `data.trace_id` and the stderr traceback, then stop |
+| 2 | blocked | report the reason codes and stop; never work around a gate |
+| 64 | usage | fix the command line |
+| 65 | invalid | fix the spec, code or data named in the summary |
+| 69 | unavailable | a provider, broker or credential is missing; tell the human |
+| 75 | busy | retry later |
+| 78 | disabled | a human decision is required |
+
+## Human-only actions
+
+`sqy trials extend`, `sqy paper arm`, setting `submission: enabled`, and any
+edit under `evidence/` or `paper/<alias>/`. The framework records these and
+refuses the ones it can detect (for example, `paper arm` needs an interactive
+terminal).
+
+# CLI reference
+
+Generated from the command registry. Every command accepts `--json`.
+
+## `sqy version`
+
+Show framework, Python and platform versions.
+
+## `sqy doctor`
+
+Check the environment, dependencies, cache and credentials.
+
+## `sqy commands`
+
+List commands, reason codes and exit codes.
+
+## `sqy schema`
+
+List bundled JSON schemas, or print one.
+
+| Option | Meaning |
+|---|---|
+| `name` | schema name (omit to list them) |
+
+## `sqy explain`
+
+Explain a reason code and how to resolve it.
+
+| Option | Meaning |
+|---|---|
+| `code` | reason code, e.g. HOLDOUT_REUSED |
+
+## `sqy init`
+
+Create a new strategy project.
+
+| Option | Meaning |
+|---|---|
+| `path` | new project directory |
+| `--upgrade-agents-md` | refresh the framework-owned blocks of an existing project's AGENTS.md |
+| `--project` | project directory for --upgrade-agents-md |
+| `--demo` | use synthetic data (no credentials needed) |
+| `--lab` | a multi-family strategy lab (per-family ledgers) |
+| `--kind` | starter strategy: equity trend or options wheel (one of `equity`, `options`) |
+| `--package` | Python package name for strategies (default: from the directory name) |
+
+## `sqy check`
+
+Run conformance, determinism and look-ahead checks.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | check only this strategy id |
+| `--parity` | also replay 60 sessions through the paper kernel and a fake venue; must match the backtest |
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy data`
+
+Fetch, verify and list recorded market data.
+
+### `sqy data fetch`
+
+Download daily bars and corporate actions and record a manifest.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | fetch the symbols (and benchmark) of this strategy |
+| `--symbols` | comma-separated extra symbols |
+| `--start` | first date (default 2016-01-01) |
+| `--end` | last date (default yesterday) |
+| `--feed` | default: the strategy's feed, else sip (one of `sip`, `iex`) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy data probe`
+
+Check provider coverage: expired option contracts and their bars.
+
+| Option | Meaning |
+|---|---|
+| `what` | what to probe (one of `options-coverage`) |
+| `--underlying` | underlying symbol |
+| `--month` | expiration month to probe, YYYY-MM (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy data record`
+
+Record today's option chain for an underlying (raw pages cached, hash-only record).
+
+| Option | Meaning |
+|---|---|
+| `what` | what to record (one of `options`) |
+| `--underlying` | underlying symbol, e.g. QQQ (required) |
+| `--max-dte` | latest expiration, in days from today |
+| `--width` | strike window around spot, as a fraction |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy data verify`
+
+Re-hash cached pages against every manifest.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy data ls`
+
+List recorded datasets.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy spec`
+
+Freeze a strategy configuration (spec freeze).
+
+### `sqy spec freeze`
+
+Freeze the configuration and seal the family's holdout.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy evaluate`
+
+Walk-forward, stress and holdout gates; sets the claim level.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--no-stress` | skip the cost and delay stress reruns |
+| `--holdout` | open the sealed holdout (once per family; needs G1-G3) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy trials`
+
+List trials or (humans only) extend a family's budget.
+
+### `sqy trials ls`
+
+List recorded trials.
+
+| Option | Meaning |
+|---|---|
+| `--family` | strategy family |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy trials show`
+
+Show entries by sequence number or configuration-hash prefix.
+
+| Option | Meaning |
+|---|---|
+| `key` | sequence number or configuration-hash prefix |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy trials extend`
+
+HUMAN ONLY: add 10 trials to a family's budget.
+
+| Option | Meaning |
+|---|---|
+| `--family` | strategy family (required) |
+| `--reason` | why; recorded in the evidence log (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy holdout`
+
+Seal a family's holdout early, or show seals and openings.
+
+### `sqy holdout status`
+
+Show each family's holdout seal and opening.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy holdout seal`
+
+Seal the strategy family's holdout now, before exploring.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy sweep`
+
+Backtest a parameter grid (each point on real data is a trial); reports PBO.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--param` | NAME=V1,V2,… (repeatable) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy backtest`
+
+Backtest a strategy and write run artifacts.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--start` | first session (YYYY-MM-DD) |
+| `--end` | last session (YYYY-MM-DD) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy evidence`
+
+Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
+
+### `sqy evidence verify`
+
+Verify evidence ledgers and paper journals, or an exported bundle (--bundle).
+
+| Option | Meaning |
+|---|---|
+| `--base` | git ref; fail if any log changed other than by appending since it |
+| `--bundle` | verify this exported evidence bundle directory instead |
+| `--max-tier` | highest tier the bundle may carry (one of `public`, `nda`) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy evidence export`
+
+Export a family's evidence bundle under its publication policy.
+
+| Option | Meaning |
+|---|---|
+| `--family` | strategy family (required) |
+| `--tier` | public (showcase) or nda (data room) (one of `public`, `nda`) |
+| `--out` | output directory (default: .signalquarry/exports/...) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy commit`
+
+Salted commitments to frozen strategies and journal heads (OpenTimestamps).
+
+### `sqy commit create`
+
+Commit to a frozen strategy (salted) or to a paper journal head.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--alias` | commit to this paper deployment's journal head instead |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy commit reveal`
+
+Write the private opening of a spec commitment (NDA only).
+
+| Option | Meaning |
+|---|---|
+| `--id` | commitment id (required) |
+| `--out` | where to write the opening (mode 0600) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy commit verify`
+
+Check an opening against a commitment record.
+
+| Option | Meaning |
+|---|---|
+| `--record` | commitment record JSON (required) |
+| `--reveal` | opening JSON from `sqy commit reveal` (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy perf`
+
+Paper performance snapshots: private captures, or a public feed (live_feed: allow).
+
+### `sqy perf publish`
+
+Capture and write ALIAS/latest.json (signalquarry-public-performance/v1).
+
+| Option | Meaning |
+|---|---|
+| `--alias` | paper deployment alias (required) |
+| `--out` | feed directory, e.g. site/public/feeds/paper (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy perf capture`
+
+Record a private, hash-chained snapshot under paper/ALIAS/captures/.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | paper deployment alias (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy docs`
+
+Print llms.txt (or --full: every guide, the CLI reference and reason codes) for agents.
+
+| Option | Meaning |
+|---|---|
+| `--llms` | llms.txt format (the default) |
+| `--full` | llms-full.txt: all documentation |
+
+## `sqy report`
+
+Render the latest backtest and evaluation as report.md and equity.svg.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id from strategy.yaml (required) |
+| `--run` | backtest run id (default: the latest) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+## `sqy paper`
+
+Alpaca paper forward tests: preflight, dry-run, run-once, status, halt.
+
+### `sqy paper preflight`
+
+Read-only readiness checks for a deployment.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper dry-run`
+
+Decide and size the next session without submitting anything.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper arm`
+
+HUMAN ONLY: allow a deployment to submit paper orders (interactive confirmation).
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--reason` | recorded in the journal (required) |
+
+### `sqy paper run-once`
+
+Reconcile, decide and submit the current session's orders (idempotent).
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper status`
+
+Show the journal state: armed/halted, sessions, pending orders.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper reconcile`
+
+Finalize journaled orders and check positions against the broker.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper halt`
+
+Stop a deployment and cancel its open orders; a human re-arms.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--reason` | recorded in the journal (required) |
+
+### `sqy paper drift`
+
+Replay sessions against the engine, measure fill slippage, apply model costs; gate G5.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy paper run`
+
+Run run-once until done, retrying while busy or unavailable (for a service manager).
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--interval` | seconds between retries |
+| `--max-minutes` | give up after this long |
+
+### `sqy paper backup`
+
+Write a tar.gz of the journal and arm token with a hash manifest.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--out` | directory (default: .signalquarry/backups/ALIAS) |
+
+### `sqy paper verify-continuity`
+
+Check the live journal extends a backup (no rollback on the host).
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--backup` | a tar.gz written by paper backup (required) |
+
+### `sqy paper schedule`
+
+Write scheduler templates (systemd, launchd, cron, github-actions) for review.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--target` | scheduler to write templates for (github-actions is demo-only) (required; one of `systemd`, `launchd`, `cron`, `github-actions`) |
+
+# Reason codes
+
+Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one.
+
+| Code | Category | Meaning | What to do |
+|---|---|---|---|
+| `AGENTS_MD_UNMANAGED` | usage | AGENTS.md has no signalquarry:begin/end blocks, so there is nothing safe to refresh. | Compare it by hand with a fresh `sqy init` template, then keep the markers. |
+| `BACKTEST_RANGE_EMPTY` | data | No sessions in the requested backtest range. | Widen --start/--end or fetch more data. |
+| `BROKER_CREDENTIALS_REJECTED` | environment | The broker rejected the paper credentials. | Check the keys of the paper profile; use keys of a paper account. |
+| `BROKER_NOT_PAPER_ONLY` | risk | A broker plugin returned a broker that does not declare paper_only = True. | Only paper brokers can be used; there is no live path. Fix or remove the plugin. |
+| `BROKER_ORDER_REJECTED` | execution | The broker rejected an order. | The session is recorded as incomplete and retried on the next unchanged target. |
+| `BROKER_ORIGIN_NOT_PAPER` | execution | A broker request targeted a host other than the Alpaca paper origin. | Only https://paper-api.alpaca.markets is supported. |
+| `BROKER_PLUGIN_INVALID` | environment | A broker plugin's broker lacks part of the paper broker interface (listed in the detail). | Implement account, clock, positions, open_orders, order_by_client_id, submit, cancel and calendar. |
+| `BROKER_REQUEST_FAILED` | execution | The broker returned an unexpected HTTP status. | Inspect the status in the summary and retry. |
+| `BROKER_RESPONSE_INVALID` | execution | The broker response could not be parsed. | Retry; report it if it persists. |
+| `BROKER_UNAVAILABLE` | execution | The broker did not answer (network error, 429 or 5xx). | Rerun later; submissions are resolved by client order id, never resubmitted blindly. |
+| `BUNDLE_INVALID` | evidence | The evidence bundle failed verification. | See data.errors; bundles are never edited after export. |
+| `CACHE_DIR_NOT_WRITABLE` | environment | The market-data cache directory cannot be written. | Set SIGNALQUARRY_CACHE_DIR to a writable directory. |
+| `COMMITMENT_CODE_MISMATCH` | evidence | The opening does not reproduce the committed code digest. | The code tree differs from what was committed. |
+| `COMMITMENT_DIGEST_MISMATCH` | evidence | The record's digest does not match its own fields. | The record was edited after creation. |
+| `COMMITMENT_PROOF_PENDING` | evidence | The commitment has no timestamp proof yet. | Install the OpenTimestamps client (signalquarry[ots]) and run `ots stamp` on the record. |
+| `COMMITMENT_RECORD_INVALID` | evidence | The commitment record is missing or malformed. | Pass the record JSON from evidence/commitments/. |
+| `COMMITMENT_REVEAL_INVALID` | evidence | The opening file is missing or malformed. | Use the file written by `sqy commit reveal`. |
+| `COMMITMENT_REVEAL_IS_PRIVATE` | evidence | A commitment opening reveals the configuration. | Share it only under NDA, for example in a data room. |
+| `COMMITMENT_SALT_MISSING` | evidence | The private salt for this commitment is not on this machine. | Restore $SIGNALQUARRY_CONFIG_DIR/salts from your backup. |
+| `COMMITMENT_SPEC_MISMATCH` | evidence | The opening does not reproduce the committed specification digest. | The configuration or salt differs from what was committed. |
+| `CONFORMANCE_FAILED` | evidence | One or more `sqy check` conformance checks failed. | Fix each failed check listed in data.strategies[].checks. |
+| `CORPORATE_ACTION_UNSUPPORTED` | data | A corporate action the simulator cannot model happened while a position was open. | Exclude the period or the underlying; the run stops rather than guess. |
+| `CREDENTIALS_FILE_PERMISSIONS_TOO_OPEN` | environment | credentials.toml is readable by other users. | Run `chmod 600` on the credentials file. |
+| `DATASET_SYMBOLS_MISSING` | data | The dataset lacks a declared symbol. | Fetch data for every symbol in data.symbols. |
+| `DATA_CREDENTIALS_MISSING` | environment | No Alpaca market-data credentials were found. | Set APCA_API_KEY_ID and APCA_API_SECRET_KEY, or use the synthetic provider. |
+| `DATA_CREDENTIALS_REJECTED` | environment | Alpaca rejected the market-data credentials (HTTP 401/403). | Check APCA_API_KEY_ID/APCA_API_SECRET_KEY; paper keys work for market data. |
+| `DATA_EMPTY` | data | The provider returned no bars for the request. | Check symbols and the date range. |
+| `DATA_IDENTITY_MISMATCH` | data | Cached pages rebuild to a different dataset than the manifest records. | Re-fetch; never edit manifests by hand. |
+| `DATA_MANIFEST_INVALID` | data | A dataset manifest is malformed or its manifest_hash does not match. | Restore the manifest from version control or re-fetch. |
+| `DATA_PAGE_CORRUPT` | data | A cached raw page no longer matches its recorded hash. | Delete the cache entry and re-fetch. |
+| `DATA_PAGE_MISSING` | data | A raw page referenced by a manifest is not in the local cache. | Re-run `sqy data fetch` for that dataset. |
+| `DECISION_SYMBOL_NOT_DECLARED` | signal | A target used a symbol not declared in strategy.yaml data.symbols. | Declare the symbol or remove it from the target. |
+| `DECISION_WEIGHT_ABOVE_LIMIT` | risk | A target weight exceeds limits.max_weight_per_symbol. | Lower the weight or raise the declared limit. |
+| `DEPENDENCY_MISSING` | environment | A required runtime dependency cannot be imported. | Reinstall with `pip install signalquarry`. |
+| `EVIDENCE_FAMILY_REQUIRED` | evidence | The per-family evidence layout needs a family for this log. | Pass the strategy family; this is a framework bug if it reaches you. |
+| `EVIDENCE_INDEX_MISMATCH` | evidence | A family evidence log does not end where the project index last recorded it. | Restore the family log from version control; logs are append-only. |
+| `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
+| `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
+| `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |
+| `FREEZE_STALE` | evidence | The strategy changed after its last freeze. | Freeze again; the new configuration counts as a new trial. |
+| `GATE_FAILED` | evidence | A qualification gate did not pass. | Report the failed gate; do not relax gates. Try a new hypothesis. |
+| `HOLDOUT_CLIPPED` | evidence | The backtest stopped before the sealed holdout. | Expected after `sqy spec freeze`; the holdout is only for `sqy evaluate --holdout`. |
+| `HOLDOUT_REQUIRES_GATES` | evidence | The holdout can only be opened after G1-G3 pass. | Report the failed gates; form a new hypothesis rather than tuning. |
+| `HOLDOUT_REUSED` | evidence | The sealed holdout for this family was already opened once. | Start a new hypothesis family; claims stay capped at walk_forward. |
+| `HUMAN_ACTION_RECORDED` | evidence | A human-only action was recorded in the evidence log. | Agents must not run human-only commands such as `trials extend`. |
+| `INSUFFICIENT_HISTORY` | data | Fewer completed sessions than the strategy's declared lookback. | Fetch more history or shorten the lookback. |
+| `INSUFFICIENT_SETTLED_CASH` | execution | A cash-account buy was reduced to the settled cash available. | Expected with cash accounts; use account.model: margin to spend unsettled proceeds. |
+| `INTERNAL_ERROR` | environment | An unexpected error inside SignalQuarry (a bug, or a broken installation). | Run `sqy doctor`; report the bug with the trace id and the traceback printed on stderr. |
+| `MARGIN_MODEL_WOULD_BORROW` | execution | A margin-account buy would require borrowing. | SignalQuarry never borrows; this indicates an engine bug. Please report it. |
+| `OPTIONS_CHAIN_EMPTY` | data | The provider returned no option quotes for that underlying and window. | Check the symbol, widen --width or --max-dte, and record during market hours. |
+| `OPTIONS_DELAY_STRESS_UNSUPPORTED` | usage | The options simulator has no execution-delay model. | Options stress tests vary costs only. |
+| `OPTIONS_HISTORY_UNAVAILABLE` | data | The provider does not return daily bars for expired option contracts in that month. | Options backtests keep using modelled prices (low evidence); rely on paper forward tests. |
+| `OPTIONS_RECORDED_CHAINS_USED` | data | Recorded provider quotes replaced modelled option prices on some sessions (count after the colon). | Informational: recorded sessions use real bid/ask snapshots; the rest stay modelled (low evidence). |
+| `OTS_CLIENT_MISSING` | environment | The OpenTimestamps client is not installed, so new commitments stay unstamped (pending). | Install it with `pip install 'signalquarry[ots]'` where commitments are made (the paper host). |
+| `PAPER_ACCOUNT_BLOCKED` | risk | The paper account is not active or trading is blocked. | Check the account in the Alpaca dashboard. |
+| `PAPER_ACCOUNT_MISMATCH` | risk | The broker account differs from the deployment's expected or armed account. | Use the deployment's own paper account; re-arm after an intentional switch. |
+| `PAPER_ARM_EXPIRED` | execution | The arm token expired. | A human re-arms with `sqy paper arm`. |
+| `PAPER_ARM_NOT_CONFIRMED` | execution | The arm confirmation did not match the alias. | Type the alias exactly to confirm. |
+| `PAPER_ARM_REQUIRES_HUMAN` | execution | Arming needs a human at an interactive terminal. | Agents must not arm paper trading; ask the owner. |
+| `PAPER_ARM_STALE` | execution | The strategy configuration or freeze changed since arming. | Freeze the new configuration; a human re-arms. |
+| `PAPER_BACKUP_INVALID` | usage | The backup archive is unreadable or belongs to another deployment. | Pass a tar.gz written by `sqy paper backup` for this alias. |
+| `PAPER_BROKER_PLUGIN_NOT_FOUND` | environment | The paper config names a broker plugin that is not installed. | Install the package that provides it (`sqy doctor` lists broker plugins) or fix `broker:`. |
+| `PAPER_BROKER_SIMULATED` | execution | The deployment uses the offline simulated broker, which cannot be armed or submit orders. | Use broker: alpaca-paper with a dedicated paper account for forward tests. |
+| `PAPER_CANCEL_UNCONFIRMED` | execution | A cancel request was not confirmed yet. | Rerun; the kernel waits for a terminal status. |
+| `PAPER_CLOCK_SKEW` | risk | The local clock differs from the broker clock beyond the guard. | Synchronize the host clock (NTP). |
+| `PAPER_CONFIG_INVALID` | usage | The paper deployment config failed validation. | Fix the field named in the summary; run `sqy schema paper`. |
+| `PAPER_CONFIG_NOT_FOUND` | usage | No paper deployment config with that alias exists. | Create paper/<alias>.paper.yaml (see `sqy init`). |
+| `PAPER_CONTINUITY_BROKEN` | risk | The live journal does not extend the backup: history was rolled back or rewritten. | Investigate the host; restore the journal from the backup and re-arm. |
+| `PAPER_CORPORATE_ACTION_PENDING` | execution | The broker has not applied today's split to the position yet. | Rerun later in the window. |
+| `PAPER_CREDENTIALS_MISSING` | environment | No credentials were found for the deployment's paper profile. | Add [paper.<alias>] to credentials.toml (0600) or set SIGNALQUARRY_PAPER_KEY_ID/SECRET_KEY. |
+| `PAPER_DATA_STALE` | execution | The previous session's bars are not available yet. | Rerun later in the window. |
+| `PAPER_DATA_UNAVAILABLE` | execution | Market data for the session could not be loaded. | Check data credentials and connectivity; rerun. |
+| `PAPER_DRAWDOWN_HALT` | risk | Equity fell more than the daily drawdown guard. | The deployment halted; review, then a human re-arms. |
+| `PAPER_EXECUTION_DELAY_UNSUPPORTED` | usage | Paper deployments execute at the next open; execution_delay_sessions must be 0. | Use the delay only for backtest stress runs. |
+| `PAPER_FRACTIONAL_UNSUPPORTED` | usage | Market-on-open paper orders need whole shares. | Set execution.sizing to whole_shares for paper deployments. |
+| `PAPER_HALTED` | risk | The deployment is halted. | Review the halt reason; a human re-arms with `sqy paper arm` to resume. |
+| `PAPER_JOURNAL_CORRUPT` | risk | The deployment journal's hash chain does not verify. | Restore the journal from backup; never edit it by hand. |
+| `PAPER_KEY_DENIED` | risk | The paper key is on the deployment's deny-list (it belongs to another deployment). | Use this deployment's own paper account keys. |
+| `PAPER_KIND_UNSUPPORTED` | usage | This paper runner does not trade this strategy kind. | Options deployments use the options runner. |
+| `PAPER_NOT_ARMED` | execution | Paper trading is disabled until a human arms the deployment. | A human runs `sqy paper arm --reason ...` after reviewing the evidence. |
+| `PAPER_NO_SESSION_TODAY` | execution | The market has no session today. | None; the scheduler retries on the next session. |
+| `PAPER_OPEN_ORDERS` | execution | Own orders are still open. | Retry after they fill, expire or are canceled. |
+| `PAPER_ORDER_NOT_FOUND` | execution | A journaled order intent never reached the broker. | None; it is recorded as not submitted. |
+| `PAPER_OUTSIDE_WINDOW` | execution | The command ran outside the pre-open submission window. | Schedule run-once inside the configured window (default 09:00-09:25 ET). |
+| `PAPER_PARITY_MISMATCH` | risk | Replaying a paper session through the engine produced a different decision or orders. | Investigate before trusting the forward record; G5 cannot pass with a mismatch. |
+| `PAPER_PENDING_ORDERS` | execution | Journaled orders are not finalized yet. | Run `sqy paper reconcile`. |
+| `PAPER_POSITION_DRIFT` | risk | Broker positions differ from the journal in a way fills and splits cannot explain. | The deployment halted; investigate, then a human re-arms. |
+| `PAPER_RUN_GAVE_UP` | execution | paper run stopped retrying before run-once succeeded. | Check the reason codes; the scheduler retries on the next tick. |
+| `PAPER_SESSION_ALREADY_COMPLETED` | execution | Today's session was already submitted. | None; run-once is idempotent. |
+| `PAPER_STALE_ORDER_CANCELED` | execution | An own order from an earlier session was still open and was canceled. | None; the target is retried. |
+| `PAPER_STRATEGY_FAILED` | risk | The strategy raised or broke its contract during a paper session. | The deployment halted; fix and re-freeze, then a human re-arms. |
+| `PAPER_STRATEGY_TIMEOUT` | risk | The strategy's decide step exceeded its time limit in the isolated process. | The deployment halted; make decide faster, re-freeze, then a human re-arms. |
+| `PAPER_SUBMISSION_DISABLED` | execution | The deployment config has submission: disabled. | A human sets submission: enabled after review. |
+| `PAPER_UNMANAGED_ORDERS` | risk | The account has open orders this deployment did not create. | Cancel them or use a dedicated paper account per deployment. |
+| `PAPER_UNMANAGED_POSITION` | risk | The account holds positions outside the strategy's symbols. | Close them or use a dedicated paper account per deployment. |
+| `PERF_FEED_INVALID` | evidence | The existing feed file is not a performance snapshot, so the new one cannot chain to it. | Move the file aside (a new chain starts) or restore the published snapshot. |
+| `PERF_PUBLISH_DENIED` | evidence | The family's publication policy does not allow a live performance feed. | Set live_feed: allow for a non-commercial family; commercial families publish lagged exports only. |
+| `PRICE_MISSING` | data | No price for a symbol on the execution session; the order waits. | Check data coverage for the symbol. |
+| `PROJECT_CONFIG_INVALID` | usage | signalquarry.toml could not be parsed or has invalid values. | Fix the reported field in signalquarry.toml. |
+| `PROJECT_DIR_NOT_EMPTY` | usage | `sqy init` only creates projects in a new or empty directory. | Choose a new directory name. |
+| `PROJECT_NOT_FOUND` | usage | No signalquarry.toml in this directory or its parents. | Run `sqy init <dir>` or pass --project. |
+| `PROVIDER_PAGINATION_LIMIT` | data | The request needed more pages than allowed. | Fetch fewer symbols or a shorter range at a time. |
+| `PROVIDER_PAGINATION_LOOP` | data | The provider repeated a page token. | Retry later; the partial download was discarded. |
+| `PROVIDER_REQUEST_FAILED` | data | The provider returned an unexpected HTTP status. | Check symbols, dates and plan entitlements (SIP needs 15-minute-old data on free plans). |
+| `PROVIDER_RESPONSE_INVALID` | data | A provider response was malformed or contained impossible values. | Retry later; report the endpoint if it persists. |
+| `PROVIDER_UNAVAILABLE` | data | The configured data provider is not available yet. | Use provider = "synthetic" in signalquarry.toml, or fetch data first. |
+| `PUBLICATION_FAMILY_MISMATCH` | usage | A published strategy belongs to a different family. | List only strategies of this family. |
+| `PUBLICATION_INVALID` | usage | The publication policy failed validation or breaks a disclosure cap. | Fix the field named in the summary; commercial families are category-tier. |
+| `PUBLICATION_NOT_FOUND` | usage | The family has no publication policy, so nothing may be exported. | Create publication/FAMILY.publication.yaml (default-deny). |
+| `PUBLICATION_STRATEGY_UNKNOWN` | usage | The publication policy names a strategy the project does not define. | Use strategy ids from strategy.yaml. |
+| `PYTHON_ARCH_EMULATED` | environment | Python is running under Rosetta emulation on Apple Silicon. | Use a native arm64 Python build. |
+| `PYTHON_VERSION_UNSUPPORTED` | environment | SignalQuarry needs Python 3.12 or newer. | Install Python 3.12+ and recreate the environment. |
+| `REASON_CODE_UNDECLARED` | signal | A strategy returned a reason code it did not declare in strategy.yaml. | Declare the code under reason_codes in strategy.yaml. |
+| `REASON_CODE_UNKNOWN` | usage | The code is not a framework or declared strategy reason code. | Check spelling; codes are UPPER_SNAKE_CASE. |
+| `REPORT_CONFIGURATION_CHANGED` | evidence | The reported runs used a different configuration than the current code and spec. | Rerun the backtest and evaluation for the current configuration. |
+| `REPORT_NO_RUNS` | usage | There is no backtest or evaluation run to report on. | Run `sqy backtest --strategy <id>` (and `sqy evaluate`) first. |
+| `RUN_LEASE_BUSY` | execution | Another run holds the deployment lease. | Retry after the running command finishes. |
+| `SCHEDULE_GITHUB_ACTIONS_DEMO_ONLY` | execution | GitHub Actions schedules are delayed and best-effort; use them for demos only. | Use systemd on a small VM (or launchd/cron on an always-on host) for forward tests. |
+| `SCHEMA_UNKNOWN` | usage | No bundled schema has that name. | Run `sqy schema` to list schema names. |
+| `STALE_OBSERVATIONS` | data | The latest completed bar is older than the declared staleness limit. | Refresh data with `sqy data fetch`. |
+| `STRATEGY_ID_DUPLICATE` | signal | Two strategies share one id. | Give each strategy.yaml a unique id. |
+| `STRATEGY_IMPORT_FAILED` | signal | A strategy module could not be imported. | Fix the import error shown in the detail. |
+| `STRATEGY_KIND_MISMATCH` | usage | The strategy decorator does not match strategy.yaml's kind. | Use @options_strategy for kind options_single_leg and @strategy for equity_daily. |
+| `STRATEGY_LOOKBACK_INVALID` | signal | lookback(params) must return a positive integer. | Fix the lookback in @strategy. |
+| `STRATEGY_MODULE_INVALID` | signal | A strategy module must define exactly one @strategy function. | Keep one decide function per module. |
+| `STRATEGY_NOT_FOUND` | usage | No loaded strategy has that id. | Run `sqy check` to list strategies, or add the module to signalquarry.toml. |
+| `STRATEGY_PARAMS_INVALID` | signal | strategy.yaml params do not validate against the Params class. | Make params match the Params fields and bounds. |
+| `STRATEGY_RETURNED_NON_DECISION` | signal | decide() must return a Decision. | Return Decision.target, Decision.hold or Decision.unavailable. |
+| `STRATEGY_SPEC_INVALID` | signal | strategy.yaml does not match signalquarry.strategy/v1. | Fix the fields named in the detail. |
+| `STRATEGY_SPEC_MISSING` | signal | strategy.yaml is missing next to the strategy module. | Add strategy.yaml next to strategy.py. |
+| `STRATEGY_STATE_NOT_SERIALIZABLE` | signal | Strategy state must be canonical JSON (string keys, finite numbers, aware datetimes). | Store plain JSON values in state. |
+| `STRATEGY_STATE_TOO_LARGE` | signal | Strategy state exceeds 16 KB of canonical JSON. | Keep state small; recompute from bars instead. |
+| `SWEEP_RESULTS_ARE_IN_SAMPLE` | evidence | Sweep results are in-sample and raise the trial count. | Pick a configuration by reasoning, freeze it, then evaluate. |
+| `SWEEP_TOO_LARGE` | usage | The parameter grid has too many points. | Sweep fewer, better-reasoned values; each point on real data is a trial. |
+| `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |
+| `TRIAL_BUDGET_NEARLY_USED` | evidence | The family has used at least 80% of its trial budget. | Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision. |
+| `TRIAL_NOT_FOUND` | usage | No trial ledger entry matches that sequence number or configuration-hash prefix. | Run `sqy trials ls` to see the entries. |
+| `USAGE_INVALID` | usage | The command line could not be parsed. | Run `sqy commands` or `sqy <command> --help`. |
+| `VCS_DIRTY` | evidence | The project had uncommitted changes when frozen. | Commit before freezing so the frozen code is recoverable. |
+| `VOLUME_CAPPED` | execution | An order was reduced to the fill model's share of that session's volume. | The rest is retried next session; lower weights or accept slower fills for illiquid symbols. |

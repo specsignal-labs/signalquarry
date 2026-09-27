@@ -1,0 +1,10 @@
+SignalQuarry
+Copyright 2026 Pengyuan Li
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+"SignalQuarry" is a name of the project maintainer; the license grants no
+trademark rights (see Apache-2.0 section 6).
+
+Project templates (src/signalquarry/templates/, copied by `sqy init`) are
+dedicated to the public domain under CC0-1.0, so projects created from them
+carry no license obligations from SignalQuarry.

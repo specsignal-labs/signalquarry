@@ -1,0 +1,132 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    # gitleaks over the full history (pinned; the same command is run locally before merging).
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Secret scan (gitleaks)
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.28.0
+          "$(go env GOPATH)/bin/gitleaks" git --no-banner --redact .
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS minutes cost 10x on private repositories: pull requests run Linux only,
+        # main and manual runs add macOS.
+        os: ${{ fromJSON(github.event_name == 'pull_request' && '["ubuntu-24.04"]' || '["ubuntu-24.04", "macos-15"]') }}
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --python ${{ matrix.python }}
+      - name: Lint and format
+        run: |
+          uv run ruff check src tests tools evals
+          uv run ruff format --check src tests tools/gen_docs.py tools/bench.py tools/check_headers.py tools/check_coverage.py tools/api_snapshot.py tools/public_tree.py evals
+          uv run python tools/check_headers.py
+      - name: Import contracts
+        run: uv run lint-imports
+      - name: REUSE compliance
+        run: uvx --from 'reuse[charset-normalizer]==6.2.0' reuse lint
+      - name: Type check
+        run: uv run pyright
+      - name: Public API snapshot
+        run: uv run python tools/api_snapshot.py --check
+      - name: Tests (with coverage)
+        run: uv run coverage run -m pytest -p no:cacheprovider
+      - name: Coverage thresholds (85% overall, 95% on engine, validation, paper kernel, canonical)
+        run: |
+          uv run coverage report
+          uv run coverage json -q
+          uv run python tools/check_coverage.py
+      - name: Wheel smoke test in a fresh environment
+        run: |
+          uv build --wheel --out-dir dist
+          uv venv --python ${{ matrix.python }} /tmp/smoke
+          VIRTUAL_ENV=/tmp/smoke uv pip install dist/*.whl
+          cd /tmp
+          /tmp/smoke/bin/sqy --json version
+          /tmp/smoke/bin/sqy --json schema evidence-bundle > /dev/null
+          set +e; /tmp/smoke/bin/sqy --json bogus > /dev/null; code=$?; set -e
+          test "$code" = 64
+          /tmp/smoke/bin/sqy --json init /tmp/flow --demo > /dev/null
+          cd /tmp/flow
+          /tmp/smoke/bin/sqy --json check | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok', d"
+          /tmp/smoke/bin/sqy --json backtest --strategy sma-trend | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and len(d['artifacts'])==4, d"
+          set +e; /tmp/smoke/bin/sqy --json evaluate --strategy sma-trend > /tmp/evaluate.json; code=$?; set -e
+          test "$code" = 0 -o "$code" = 2
+          python3 -c "import json; d=json.load(open('/tmp/evaluate.json')); assert d['evidence']['claim_level']=='none' and d['data']['run_id'], d"
+          /tmp/smoke/bin/sqy --json report --strategy sma-trend | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and {a['kind'] for a in d['artifacts']}=={'report','equity'}, d"
+          /tmp/smoke/bin/sqy --json paper dry-run --alias demo | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and d['evidence']['grade']=='simulated', d"
+          set +e; /tmp/smoke/bin/sqy --json paper run-once --alias demo > /dev/null; code=$?; set -e
+          test "$code" = 78
+          /tmp/smoke/bin/sqy --json init /tmp/wheel --demo --kind options > /dev/null
+          cd /tmp/wheel
+          /tmp/smoke/bin/sqy --json check --parity | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok', d"
+          /tmp/smoke/bin/sqy --json backtest --strategy wheel | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok', d"
+          /tmp/smoke/bin/sqy --json init --upgrade-agents-md | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and not d['data']['updated'], d"
+      - name: Agent-eval harness replay (reference solutions through the installed CLI)
+        run: /tmp/smoke/bin/python "$GITHUB_WORKSPACE/evals/replay.py" --sqy /tmp/smoke/bin/sqy
+
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+      - name: Install docs toolchain
+        run: uv sync --locked --group docs --python 3.12
+      - name: Generated docs are fresh
+        run: uv run python tools/gen_docs.py --check
+      - name: Build the site (strict)
+        run: uv run mkdocs build --strict
+
+  lowest-direct:
+    # The declared lower bounds of runtime dependencies must actually work.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.1"
+      - name: Install with the lowest direct dependency versions
+        run: |
+          uv venv --python 3.12 .lowest
+          VIRTUAL_ENV=.lowest uv pip install --resolution lowest-direct -e . "pytest>=8.4,<9" "hypothesis>=6.100,<7" "pyyaml>=6.0.2,<7" "jsonschema>=4.23,<5"
+      - name: Tests
+        run: .lowest/bin/python -m pytest -p no:cacheprovider
+
+  bench:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --python 3.12
+      - name: Performance targets (warn at 1.5x, fail at 2x)
+        run: uv run python tools/bench.py

@@ -1,0 +1,42 @@
+schema: signalquarry.strategy/v1
+id: wheel
+family: wheel
+version: 1.0.0
+kind: options_single_leg
+hypothesis:
+  statement: Selling short-dated out-of-the-money puts, then covered calls after assignment, on {{underlying}} earns more than holding it, net of fees and spreads.
+  falsification: The wheel's walk-forward return is below holding {{underlying}}, or the deflated Sharpe ratio is below 0.95.
+data:
+  symbols: [{{underlying}}]
+  fields: [close]
+  feed: {{feed}}
+account:
+  model: cash
+  initial_cash: "100000"
+params:
+  underlying: {{underlying}}
+  trend_sessions: 50
+  min_dte: 7
+  max_dte: 14
+  uptrend_put_otm: "0.01"
+  downtrend_put_otm: "0.03"
+  uptrend_call_otm: "0.03"
+  downtrend_call_otm: "0.01"
+  take_profit: "0.15"
+reason_codes:
+  TAKE_PROFIT: More than the target fraction of the premium was captured; buy the leg back.
+  HOLD_LEG: A leg is open and the profit target is not reached.
+  WEEKLY_ENTRY_USED: This week's entry was already made.
+  SELL_PUT_UPTREND: Flat, above the trend mean; sell a put closer to the money.
+  SELL_PUT_DOWNTREND: Flat, below the trend mean; sell a put further out of the money.
+  SELL_CALL_UPTREND: Holding shares, above the trend mean; sell a call further out of the money.
+  SELL_CALL_DOWNTREND: Holding shares, below the trend mean; sell a call closer to the money.
+options:
+  underlyings: [{{underlying}}]
+  per_contract_fee: "0.65"
+  spread_haircut: "0.5"
+  entry_cutoff: "15:15"
+evaluation:
+  holdout: {months: 0}  # options: no holdout gate; the paper forward test (G5) is out of sample
+  walk_forward: {train_months: 12, test_months: 3}
+  trial_budget: 20

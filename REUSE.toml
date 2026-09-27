@@ -1,0 +1,16 @@
+version = 1
+
+# Default: Apache-2.0 (files also carry their own SPDX-License-Identifier header).
+# Later, more specific annotations win.
+[[annotations]]
+path = ["**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Pengyuan Li"
+SPDX-License-Identifier = "Apache-2.0"
+
+# `sqy init` templates: public domain, so user strategies carry no license obligations.
+[[annotations]]
+path = ["src/signalquarry/templates/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"

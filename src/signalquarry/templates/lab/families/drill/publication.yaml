@@ -1,0 +1,12 @@
+# Default-deny. Only a human edits this file.
+schema: signalquarry.publication/v1
+family: drill
+family_label: Transfer drill
+commercial: true
+tier: category
+backtest_results: deny
+strategies:
+  - id: drill
+    title: Transfer drill (never traded)
+    summary: A placeholder family used to rehearse extracting and transferring a family repository.
+    assets: US equities

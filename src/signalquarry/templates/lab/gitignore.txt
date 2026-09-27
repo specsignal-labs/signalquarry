@@ -1,0 +1,10 @@
+.signalquarry/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+paper/*/lease
+paper/*/*.log
+deals/*
+!deals/README.md
+*.salt

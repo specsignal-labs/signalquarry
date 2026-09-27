@@ -1,0 +1,210 @@
+signalquarry.__version__: str
+signalquarry.sdk.Bars: class(object)
+signalquarry.sdk.Bars.symbol: field str
+signalquarry.sdk.Bars.sessions: field np.ndarray
+signalquarry.sdk.Bars.open: field np.ndarray
+signalquarry.sdk.Bars.high: field np.ndarray
+signalquarry.sdk.Bars.low: field np.ndarray
+signalquarry.sdk.Bars.close: field np.ndarray
+signalquarry.sdk.Bars.volume: field np.ndarray
+signalquarry.sdk.Ctx: class(object)
+signalquarry.sdk.Ctx.decision_session: field date
+signalquarry.sdk.Ctx.positions: field Mapping[str, Decimal]
+signalquarry.sdk.Ctx.weights: field Mapping[str, Decimal]
+signalquarry.sdk.Ctx.cash: field Decimal
+signalquarry.sdk.Ctx.equity: field Decimal
+signalquarry.sdk.Ctx.state: field Mapping[str, Any]
+signalquarry.sdk.Ctx.bars(self, symbol: 'str') -> 'Bars'
+signalquarry.sdk.Ctx.symbols: property
+signalquarry.sdk.Decision: class(object)
+signalquarry.sdk.Decision.action: field Action
+signalquarry.sdk.Decision.weights: field dict[str, Decimal]
+signalquarry.sdk.Decision.reason_codes: field tuple[str, ...]
+signalquarry.sdk.Decision.state: field dict[str, Any] | None
+signalquarry.sdk.Decision.hold(cls, *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
+signalquarry.sdk.Decision.target(cls, weights: 'dict[str, Decimal | float | int | str]', *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
+signalquarry.sdk.Decision.unavailable(cls, *reason_codes: 'str') -> 'Decision'
+signalquarry.sdk.Field: re-export of pydantic.fields.Field
+signalquarry.sdk.Params: class(BaseModel)
+signalquarry.sdk.StrategyDef: class(object)
+signalquarry.sdk.StrategyDef.decide: field Callable[[Ctx, Params], Decision]
+signalquarry.sdk.StrategyDef.params: field type[Params]
+signalquarry.sdk.StrategyDef.lookback: field Callable[[Params], int]
+signalquarry.sdk.StrategyDef.module: field str
+signalquarry.sdk.StrategyDef.name: field str
+signalquarry.sdk.StrategyDef.kind: field str
+signalquarry.sdk.definition_of(obj: 'object') -> 'StrategyDef'
+signalquarry.sdk.strategy(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[Ctx, P], Decision]], Callable[[Ctx, P], Decision]]'
+signalquarry.sdk.ta: module
+signalquarry.sdk.options.LegView: class(object)
+signalquarry.sdk.options.LegView.symbol: field str
+signalquarry.sdk.options.LegView.right: field Literal['PUT', 'CALL']
+signalquarry.sdk.options.LegView.strike: field Decimal
+signalquarry.sdk.options.LegView.expiration: field date
+signalquarry.sdk.options.LegView.dte: field int
+signalquarry.sdk.options.LegView.entry_credit: field Decimal
+signalquarry.sdk.options.LegView.close_cost: field Decimal | None
+signalquarry.sdk.options.LegView.captured_fraction: field Decimal | None
+signalquarry.sdk.options.OD: class(object)
+signalquarry.sdk.options.OD.close(underlying: 'str', *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'OptionsDecision'
+signalquarry.sdk.options.OD.hold(*reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'OptionsDecision'
+signalquarry.sdk.options.OD.open(selector: 'OptionSelector', *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'OptionsDecision'
+signalquarry.sdk.options.OD.unavailable(*reason_codes: 'str') -> 'OptionsDecision'
+signalquarry.sdk.options.OptionSelector: class(object)
+signalquarry.sdk.options.OptionSelector.underlying: field str
+signalquarry.sdk.options.OptionSelector.right: field Literal['PUT', 'CALL']
+signalquarry.sdk.options.OptionSelector.min_dte: field int
+signalquarry.sdk.options.OptionSelector.max_dte: field int
+signalquarry.sdk.options.OptionSelector.strike: field StrikeRule
+signalquarry.sdk.options.OptionsCtx: class(object)
+signalquarry.sdk.options.OptionsCtx.decision_time: field datetime
+signalquarry.sdk.options.OptionsCtx.spots: field Mapping[str, Decimal]
+signalquarry.sdk.options.OptionsCtx.cash: field Decimal
+signalquarry.sdk.options.OptionsCtx.equity: field Decimal
+signalquarry.sdk.options.OptionsCtx.state: field Mapping[str, Any]
+signalquarry.sdk.options.OptionsCtx.bars(self, symbol: 'str') -> 'Bars'
+signalquarry.sdk.options.OptionsCtx.leg(self, underlying: 'str') -> 'LegView | None'
+signalquarry.sdk.options.OptionsCtx.spot(self, underlying: 'str') -> 'Decimal'
+signalquarry.sdk.options.OptionsCtx.wheel(self, underlying: 'str') -> 'WheelView'
+signalquarry.sdk.options.OptionsDecision: class(object)
+signalquarry.sdk.options.OptionsDecision.action: field Literal['open', 'close', 'hold', 'unavailable']
+signalquarry.sdk.options.OptionsDecision.reason_codes: field tuple[str, ...]
+signalquarry.sdk.options.OptionsDecision.selector: field OptionSelector | None
+signalquarry.sdk.options.OptionsDecision.underlying: field str | None
+signalquarry.sdk.options.OptionsDecision.state: field dict[str, Any] | None
+signalquarry.sdk.options.Strike: class(object)
+signalquarry.sdk.options.Strike.otm(fraction: 'Decimal | float | str') -> 'StrikeRule'
+signalquarry.sdk.options.StrikeRule: class(object)
+signalquarry.sdk.options.StrikeRule.kind: field Literal['otm']
+signalquarry.sdk.options.StrikeRule.value: field Decimal
+signalquarry.sdk.options.WheelView: class(object)
+signalquarry.sdk.options.WheelView.underlying: field str
+signalquarry.sdk.options.WheelView.state: field Literal['flat', 'short_put', 'long_shares', 'covered_call']
+signalquarry.sdk.options.WheelView.shares: field int
+signalquarry.sdk.options.WheelView.share_cost_basis: field Decimal | None
+signalquarry.sdk.options.options_strategy(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[OptionsCtx, P], OptionsDecision]], Callable[[OptionsCtx, P], OptionsDecision]]'
+signalquarry.sdk.options.sell_call(underlying: 'str', *, dte: 'tuple[int, int]', strike: 'StrikeRule') -> 'OptionSelector'
+signalquarry.sdk.options.sell_put(underlying: 'str', *, dte: 'tuple[int, int]', strike: 'StrikeRule') -> 'OptionSelector'
+signalquarry.api.Envelope: class(object)
+signalquarry.api.Envelope.command: field str
+signalquarry.api.Envelope.status: field Status
+signalquarry.api.Envelope.summary: field str
+signalquarry.api.Envelope.reason_codes: field list[str]
+signalquarry.api.Envelope.data: field dict[str, Any]
+signalquarry.api.Envelope.metrics: field dict[str, Any]
+signalquarry.api.Envelope.evidence: field dict[str, Any] | None
+signalquarry.api.Envelope.artifacts: field list[dict[str, str]]
+signalquarry.api.Envelope.warnings: field list[str]
+signalquarry.api.Envelope.next_actions: field list[dict[str, str]]
+signalquarry.api.Envelope.run_id: field str
+signalquarry.api.Envelope.started: field float
+signalquarry.api.Envelope.as_dict(self) -> 'dict[str, Any]'
+signalquarry.api.Envelope.exit_code: property
+signalquarry.api.backtest(strategy_id: 'str', *, start: 'date | None' = None, end: 'date | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.bundle_verify(bundle: 'Path', *, max_tier: 'str' = 'public') -> 'Envelope'
+signalquarry.api.cache_dir() -> 'Path'
+signalquarry.api.check(strategy_id: 'str | None' = None, *, project: 'Path | None' = None, parity: 'bool' = False) -> 'Envelope'
+signalquarry.api.commit_create(strategy_id: 'str', *, alias: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.commit_reveal(commit_id: 'str', *, out: 'Path', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.commit_verify(record_path: 'Path', reveal_path: 'Path') -> 'Envelope'
+signalquarry.api.data_fetch(*, strategy_id: 'str | None' = None, symbols: 'tuple[str, ...]' = (), start: 'date | None' = None, end: 'date | None' = None, feed: 'str | None' = None, project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, today: 'date | None' = None) -> 'Envelope'
+signalquarry.api.data_ls(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.data_probe_options(underlying: 'str', month: 'str', *, broker: 'OptionContractSource | None' = None, client: 'AlpacaDataClient | None' = None) -> 'Envelope'
+signalquarry.api.data_record_options(underlying: 'str', *, max_dte: 'int' = 60, width: 'float' = 0.2, options_feed: 'str' = 'indicative', stock_feed: 'str' = 'iex', project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, now: 'datetime | None' = None) -> 'Envelope'
+signalquarry.api.data_verify(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.docs(catalog: 'list[dict[str, Any]]', *, full: 'bool') -> 'Envelope'
+signalquarry.api.doctor() -> 'Envelope'
+signalquarry.api.evaluate_command(strategy_id: 'str', *, stress: 'bool' = True, open_holdout: 'bool' = False, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.evidence_export(family: 'str', *, tier: 'str' = 'public', out: 'Path | None' = None, project: 'Path | None' = None, today: 'date | None' = None) -> 'Envelope'
+signalquarry.api.evidence_verify(*, base: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.explain(code: 'str') -> 'Envelope'
+signalquarry.api.holdout_seal(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.holdout_status(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.init(path: 'Path', *, demo: 'bool' = False, package: 'str | None' = None, lab: 'bool' = False, kind: 'str' = 'equity') -> 'Envelope'
+signalquarry.api.paper_arm(alias: 'str', reason: 'str', *, project: 'Path | None' = None, confirm: 'Callable[[str], str] | None' = None, interactive: 'bool | None' = None) -> 'Envelope'
+signalquarry.api.paper_backup(alias: 'str', *, out: 'Path | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_drift(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_dry_run(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_halt(alias: 'str', reason: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_preflight(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_reconcile(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_run(alias: 'str', *, project: 'Path | None' = None, interval: 'float' = 60.0, max_minutes: 'float' = 30.0, sleep: 'Callable[[float], None]' = <built-in function sleep>, clock: 'Callable[[], float]' = <built-in function monotonic>) -> 'Envelope'
+signalquarry.api.paper_run_once(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_schedule(alias: 'str', target: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_status(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_verify_continuity(alias: 'str', backup: 'Path', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.perf_capture(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.perf_publish(alias: 'str', *, out: 'Path', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.reason_code_catalog() -> 'dict[str, dict[str, str]]'
+signalquarry.api.report(strategy_id: 'str', *, run_id: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.schema(name: 'str | None' = None) -> 'Envelope'
+signalquarry.api.spec_freeze(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.sweep(strategy_id: 'str', assignments: 'list[str]', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.trials_extend(family: 'str', reason: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.trials_ls(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.trials_show(key: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.version() -> 'Envelope'
+signalquarry.plugins.API_VERSION: int
+signalquarry.plugins.BrokerPlugin: class(Protocol)
+signalquarry.plugins.BrokerPlugin.create(self, alias: 'str', key_id: 'str | None', secret_key: 'str | None') -> 'Any'
+signalquarry.plugins.Discovery: class(object)
+signalquarry.plugins.Discovery.plugins: field tuple[Loaded, ...]
+signalquarry.plugins.Discovery.errors: field tuple[str, ...]
+signalquarry.plugins.GROUPS: tuple
+signalquarry.plugins.GateContext: class(object)
+signalquarry.plugins.GateContext.strategy_id: field str
+signalquarry.plugins.GateContext.family: field str
+signalquarry.plugins.GateContext.grade: field str
+signalquarry.plugins.GateContext.spec: field Mapping[str, Any]
+signalquarry.plugins.GateContext.gates: field Mapping[str, Mapping[str, Any]]
+signalquarry.plugins.GateContext.folds: field tuple[Mapping[str, Any], ...]
+signalquarry.plugins.GateContext.oos: field Mapping[str, Any]
+signalquarry.plugins.GateContext.oos_returns: field tuple[float, ...]
+signalquarry.plugins.GateOutcome: class(object)
+signalquarry.plugins.GateOutcome.ok: field bool
+signalquarry.plugins.GateOutcome.detail: field Mapping[str, Any]
+signalquarry.plugins.GatePlugin: class(Protocol)
+signalquarry.plugins.GatePlugin.check(self, context: 'GateContext') -> 'GateOutcome'
+signalquarry.plugins.Loaded: class(object)
+signalquarry.plugins.Loaded.group: field str
+signalquarry.plugins.Loaded.name: field str
+signalquarry.plugins.Loaded.source: field str
+signalquarry.plugins.Loaded.plugin: field Any
+signalquarry.plugins.ReportContext: class(object)
+signalquarry.plugins.ReportContext.spec: field Mapping[str, Any]
+signalquarry.plugins.ReportContext.result: field Mapping[str, Any] | None
+signalquarry.plugins.ReportContext.evaluation: field Mapping[str, Any] | None
+signalquarry.plugins.ReportSectionPlugin: class(Protocol)
+signalquarry.plugins.ReportSectionPlugin.render(self, context: 'ReportContext') -> 'str'
+signalquarry.plugins.discover(group: 'str', *, entry_points: 'EntryPoints' = <function _installed>) -> 'Discovery'
+signalquarry.testing.FakeBroker: class(object)
+signalquarry.testing.FakeBroker.dataset: field Dataset
+signalquarry.testing.FakeBroker.cash: field Decimal
+signalquarry.testing.FakeBroker.account_id: field str
+signalquarry.testing.FakeBroker.now: field datetime
+signalquarry.testing.FakeBroker.skew: field timedelta
+signalquarry.testing.FakeBroker.positions_: field dict[str, Decimal]
+signalquarry.testing.FakeBroker.orders: field dict[str, BrokerOrder]
+signalquarry.testing.FakeBroker.faults: field list[Fault]
+signalquarry.testing.FakeBroker.submissions: field int
+signalquarry.testing.FakeBroker.paper_only: field bool
+signalquarry.testing.FakeBroker.name: field str
+signalquarry.testing.FakeBroker.account(self) -> 'BrokerAccount'
+signalquarry.testing.FakeBroker.cancel(self, order_id: 'str') -> 'None'
+signalquarry.testing.FakeBroker.clock(self) -> 'BrokerClock'
+signalquarry.testing.FakeBroker.next_session_after(self, session: 'date') -> 'date | None'
+signalquarry.testing.FakeBroker.open_orders(self) -> 'list[BrokerOrder]'
+signalquarry.testing.FakeBroker.open_session(self, session: 'date') -> 'None'
+signalquarry.testing.FakeBroker.order_by_client_id(self, client_order_id: 'str') -> 'BrokerOrder | None'
+signalquarry.testing.FakeBroker.positions(self) -> 'list[BrokerPosition]'
+signalquarry.testing.FakeBroker.pre_open(self, session: 'date', at: 'time' = datetime.time(9, 10)) -> 'None'
+signalquarry.testing.FakeBroker.submit(self, request: 'OrderRequest') -> 'BrokerOrder'
+signalquarry.testing.conformance(project: 'Path | str | None' = None, strategy: 'str | None' = None) -> 'list[dict[str, Any]]'
+signalquarry.testing.synthetic_dataset(start: 'date' = datetime.date(2014, 1, 2), end: 'date' = datetime.date(2025, 12, 31), *, seed: 'int' = 7, symbols: 'tuple[str, ...]' = ('SYNA', 'SYNB', 'SYNC', 'SYNX')) -> 'Dataset'
+signalquarry.sdk.ta.ema(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
+signalquarry.sdk.ta.returns(values: 'np.ndarray', periods: 'int' = 1) -> 'np.ndarray'
+signalquarry.sdk.ta.rolling_std(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
+signalquarry.sdk.ta.rsi(values: 'np.ndarray', period: 'int' = 14) -> 'np.ndarray'
+signalquarry.sdk.ta.sma(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
+signalquarry.sdk.ta.zscore(values: 'np.ndarray', period: 'int') -> 'np.ndarray'

@@ -1,0 +1,43 @@
+# SignalQuarry
+
+> Agent-first strategy research: honest backtests on Alpaca data and Alpaca paper forward tests. The framework owns time, data, fills and the evidence record; strategies are one pure `decide(ctx, params)` function plus `strategy.yaml`. No live-trading path exists.
+
+Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text offline.
+
+## Guides
+
+- [index](index.md): What SignalQuarry is and why its results can be trusted.
+- [quickstart](quickstart.md): Install, create a demo project and run the golden path.
+- [authoring](authoring.md): Write decide(ctx, params) and strategy.yaml; rules sqy check enforces.
+- [evidence](evidence.md): Claim ladder, trial ledger, freeze and sealed holdout, gates G1–G4, reports.
+- [data](data.md): Alpaca credentials, fetching and verifying data, point-in-time adjustment.
+- [paper](paper.md): Paper deployments, the arm step, run-once, journal, guards and scheduling.
+- [agents](agents.md): The JSON envelope, exit codes and human-only actions for coding agents.
+
+## Reference
+
+- [CLI reference](reference/cli.md): every command and option.
+- [Reason codes](reference/reason-codes.md): every status code and its remedy.
+
+## Commands
+
+- `sqy version`: Show framework, Python and platform versions.
+- `sqy doctor`: Check the environment, dependencies, cache and credentials.
+- `sqy commands`: List commands, reason codes and exit codes.
+- `sqy schema`: List bundled JSON schemas, or print one.
+- `sqy explain`: Explain a reason code and how to resolve it.
+- `sqy init`: Create a new strategy project.
+- `sqy check`: Run conformance, determinism and look-ahead checks.
+- `sqy data`: Fetch, verify and list recorded market data.
+- `sqy spec`: Freeze a strategy configuration (spec freeze).
+- `sqy evaluate`: Walk-forward, stress and holdout gates; sets the claim level.
+- `sqy trials`: List trials or (humans only) extend a family's budget.
+- `sqy holdout`: Seal a family's holdout early, or show seals and openings.
+- `sqy sweep`: Backtest a parameter grid (each point on real data is a trial); reports PBO.
+- `sqy backtest`: Backtest a strategy and write run artifacts.
+- `sqy evidence`: Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
+- `sqy commit`: Salted commitments to frozen strategies and journal heads (OpenTimestamps).
+- `sqy perf`: Paper performance snapshots: private captures, or a public feed (live_feed: allow).
+- `sqy docs`: Print llms.txt (or --full: every guide, the CLI reference and reason codes) for agents.
+- `sqy report`: Render the latest backtest and evaluation as report.md and equity.svg.
+- `sqy paper`: Alpaca paper forward tests: preflight, dry-run, run-once, status, halt.

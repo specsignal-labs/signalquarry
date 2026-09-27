@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalquarry.dev/schemas/v1/showcase/study-result.json",
+  "title": "StudyResultV1",
+  "description": "One historical (hypothetical) backtest result. Commercial strategies never have public result records.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "strategy_id", "variant", "title", "test_start", "test_end", "published_at", "evidence", "status", "conclusion", "assumptions", "limitations", "source", "hypothetical", "commercial", "metrics"],
+  "properties": {
+    "schema": {"const": "signalquarry.showcase.study-result/v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{1,160}$"},
+    "strategy_id": {"type": "string"},
+    "variant": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 5},
+    "test_start": {"type": ["string", "null"]},
+    "test_end": {"type": ["string", "null"]},
+    "published_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "evidence": {"enum": ["historical", "option_proxy", "diagnostic"]},
+    "status": {"type": "string", "minLength": 5},
+    "conclusion": {"type": "string", "minLength": 20},
+    "assumptions": {"type": "string", "minLength": 15},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "study_id": {"type": "string"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"type": "string", "minLength": 5}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+    },
+    "qualification_failures": {"type": "array", "items": {"type": "string"}},
+    "hypothetical": {"const": true},
+    "commercial": {"const": false},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_return", "annualized_return", "max_drawdown", "sharpe", "trades"],
+      "properties": {
+        "total_return": {"type": ["number", "null"]},
+        "annualized_return": {"type": ["number", "null"]},
+        "max_drawdown": {"type": ["number", "null"]},
+        "sharpe": {"type": ["number", "null"]},
+        "trades": {"type": ["number", "null"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,3 @@
+# Paths on the runner host whose existence blocks a deploy (read-only check), e.g.
+# deploy-in-progress markers of other systems that share the host. Empty by default.
+forbidden_markers = []

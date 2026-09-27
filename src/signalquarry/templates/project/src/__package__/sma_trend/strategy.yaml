@@ -1,0 +1,32 @@
+schema: signalquarry.strategy/v1
+id: sma-trend
+family: sma-trend
+version: 1.0.0
+kind: equity_daily
+hypothesis:
+  statement: Holding {{symbol}} only while it closes above its 200-session average reduces drawdowns versus buy-and-hold.
+  falsification: Walk-forward max drawdown is not lower than buy-and-hold, or the deflated Sharpe ratio is below 0.95.
+data:
+  symbols: [{{symbol}}]
+  fields: [close]
+  feed: {{feed}}
+  max_staleness_sessions: 3
+account:
+  model: cash
+  initial_cash: "100000"
+execution:
+  model: next_open
+  sizing: whole_shares
+  costs: {bps: "5"}
+params:
+  symbol: {{symbol}}
+  period: 200
+  weight: "0.95"
+reason_codes:
+  PRICE_ABOVE_SMA: Last completed close is above the moving average; hold the target weight.
+  PRICE_BELOW_SMA: Last completed close is below the moving average; hold cash.
+evaluation:
+  holdout: {months: 12}
+  walk_forward: {train_months: 36, test_months: 6}
+  trial_budget: 50
+benchmark: {{symbol}}

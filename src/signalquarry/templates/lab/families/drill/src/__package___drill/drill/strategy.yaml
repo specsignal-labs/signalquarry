@@ -1,0 +1,17 @@
+schema: signalquarry.strategy/v1
+id: drill
+family: drill
+version: 0.1.0
+kind: equity_daily
+hypothesis:
+  statement: None; this family exists only to rehearse extracting and transferring a family.
+  falsification: The drill fails if the extracted family no longer verifies on its own.
+data:
+  symbols: [SPY]
+  feed: sip
+account: {model: cash, initial_cash: "100000"}
+execution: {sizing: whole_shares, costs: {bps: "5"}}
+params: {symbol: SPY, period: 100, weight: "0.5"}
+reason_codes:
+  ABOVE_AVERAGE: Close above the moving average.
+  BELOW_AVERAGE: Close below the moving average.

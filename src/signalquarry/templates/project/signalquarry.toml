@@ -1,0 +1,12 @@
+# SignalQuarry project settings. See AGENTS.md for the workflow.
+[project]
+name = "{{project}}"
+
+[data]
+# "synthetic" needs no credentials (demo data, says nothing about real markets).
+# "alpaca" uses your own keys from APCA_API_KEY_ID / APCA_API_SECRET_KEY.
+provider = "{{provider}}"
+
+[strategies]
+src_dirs = ["src"]
+modules = ["{{package}}.sma_trend.strategy"]

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalquarry.dev/schemas/v1/showcase/strategy-profile.json",
+  "title": "StrategyProfileV1",
+  "description": "One strategy as the showcase may present it. Caps: commercial strategies are category-tier; rule fields exist only at the rules tier.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "title", "family", "kind", "asset_class", "assets", "horizon", "summary", "disclosure_tier", "commercial", "status", "evidence_grade", "claim_level", "primary_result", "children"],
+  "properties": {
+    "schema": {"const": "signalquarry.showcase.strategy-profile/v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,80}$"},
+    "title": {"type": "string", "minLength": 5, "maxLength": 160},
+    "family": {"type": "string", "minLength": 3, "maxLength": 80},
+    "kind": {"enum": ["research", "example", "paper"]},
+    "asset_class": {"enum": ["equity", "options", "none"]},
+    "assets": {"type": "string", "minLength": 2, "maxLength": 200},
+    "horizon": {"type": "string", "minLength": 2, "maxLength": 40},
+    "summary": {"type": "string", "minLength": 30, "maxLength": 1200},
+    "disclosure_tier": {"enum": ["rules", "results", "category"]},
+    "commercial": {"type": "boolean"},
+    "status": {"enum": ["research", "forward_paper", "retired", "licensed", "sold"]},
+    "evidence_grade": {"enum": ["historical", "option_proxy", "paper", "synthetic", "low_evidence_options", "none"]},
+    "claim_level": {"enum": ["none", "in_sample", "walk_forward", "holdout_passed", "paper_forward"]},
+    "primary_result": {"type": ["string", "null"]},
+    "children": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "capacity_note": {"type": "string", "maxLength": 600},
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["how", "thesis", "entry", "exit", "risks", "leverage", "execution", "costs"],
+      "properties": {
+        "how": {"type": "string", "minLength": 30},
+        "thesis": {"type": "string", "minLength": 30},
+        "entry": {"type": "string", "minLength": 12},
+        "exit": {"type": "string", "minLength": 12},
+        "risks": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 12}},
+        "leverage": {"type": "string", "minLength": 2},
+        "execution": {"type": "string", "minLength": 8},
+        "costs": {"type": "string", "minLength": 8}
+      }
+    },
+    "public_notes": {
+      "type": "object",
+      "description": "Non-rule context shown at the results tier (risks, execution and cost framing without the rule).",
+      "additionalProperties": false,
+      "properties": {
+        "risks": {"type": "array", "items": {"type": "string", "minLength": 12}},
+        "execution": {"type": "string"},
+        "costs": {"type": "string"},
+        "leverage": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"commercial": {"const": true}}}, "then": {"properties": {"disclosure_tier": {"const": "category"}}}},
+    {"if": {"properties": {"disclosure_tier": {"not": {"const": "rules"}}}}, "then": {"not": {"required": ["rules"]}}},
+    {"if": {"properties": {"disclosure_tier": {"const": "category"}}}, "then": {"properties": {"primary_result": {"const": null}}, "not": {"required": ["public_notes"]}}}
+  ]
+}

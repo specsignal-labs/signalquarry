@@ -1,0 +1,53 @@
+site_name: SignalQuarry
+site_description: Agent-first strategy research — honest backtests and Alpaca paper forward tests.
+repo_url: https://github.com/specsignal-labs/signalquarry
+edit_uri: ""
+strict: true
+theme:
+  name: material
+  features: [navigation.sections, content.code.copy]
+  palette:
+    - scheme: default
+      toggle: {icon: material/weather-night, name: Dark mode}
+    - scheme: slate
+      toggle: {icon: material/weather-sunny, name: Light mode}
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options: {docstring_style: google, show_source: false}
+markdown_extensions:
+  - admonition
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.superfences
+not_in_nav: |
+  /llms.txt
+  /llms-full.txt
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Guides:
+      - Writing a strategy: authoring.md
+      - Evidence and claims: evidence.md
+      - Market data: data.md
+      - Paper trading: paper.md
+      - Working with agents: agents.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Reason codes: reference/reason-codes.md
+      - SDK: reference/sdk.md
+  - Design:
+      - Architecture: design/ARCHITECTURE.md
+      - Decisions: adr/README.md
+      - "0001 Layering": adr/0001-layering-and-public-surface.md
+      - "0002 Authoring API": adr/0002-strategy-authoring-api.md
+      - "0003 Look-ahead": adr/0003-look-ahead-policy.md
+      - "0004 Data and cache": adr/0004-data-and-cache-format.md
+      - "0005 Gates and ledger": adr/0005-validation-gates-and-trial-ledger.md
+      - "0006 Paper kernel": adr/0006-paper-kernel.md
+      - "0007 Packaging": adr/0007-packaging-and-release.md
+      - "0008 Docs toolchain": adr/0008-docs-toolchain.md
+      - "0009 Plugins": adr/0009-plugins.md

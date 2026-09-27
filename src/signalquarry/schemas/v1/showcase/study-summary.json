@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalquarry.dev/schemas/v1/showcase/study-summary.json",
+  "title": "StudySummaryV1",
+  "description": "An owner-approved aggregate summary of one historical study.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "title", "stage", "status", "period", "summary", "result", "caveats", "report", "reproduction_status", "hash_bindings", "metrics", "hypothetical"],
+  "properties": {
+    "schema": {"const": "signalquarry.showcase.study-summary/v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,80}$"},
+    "title": {"type": "string", "minLength": 5},
+    "stage": {"enum": ["historical", "complete", "incomplete"]},
+    "status": {"type": "string"},
+    "period": {"type": "string"},
+    "summary": {"type": "string", "minLength": 20},
+    "result": {"type": "string", "minLength": 10},
+    "caveats": {"type": "array", "items": {"type": "string"}},
+    "report": {"type": "string"},
+    "reproduction_status": {"enum": ["original_environment_verified", "portable_parity_verified", "not_reproduced", "blocked_missing_data", "blocked_runtime", "incomplete"]},
+    "hash_bindings": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["label", "value"], "properties": {"label": {"type": "string"}, "value": {"type": "string"}}}},
+    "metrics": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["label", "value", "note"], "properties": {"label": {"type": "string"}, "value": {"type": "string"}, "note": {"type": "string"}}}},
+    "hypothetical": {"const": true}
+  }
+}

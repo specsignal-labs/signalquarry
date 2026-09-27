@@ -1,0 +1,892 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Framework reason codes. Codes are append-only: never renamed or removed."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+
+
+class Category(StrEnum):
+    USAGE = "usage"
+    ENVIRONMENT = "environment"
+    DATA = "data"
+    SIGNAL = "signal"
+    EVIDENCE = "evidence"
+    RISK = "risk"
+    EXECUTION = "execution"
+
+
+@dataclass(frozen=True)
+class ReasonCode:
+    code: str
+    category: Category
+    description: str
+    remedy: str
+
+
+_CODES = (
+    ReasonCode(
+        "USAGE_INVALID",
+        Category.USAGE,
+        "The command line could not be parsed.",
+        "Run `sqy commands` or `sqy <command> --help`.",
+    ),
+    ReasonCode(
+        "SCHEMA_UNKNOWN",
+        Category.USAGE,
+        "No bundled schema has that name.",
+        "Run `sqy schema` to list schema names.",
+    ),
+    ReasonCode(
+        "REASON_CODE_UNKNOWN",
+        Category.USAGE,
+        "The code is not a framework or declared strategy reason code.",
+        "Check spelling; codes are UPPER_SNAKE_CASE.",
+    ),
+    ReasonCode(
+        "PYTHON_VERSION_UNSUPPORTED",
+        Category.ENVIRONMENT,
+        "SignalQuarry needs Python 3.12 or newer.",
+        "Install Python 3.12+ and recreate the environment.",
+    ),
+    ReasonCode(
+        "PYTHON_ARCH_EMULATED",
+        Category.ENVIRONMENT,
+        "Python is running under Rosetta emulation on Apple Silicon.",
+        "Use a native arm64 Python build.",
+    ),
+    ReasonCode(
+        "DEPENDENCY_MISSING",
+        Category.ENVIRONMENT,
+        "A required runtime dependency cannot be imported.",
+        "Reinstall with `pip install signalquarry`.",
+    ),
+    ReasonCode(
+        "CACHE_DIR_NOT_WRITABLE",
+        Category.ENVIRONMENT,
+        "The market-data cache directory cannot be written.",
+        "Set SIGNALQUARRY_CACHE_DIR to a writable directory.",
+    ),
+    ReasonCode(
+        "DATA_CREDENTIALS_MISSING",
+        Category.ENVIRONMENT,
+        "No Alpaca market-data credentials were found.",
+        "Set APCA_API_KEY_ID and APCA_API_SECRET_KEY, or use the synthetic provider.",
+    ),
+    ReasonCode(
+        "INSUFFICIENT_HISTORY",
+        Category.DATA,
+        "Fewer completed sessions than the strategy's declared lookback.",
+        "Fetch more history or shorten the lookback.",
+    ),
+    ReasonCode(
+        "STALE_OBSERVATIONS",
+        Category.DATA,
+        "The latest completed bar is older than the declared staleness limit.",
+        "Refresh data with `sqy data fetch`.",
+    ),
+    ReasonCode(
+        "REASON_CODE_UNDECLARED",
+        Category.SIGNAL,
+        "A strategy returned a reason code it did not declare in strategy.yaml.",
+        "Declare the code under reason_codes in strategy.yaml.",
+    ),
+    ReasonCode(
+        "HOLDOUT_REUSED",
+        Category.EVIDENCE,
+        "The sealed holdout for this family was already opened once.",
+        "Start a new hypothesis family; claims stay capped at walk_forward.",
+    ),
+    ReasonCode(
+        "TRIAL_BUDGET_EXHAUSTED",
+        Category.EVIDENCE,
+        "The family's trial budget is used up.",
+        "Stop, or have a human run `sqy trials extend --reason`.",
+    ),
+    ReasonCode(
+        "GATE_FAILED",
+        Category.EVIDENCE,
+        "A qualification gate did not pass.",
+        "Report the failed gate; do not relax gates. Try a new hypothesis.",
+    ),
+    ReasonCode(
+        "PAPER_NOT_ARMED",
+        Category.EXECUTION,
+        "Paper trading is disabled until a human arms the deployment.",
+        "A human runs `sqy paper arm --reason ...` after reviewing the evidence.",
+    ),
+    ReasonCode(
+        "RUN_LEASE_BUSY",
+        Category.EXECUTION,
+        "Another run holds the deployment lease.",
+        "Retry after the running command finishes.",
+    ),
+)
+_CODES += (
+    ReasonCode(
+        "PROJECT_NOT_FOUND",
+        Category.USAGE,
+        "No signalquarry.toml in this directory or its parents.",
+        "Run `sqy init <dir>` or pass --project.",
+    ),
+    ReasonCode(
+        "PROJECT_CONFIG_INVALID",
+        Category.USAGE,
+        "signalquarry.toml could not be parsed or has invalid values.",
+        "Fix the reported field in signalquarry.toml.",
+    ),
+    ReasonCode(
+        "PROJECT_DIR_NOT_EMPTY",
+        Category.USAGE,
+        "`sqy init` only creates projects in a new or empty directory.",
+        "Choose a new directory name.",
+    ),
+    ReasonCode(
+        "STRATEGY_NOT_FOUND",
+        Category.USAGE,
+        "No loaded strategy has that id.",
+        "Run `sqy check` to list strategies, or add the module to signalquarry.toml.",
+    ),
+    ReasonCode(
+        "STRATEGY_IMPORT_FAILED",
+        Category.SIGNAL,
+        "A strategy module could not be imported.",
+        "Fix the import error shown in the detail.",
+    ),
+    ReasonCode(
+        "STRATEGY_MODULE_INVALID",
+        Category.SIGNAL,
+        "A strategy module must define exactly one @strategy function.",
+        "Keep one decide function per module.",
+    ),
+    ReasonCode(
+        "STRATEGY_SPEC_MISSING",
+        Category.SIGNAL,
+        "strategy.yaml is missing next to the strategy module.",
+        "Add strategy.yaml next to strategy.py.",
+    ),
+    ReasonCode(
+        "STRATEGY_SPEC_INVALID",
+        Category.SIGNAL,
+        "strategy.yaml does not match signalquarry.strategy/v1.",
+        "Fix the fields named in the detail.",
+    ),
+    ReasonCode(
+        "STRATEGY_PARAMS_INVALID",
+        Category.SIGNAL,
+        "strategy.yaml params do not validate against the Params class.",
+        "Make params match the Params fields and bounds.",
+    ),
+    ReasonCode(
+        "STRATEGY_ID_DUPLICATE",
+        Category.SIGNAL,
+        "Two strategies share one id.",
+        "Give each strategy.yaml a unique id.",
+    ),
+    ReasonCode(
+        "STRATEGY_LOOKBACK_INVALID",
+        Category.SIGNAL,
+        "lookback(params) must return a positive integer.",
+        "Fix the lookback in @strategy.",
+    ),
+    ReasonCode(
+        "STRATEGY_RETURNED_NON_DECISION",
+        Category.SIGNAL,
+        "decide() must return a Decision.",
+        "Return Decision.target, Decision.hold or Decision.unavailable.",
+    ),
+    ReasonCode(
+        "STRATEGY_STATE_TOO_LARGE",
+        Category.SIGNAL,
+        "Strategy state exceeds 16 KB of canonical JSON.",
+        "Keep state small; recompute from bars instead.",
+    ),
+    ReasonCode(
+        "STRATEGY_STATE_NOT_SERIALIZABLE",
+        Category.SIGNAL,
+        "Strategy state must be canonical JSON (string keys, finite numbers, aware datetimes).",
+        "Store plain JSON values in state.",
+    ),
+    ReasonCode(
+        "DECISION_SYMBOL_NOT_DECLARED",
+        Category.SIGNAL,
+        "A target used a symbol not declared in strategy.yaml data.symbols.",
+        "Declare the symbol or remove it from the target.",
+    ),
+    ReasonCode(
+        "DECISION_WEIGHT_ABOVE_LIMIT",
+        Category.RISK,
+        "A target weight exceeds limits.max_weight_per_symbol.",
+        "Lower the weight or raise the declared limit.",
+    ),
+    ReasonCode(
+        "CONFORMANCE_FAILED",
+        Category.EVIDENCE,
+        "One or more `sqy check` conformance checks failed.",
+        "Fix each failed check listed in data.strategies[].checks.",
+    ),
+    ReasonCode(
+        "DATASET_SYMBOLS_MISSING",
+        Category.DATA,
+        "The dataset lacks a declared symbol.",
+        "Fetch data for every symbol in data.symbols.",
+    ),
+    ReasonCode(
+        "BACKTEST_RANGE_EMPTY",
+        Category.DATA,
+        "No sessions in the requested backtest range.",
+        "Widen --start/--end or fetch more data.",
+    ),
+    ReasonCode(
+        "PROVIDER_UNAVAILABLE",
+        Category.DATA,
+        "The configured data provider is not available yet.",
+        'Use provider = "synthetic" in signalquarry.toml, or fetch data first.',
+    ),
+    ReasonCode(
+        "MARGIN_MODEL_WOULD_BORROW",
+        Category.EXECUTION,
+        "A margin-account buy would require borrowing.",
+        "SignalQuarry never borrows; this indicates an engine bug. Please report it.",
+    ),
+    ReasonCode(
+        "VOLUME_CAPPED",
+        Category.EXECUTION,
+        "An order was reduced to the fill model's share of that session's volume.",
+        "The rest is retried next session; lower weights or accept slower fills for illiquid symbols.",
+    ),
+    ReasonCode(
+        "INSUFFICIENT_SETTLED_CASH",
+        Category.EXECUTION,
+        "A cash-account buy was reduced to the settled cash available.",
+        "Expected with cash accounts; use account.model: margin to spend unsettled proceeds.",
+    ),
+    ReasonCode(
+        "PRICE_MISSING",
+        Category.DATA,
+        "No price for a symbol on the execution session; the order waits.",
+        "Check data coverage for the symbol.",
+    ),
+)
+_CODES += (
+    ReasonCode(
+        "DATA_CREDENTIALS_REJECTED",
+        Category.ENVIRONMENT,
+        "Alpaca rejected the market-data credentials (HTTP 401/403).",
+        "Check APCA_API_KEY_ID/APCA_API_SECRET_KEY; paper keys work for market data.",
+    ),
+    ReasonCode(
+        "CREDENTIALS_FILE_PERMISSIONS_TOO_OPEN",
+        Category.ENVIRONMENT,
+        "credentials.toml is readable by other users.",
+        "Run `chmod 600` on the credentials file.",
+    ),
+    ReasonCode(
+        "PROVIDER_REQUEST_FAILED",
+        Category.DATA,
+        "The provider returned an unexpected HTTP status.",
+        "Check symbols, dates and plan entitlements (SIP needs 15-minute-old data on free plans).",
+    ),
+    ReasonCode(
+        "PROVIDER_RESPONSE_INVALID",
+        Category.DATA,
+        "A provider response was malformed or contained impossible values.",
+        "Retry later; report the endpoint if it persists.",
+    ),
+    ReasonCode(
+        "PROVIDER_PAGINATION_LOOP",
+        Category.DATA,
+        "The provider repeated a page token.",
+        "Retry later; the partial download was discarded.",
+    ),
+    ReasonCode(
+        "PROVIDER_PAGINATION_LIMIT",
+        Category.DATA,
+        "The request needed more pages than allowed.",
+        "Fetch fewer symbols or a shorter range at a time.",
+    ),
+    ReasonCode(
+        "DATA_EMPTY",
+        Category.DATA,
+        "The provider returned no bars for the request.",
+        "Check symbols and the date range.",
+    ),
+    ReasonCode(
+        "DATA_PAGE_MISSING",
+        Category.DATA,
+        "A raw page referenced by a manifest is not in the local cache.",
+        "Re-run `sqy data fetch` for that dataset.",
+    ),
+    ReasonCode(
+        "DATA_PAGE_CORRUPT",
+        Category.DATA,
+        "A cached raw page no longer matches its recorded hash.",
+        "Delete the cache entry and re-fetch.",
+    ),
+    ReasonCode(
+        "DATA_MANIFEST_INVALID",
+        Category.DATA,
+        "A dataset manifest is malformed or its manifest_hash does not match.",
+        "Restore the manifest from version control or re-fetch.",
+    ),
+    ReasonCode(
+        "DATA_IDENTITY_MISMATCH",
+        Category.DATA,
+        "Cached pages rebuild to a different dataset than the manifest records.",
+        "Re-fetch; never edit manifests by hand.",
+    ),
+)
+_CODES += (
+    ReasonCode(
+        "FREEZE_REQUIRED",
+        Category.EVIDENCE,
+        "The configuration is not frozen, so claims stay at in_sample and the holdout stays closed.",
+        "Run `sqy spec freeze --strategy <id>` before evaluating.",
+    ),
+    ReasonCode(
+        "FREEZE_STALE",
+        Category.EVIDENCE,
+        "The strategy changed after its last freeze.",
+        "Freeze again; the new configuration counts as a new trial.",
+    ),
+    ReasonCode(
+        "HOLDOUT_REQUIRES_GATES",
+        Category.EVIDENCE,
+        "The holdout can only be opened after G1-G3 pass.",
+        "Report the failed gates; form a new hypothesis rather than tuning.",
+    ),
+    ReasonCode(
+        "EVIDENCE_LOG_CORRUPT",
+        Category.EVIDENCE,
+        "An evidence log (trials, freezes or holdouts) was edited, truncated or reordered.",
+        "Restore evidence/ from version control; never edit it by hand.",
+    ),
+    ReasonCode(
+        "HOLDOUT_CLIPPED",
+        Category.EVIDENCE,
+        "The backtest stopped before the sealed holdout.",
+        "Expected after `sqy spec freeze`; the holdout is only for `sqy evaluate --holdout`.",
+    ),
+    ReasonCode(
+        "VCS_DIRTY",
+        Category.EVIDENCE,
+        "The project had uncommitted changes when frozen.",
+        "Commit before freezing so the frozen code is recoverable.",
+    ),
+    ReasonCode(
+        "HUMAN_ACTION_RECORDED",
+        Category.EVIDENCE,
+        "A human-only action was recorded in the evidence log.",
+        "Agents must not run human-only commands such as `trials extend`.",
+    ),
+    ReasonCode(
+        "PAPER_EXECUTION_DELAY_UNSUPPORTED",
+        Category.USAGE,
+        "Paper deployments execute at the next open; execution_delay_sessions must be 0.",
+        "Use the delay only for backtest stress runs.",
+    ),
+    ReasonCode(
+        "PAPER_FRACTIONAL_UNSUPPORTED",
+        Category.USAGE,
+        "Market-on-open paper orders need whole shares.",
+        "Set execution.sizing to whole_shares for paper deployments.",
+    ),
+    ReasonCode(
+        "PAPER_CONFIG_NOT_FOUND",
+        Category.USAGE,
+        "No paper deployment config with that alias exists.",
+        "Create paper/<alias>.paper.yaml (see `sqy init`).",
+    ),
+    ReasonCode(
+        "PAPER_CONFIG_INVALID",
+        Category.USAGE,
+        "The paper deployment config failed validation.",
+        "Fix the field named in the summary; run `sqy schema paper`.",
+    ),
+    ReasonCode(
+        "BROKER_NOT_PAPER_ONLY",
+        Category.EXECUTION,
+        "The broker does not declare paper_only; SignalQuarry has no live-trading path.",
+        "Use a paper broker.",
+    ),
+    ReasonCode(
+        "BROKER_ORIGIN_NOT_PAPER",
+        Category.EXECUTION,
+        "A broker request targeted a host other than the Alpaca paper origin.",
+        "Only https://paper-api.alpaca.markets is supported.",
+    ),
+    ReasonCode(
+        "BROKER_UNAVAILABLE",
+        Category.EXECUTION,
+        "The broker did not answer (network error, 429 or 5xx).",
+        "Rerun later; submissions are resolved by client order id, never resubmitted blindly.",
+    ),
+    ReasonCode(
+        "BROKER_CREDENTIALS_REJECTED",
+        Category.ENVIRONMENT,
+        "The broker rejected the paper credentials.",
+        "Check the keys of the paper profile; use keys of a paper account.",
+    ),
+    ReasonCode(
+        "BROKER_REQUEST_FAILED",
+        Category.EXECUTION,
+        "The broker returned an unexpected HTTP status.",
+        "Inspect the status in the summary and retry.",
+    ),
+    ReasonCode(
+        "BROKER_RESPONSE_INVALID",
+        Category.EXECUTION,
+        "The broker response could not be parsed.",
+        "Retry; report it if it persists.",
+    ),
+    ReasonCode(
+        "BROKER_ORDER_REJECTED",
+        Category.EXECUTION,
+        "The broker rejected an order.",
+        "The session is recorded as incomplete and retried on the next unchanged target.",
+    ),
+    ReasonCode(
+        "PAPER_CREDENTIALS_MISSING",
+        Category.ENVIRONMENT,
+        "No credentials were found for the deployment's paper profile.",
+        "Add [paper.<alias>] to credentials.toml (0600) or set SIGNALQUARRY_PAPER_KEY_ID/SECRET_KEY.",
+    ),
+    ReasonCode(
+        "PAPER_KEY_DENIED",
+        Category.RISK,
+        "The paper key is on the deployment's deny-list (it belongs to another deployment).",
+        "Use this deployment's own paper account keys.",
+    ),
+    ReasonCode(
+        "PAPER_JOURNAL_CORRUPT",
+        Category.RISK,
+        "The deployment journal's hash chain does not verify.",
+        "Restore the journal from backup; never edit it by hand.",
+    ),
+    ReasonCode(
+        "PAPER_HALTED",
+        Category.RISK,
+        "The deployment is halted.",
+        "Review the halt reason; a human re-arms with `sqy paper arm` to resume.",
+    ),
+    ReasonCode(
+        "PAPER_ARM_EXPIRED",
+        Category.EXECUTION,
+        "The arm token expired.",
+        "A human re-arms with `sqy paper arm`.",
+    ),
+    ReasonCode(
+        "PAPER_ARM_STALE",
+        Category.EXECUTION,
+        "The strategy configuration or freeze changed since arming.",
+        "Freeze the new configuration; a human re-arms.",
+    ),
+    ReasonCode(
+        "PAPER_ARM_REQUIRES_HUMAN",
+        Category.EXECUTION,
+        "Arming needs a human at an interactive terminal.",
+        "Agents must not arm paper trading; ask the owner.",
+    ),
+    ReasonCode(
+        "PAPER_ARM_NOT_CONFIRMED",
+        Category.EXECUTION,
+        "The arm confirmation did not match the alias.",
+        "Type the alias exactly to confirm.",
+    ),
+    ReasonCode(
+        "PAPER_ACCOUNT_MISMATCH",
+        Category.RISK,
+        "The broker account differs from the deployment's expected or armed account.",
+        "Use the deployment's own paper account; re-arm after an intentional switch.",
+    ),
+    ReasonCode(
+        "PAPER_ACCOUNT_BLOCKED",
+        Category.RISK,
+        "The paper account is not active or trading is blocked.",
+        "Check the account in the Alpaca dashboard.",
+    ),
+    ReasonCode(
+        "PAPER_CLOCK_SKEW",
+        Category.RISK,
+        "The local clock differs from the broker clock beyond the guard.",
+        "Synchronize the host clock (NTP).",
+    ),
+    ReasonCode(
+        "PAPER_DATA_UNAVAILABLE",
+        Category.EXECUTION,
+        "Market data for the session could not be loaded.",
+        "Check data credentials and connectivity; rerun.",
+    ),
+    ReasonCode(
+        "PAPER_DATA_STALE",
+        Category.EXECUTION,
+        "The previous session's bars are not available yet.",
+        "Rerun later in the window.",
+    ),
+    ReasonCode(
+        "PAPER_UNMANAGED_ORDERS",
+        Category.RISK,
+        "The account has open orders this deployment did not create.",
+        "Cancel them or use a dedicated paper account per deployment.",
+    ),
+    ReasonCode(
+        "PAPER_UNMANAGED_POSITION",
+        Category.RISK,
+        "The account holds positions outside the strategy's symbols.",
+        "Close them or use a dedicated paper account per deployment.",
+    ),
+    ReasonCode(
+        "PAPER_OPEN_ORDERS",
+        Category.EXECUTION,
+        "Own orders are still open.",
+        "Retry after they fill, expire or are canceled.",
+    ),
+    ReasonCode(
+        "PAPER_PENDING_ORDERS",
+        Category.EXECUTION,
+        "Journaled orders are not finalized yet.",
+        "Run `sqy paper reconcile`.",
+    ),
+    ReasonCode(
+        "PAPER_ORDER_NOT_FOUND",
+        Category.EXECUTION,
+        "A journaled order intent never reached the broker.",
+        "None; it is recorded as not submitted.",
+    ),
+    ReasonCode(
+        "PAPER_STALE_ORDER_CANCELED",
+        Category.EXECUTION,
+        "An own order from an earlier session was still open and was canceled.",
+        "None; the target is retried.",
+    ),
+    ReasonCode(
+        "PAPER_CANCEL_UNCONFIRMED",
+        Category.EXECUTION,
+        "A cancel request was not confirmed yet.",
+        "Rerun; the kernel waits for a terminal status.",
+    ),
+    ReasonCode(
+        "PAPER_CORPORATE_ACTION_PENDING",
+        Category.EXECUTION,
+        "The broker has not applied today's split to the position yet.",
+        "Rerun later in the window.",
+    ),
+    ReasonCode(
+        "PAPER_POSITION_DRIFT",
+        Category.RISK,
+        "Broker positions differ from the journal in a way fills and splits cannot explain.",
+        "The deployment halted; investigate, then a human re-arms.",
+    ),
+    ReasonCode(
+        "PAPER_DRAWDOWN_HALT",
+        Category.RISK,
+        "Equity fell more than the daily drawdown guard.",
+        "The deployment halted; review, then a human re-arms.",
+    ),
+    ReasonCode(
+        "PAPER_STRATEGY_FAILED",
+        Category.RISK,
+        "The strategy raised or broke its contract during a paper session.",
+        "The deployment halted; fix and re-freeze, then a human re-arms.",
+    ),
+    ReasonCode(
+        "PAPER_SUBMISSION_DISABLED",
+        Category.EXECUTION,
+        "The deployment config has submission: disabled.",
+        "A human sets submission: enabled after review.",
+    ),
+    ReasonCode(
+        "PAPER_NO_SESSION_TODAY",
+        Category.EXECUTION,
+        "The market has no session today.",
+        "None; the scheduler retries on the next session.",
+    ),
+    ReasonCode(
+        "PAPER_SESSION_ALREADY_COMPLETED",
+        Category.EXECUTION,
+        "Today's session was already submitted.",
+        "None; run-once is idempotent.",
+    ),
+    ReasonCode(
+        "PAPER_OUTSIDE_WINDOW",
+        Category.EXECUTION,
+        "The command ran outside the pre-open submission window.",
+        "Schedule run-once inside the configured window (default 09:00-09:25 ET).",
+    ),
+    ReasonCode(
+        "PAPER_BROKER_SIMULATED",
+        Category.EXECUTION,
+        "The deployment uses the offline simulated broker, which cannot be armed or submit orders.",
+        "Use broker: alpaca-paper with a dedicated paper account for forward tests.",
+    ),
+    ReasonCode(
+        "SCHEDULE_GITHUB_ACTIONS_DEMO_ONLY",
+        Category.EXECUTION,
+        "GitHub Actions schedules are delayed and best-effort; use them for demos only.",
+        "Use systemd on a small VM (or launchd/cron on an always-on host) for forward tests.",
+    ),
+    ReasonCode(
+        "REPORT_NO_RUNS",
+        Category.USAGE,
+        "There is no backtest or evaluation run to report on.",
+        "Run `sqy backtest --strategy <id>` (and `sqy evaluate`) first.",
+    ),
+    ReasonCode(
+        "REPORT_CONFIGURATION_CHANGED",
+        Category.EVIDENCE,
+        "The reported runs used a different configuration than the current code and spec.",
+        "Rerun the backtest and evaluation for the current configuration.",
+    ),
+    ReasonCode(
+        "EVIDENCE_LOG_REWRITTEN",
+        Category.EVIDENCE,
+        "An evidence log or paper journal was shortened, edited or deleted since the base revision.",
+        "Restore it from the base revision; evidence logs are append-only.",
+    ),
+    ReasonCode(
+        "TRIAL_NOT_FOUND",
+        Category.USAGE,
+        "No trial ledger entry matches that sequence number or configuration-hash prefix.",
+        "Run `sqy trials ls` to see the entries.",
+    ),
+    ReasonCode(
+        "PUBLICATION_NOT_FOUND",
+        Category.USAGE,
+        "The family has no publication policy, so nothing may be exported.",
+        "Create publication/FAMILY.publication.yaml (default-deny).",
+    ),
+    ReasonCode(
+        "PUBLICATION_INVALID",
+        Category.USAGE,
+        "The publication policy failed validation or breaks a disclosure cap.",
+        "Fix the field named in the summary; commercial families are category-tier.",
+    ),
+    ReasonCode(
+        "PUBLICATION_STRATEGY_UNKNOWN",
+        Category.USAGE,
+        "The publication policy names a strategy the project does not define.",
+        "Use strategy ids from strategy.yaml.",
+    ),
+    ReasonCode(
+        "PUBLICATION_FAMILY_MISMATCH",
+        Category.USAGE,
+        "A published strategy belongs to a different family.",
+        "List only strategies of this family.",
+    ),
+    ReasonCode(
+        "EXPORT_FILE_TYPE_NOT_ALLOWED",
+        Category.EVIDENCE,
+        "A file in the export has a type bundles may not carry.",
+        "Bundles carry JSON, Markdown, SVG and timestamp proofs only.",
+    ),
+    ReasonCode(
+        "BUNDLE_INVALID",
+        Category.EVIDENCE,
+        "The evidence bundle failed verification.",
+        "See data.errors; bundles are never edited after export.",
+    ),
+    ReasonCode(
+        "EVIDENCE_FAMILY_REQUIRED",
+        Category.EVIDENCE,
+        "The per-family evidence layout needs a family for this log.",
+        "Pass the strategy family; this is a framework bug if it reaches you.",
+    ),
+    ReasonCode(
+        "EVIDENCE_INDEX_MISMATCH",
+        Category.EVIDENCE,
+        "A family evidence log does not end where the project index last recorded it.",
+        "Restore the family log from version control; logs are append-only.",
+    ),
+    ReasonCode(
+        "COMMITMENT_PROOF_PENDING",
+        Category.EVIDENCE,
+        "The commitment has no timestamp proof yet.",
+        "Install the OpenTimestamps client (signalquarry[ots]) and run `ots stamp` on the record.",
+    ),
+    ReasonCode(
+        "COMMITMENT_SALT_MISSING",
+        Category.EVIDENCE,
+        "The private salt for this commitment is not on this machine.",
+        "Restore $SIGNALQUARRY_CONFIG_DIR/salts from your backup.",
+    ),
+    ReasonCode(
+        "COMMITMENT_REVEAL_IS_PRIVATE",
+        Category.EVIDENCE,
+        "A commitment opening reveals the configuration.",
+        "Share it only under NDA, for example in a data room.",
+    ),
+    ReasonCode(
+        "COMMITMENT_RECORD_INVALID",
+        Category.EVIDENCE,
+        "The commitment record is missing or malformed.",
+        "Pass the record JSON from evidence/commitments/.",
+    ),
+    ReasonCode(
+        "COMMITMENT_REVEAL_INVALID",
+        Category.EVIDENCE,
+        "The opening file is missing or malformed.",
+        "Use the file written by `sqy commit reveal`.",
+    ),
+    ReasonCode(
+        "COMMITMENT_SPEC_MISMATCH",
+        Category.EVIDENCE,
+        "The opening does not reproduce the committed specification digest.",
+        "The configuration or salt differs from what was committed.",
+    ),
+    ReasonCode(
+        "COMMITMENT_CODE_MISMATCH",
+        Category.EVIDENCE,
+        "The opening does not reproduce the committed code digest.",
+        "The code tree differs from what was committed.",
+    ),
+    ReasonCode(
+        "COMMITMENT_DIGEST_MISMATCH",
+        Category.EVIDENCE,
+        "The record's digest does not match its own fields.",
+        "The record was edited after creation.",
+    ),
+    ReasonCode(
+        "PAPER_STRATEGY_TIMEOUT",
+        Category.RISK,
+        "The strategy's decide step exceeded its time limit in the isolated process.",
+        "The deployment halted; make decide faster, re-freeze, then a human re-arms.",
+    ),
+    ReasonCode(
+        "PAPER_PARITY_MISMATCH",
+        Category.RISK,
+        "Replaying a paper session through the engine produced a different decision or orders.",
+        "Investigate before trusting the forward record; G5 cannot pass with a mismatch.",
+    ),
+    ReasonCode(
+        "PAPER_BACKUP_INVALID",
+        Category.USAGE,
+        "The backup archive is unreadable or belongs to another deployment.",
+        "Pass a tar.gz written by `sqy paper backup` for this alias.",
+    ),
+    ReasonCode(
+        "PAPER_CONTINUITY_BROKEN",
+        Category.RISK,
+        "The live journal does not extend the backup: history was rolled back or rewritten.",
+        "Investigate the host; restore the journal from the backup and re-arm.",
+    ),
+    ReasonCode(
+        "PAPER_RUN_GAVE_UP",
+        Category.EXECUTION,
+        "paper run stopped retrying before run-once succeeded.",
+        "Check the reason codes; the scheduler retries on the next tick.",
+    ),
+    ReasonCode(
+        "SWEEP_TOO_LARGE",
+        Category.USAGE,
+        "The parameter grid has too many points.",
+        "Sweep fewer, better-reasoned values; each point on real data is a trial.",
+    ),
+    ReasonCode(
+        "SWEEP_RESULTS_ARE_IN_SAMPLE",
+        Category.EVIDENCE,
+        "Sweep results are in-sample and raise the trial count.",
+        "Pick a configuration by reasoning, freeze it, then evaluate.",
+    ),
+    ReasonCode(
+        "PERF_PUBLISH_DENIED",
+        Category.EVIDENCE,
+        "The family's publication policy does not allow a live performance feed.",
+        "Set live_feed: allow for a non-commercial family; commercial families publish lagged exports only.",
+    ),
+    ReasonCode(
+        "STRATEGY_KIND_MISMATCH",
+        Category.USAGE,
+        "The strategy decorator does not match strategy.yaml's kind.",
+        "Use @options_strategy for kind options_single_leg and @strategy for equity_daily.",
+    ),
+    ReasonCode(
+        "OPTIONS_DELAY_STRESS_UNSUPPORTED",
+        Category.USAGE,
+        "The options simulator has no execution-delay model.",
+        "Options stress tests vary costs only.",
+    ),
+    ReasonCode(
+        "CORPORATE_ACTION_UNSUPPORTED",
+        Category.DATA,
+        "A corporate action the simulator cannot model happened while a position was open.",
+        "Exclude the period or the underlying; the run stops rather than guess.",
+    ),
+    ReasonCode(
+        "PAPER_KIND_UNSUPPORTED",
+        Category.USAGE,
+        "This paper runner does not trade this strategy kind.",
+        "Options deployments use the options runner.",
+    ),
+    ReasonCode(
+        "OPTIONS_HISTORY_UNAVAILABLE",
+        Category.DATA,
+        "The provider does not return daily bars for expired option contracts in that month.",
+        "Options backtests keep using modelled prices (low evidence); rely on paper forward tests.",
+    ),
+    ReasonCode(
+        "AGENTS_MD_UNMANAGED",
+        Category.USAGE,
+        "AGENTS.md has no signalquarry:begin/end blocks, so there is nothing safe to refresh.",
+        "Compare it by hand with a fresh `sqy init` template, then keep the markers.",
+    ),
+    ReasonCode(
+        "PERF_FEED_INVALID",
+        Category.EVIDENCE,
+        "The existing feed file is not a performance snapshot, so the new one cannot chain to it.",
+        "Move the file aside (a new chain starts) or restore the published snapshot.",
+    ),
+    ReasonCode(
+        "INTERNAL_ERROR",
+        Category.ENVIRONMENT,
+        "An unexpected error inside SignalQuarry (a bug, or a broken installation).",
+        "Run `sqy doctor`; report the bug with the trace id and the traceback printed on stderr.",
+    ),
+    ReasonCode(
+        "TRIAL_BUDGET_NEARLY_USED",
+        Category.EVIDENCE,
+        "The family has used at least 80% of its trial budget.",
+        "Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision.",
+    ),
+    ReasonCode(
+        "OTS_CLIENT_MISSING",
+        Category.ENVIRONMENT,
+        "The OpenTimestamps client is not installed, so new commitments stay unstamped (pending).",
+        "Install it with `pip install 'signalquarry[ots]'` where commitments are made (the paper host).",
+    ),
+    ReasonCode(
+        "OPTIONS_CHAIN_EMPTY",
+        Category.DATA,
+        "The provider returned no option quotes for that underlying and window.",
+        "Check the symbol, widen --width or --max-dte, and record during market hours.",
+    ),
+    ReasonCode(
+        "OPTIONS_RECORDED_CHAINS_USED",
+        Category.DATA,
+        "Recorded provider quotes replaced modelled option prices on some sessions (count after the colon).",
+        "Informational: recorded sessions use real bid/ask snapshots; the rest stay modelled (low evidence).",
+    ),
+    ReasonCode(
+        "PAPER_BROKER_PLUGIN_NOT_FOUND",
+        Category.ENVIRONMENT,
+        "The paper config names a broker plugin that is not installed.",
+        "Install the package that provides it (`sqy doctor` lists broker plugins) or fix `broker:`.",
+    ),
+    ReasonCode(
+        "BROKER_NOT_PAPER_ONLY",
+        Category.RISK,
+        "A broker plugin returned a broker that does not declare paper_only = True.",
+        "Only paper brokers can be used; there is no live path. Fix or remove the plugin.",
+    ),
+    ReasonCode(
+        "BROKER_PLUGIN_INVALID",
+        Category.ENVIRONMENT,
+        "A broker plugin's broker lacks part of the paper broker interface (listed in the detail).",
+        "Implement account, clock, positions, open_orders, order_by_client_id, submit, cancel and calendar.",
+    ),
+)
+REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
+
+
+def lookup(code: str) -> ReasonCode | None:
+    return REASON_CODES.get(code)

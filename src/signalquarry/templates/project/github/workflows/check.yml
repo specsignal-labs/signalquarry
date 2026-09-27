@@ -1,0 +1,26 @@
+# Offline checks for every push and pull request: no credentials, no network.
+name: check
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SIGNALQUARRY_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e . pytest
+      - name: Strategy conformance (contract, determinism, look-ahead)
+        run: sqy --json check --parity
+      - run: pytest -q
+      - name: Evidence logs are intact
+        run: sqy --json evidence verify
+      - name: Evidence logs only grew by appending
+        if: github.event_name == 'pull_request'
+        run: sqy --json evidence verify --base "origin/${{ github.base_ref }}"

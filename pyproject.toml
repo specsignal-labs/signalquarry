@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "signalquarry"
+version = "0.2.0.dev0"
+description = "Agent-first strategy research: honest backtests and Alpaca paper forward tests."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.12"
+authors = [{ name = "Pengyuan Li" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+  "pydantic>=2.7,<3",
+  "numpy>=1.26",
+  "pyarrow>=16",
+  "pyyaml>=6.0.2,<7",
+]
+
+[project.optional-dependencies]
+ots = ["opentimestamps-client>=0.7,<1"]
+
+[project.scripts]
+signalquarry = "signalquarry.cli.main:main"
+sqy = "signalquarry.cli.main:main"
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9", "ruff>=0.16,<0.17", "import-linter>=2.1,<3", "hypothesis>=6.100,<7", "coverage[toml]>=7.6,<8", "jsonschema>=4.23,<5", "git-filter-repo>=2.38", "pyright>=1.1.400,<1.2"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "mkdocstrings[python]>=0.29,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/signalquarry"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["tools/", ".github/", "EXTRACTION_RECORD.json", ".import_linter_cache/"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/signalquarry"]
+
+[tool.coverage.report]
+fail_under = 85
+skip_covered = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]  # ruff format owns line layout
+
+[tool.pyright]
+include = ["src"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plugins"]
+
+[tool.importlinter]
+root_package = "signalquarry"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers"
+type = "layers"
+# Parenthesized layers are optional until their modules exist.
+layers = [
+  "signalquarry.cli",
+  "signalquarry.api",
+  "(signalquarry._internal.paper) | signalquarry._internal.evidence | (signalquarry._internal.publish)",
+  "(signalquarry._internal.validation)",
+  "(signalquarry._internal.engine)",
+  "(signalquarry._internal.data) | (signalquarry._internal.project) | (signalquarry._internal.options)",
+  "(signalquarry.sdk) | (signalquarry.plugins)",
+  "signalquarry._internal.contracts",
+  "signalquarry._internal.canonical",
+]
+exhaustive = false
+
+[[tool.importlinter.contracts]]
+name = "Stdlib-only verifiers"
+type = "forbidden"
+source_modules = ["signalquarry._internal.canonical", "signalquarry._internal.evidence.verify"]
+forbidden_modules = ["pydantic", "numpy", "pyarrow", "yaml"]
+allow_indirect_imports = false

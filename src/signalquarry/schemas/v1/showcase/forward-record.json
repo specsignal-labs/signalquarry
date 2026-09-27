@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://signalquarry.dev/schemas/v1/showcase/forward-record.json",
+  "title": "ForwardRecordV1",
+  "description": "Weekly paper forward record of a commercial strategy: returns only, published with at least a 14-day lag; positions, fills and exposure are always withheld.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "strategy_id", "account_kind", "resolution", "lag_days", "weeks", "positions", "fills", "exposure"],
+  "properties": {
+    "schema": {"const": "signalquarry.showcase.forward-record/v1"},
+    "strategy_id": {"type": "string"},
+    "account_kind": {"const": "paper"},
+    "resolution": {"enum": ["weekly", "monthly"]},
+    "lag_days": {"type": "integer", "minimum": 14},
+    "weeks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["week_ending", "return", "cumulative_return", "drawdown"],
+        "properties": {
+          "week_ending": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+          "return": {"type": "number"},
+          "cumulative_return": {"type": "number"},
+          "drawdown": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "spy_correlation": {"type": ["number", "null"]},
+    "spy_beta": {"type": ["number", "null"]},
+    "positions": {"const": "withheld"},
+    "fills": {"const": "withheld"},
+    "exposure": {"const": "withheld"}
+  }
+}

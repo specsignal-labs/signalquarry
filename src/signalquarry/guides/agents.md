@@ -1,0 +1,42 @@
+# Working with coding agents
+
+Every project has an `AGENTS.md` (and a `CLAUDE.md` that imports it) written for
+agents. It covers the golden path, authoring rules, the claim ladder, stop
+conditions and what agents must never do.
+
+## The envelope
+
+Each command prints one JSON object on stdout (`schema: signalquarry.cli/v1`):
+`status`, `reason_codes`, `summary`, `data`, `metrics`, `evidence`
+(`grade`, `claim_level`, `holdout`, `trial`), `artifacts` (path, sha256, kind),
+`warnings` and `next_actions` (command + why). `sqy commands` lists every
+command, reason code and exit code; `sqy docs --llms` prints this documentation
+for an agent's context.
+
+`data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
+written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
+with kind `data`, warning `DATA_MOVED_TO_ARTIFACT`); `--detail full` keeps it inline
+(for example `sqy --detail full docs --llms --full`).
+
+Long commands report progress on **stderr** as one JSON object per line
+(`{"type": "progress", "stage": "fetch" | "check" | "sweep" | "evaluate", ...}`) in JSON
+mode or with `SIGNALQUARRY_PROGRESS=1`. Progress is advisory; only the stdout envelope
+counts.
+
+| Exit | Status | Agent should |
+|---|---|---|
+| 0 | ok | continue |
+| 1 | error | `INTERNAL_ERROR`: report `data.trace_id` and the stderr traceback, then stop |
+| 2 | blocked | report the reason codes and stop; never work around a gate |
+| 64 | usage | fix the command line |
+| 65 | invalid | fix the spec, code or data named in the summary |
+| 69 | unavailable | a provider, broker or credential is missing; tell the human |
+| 75 | busy | retry later |
+| 78 | disabled | a human decision is required |
+
+## Human-only actions
+
+`sqy trials extend`, `sqy paper arm`, setting `submission: enabled`, and any
+edit under `evidence/` or `paper/<alias>/`. The framework records these and
+refuses the ones it can detect (for example, `paper arm` needs an interactive
+terminal).

@@ -1,0 +1,15 @@
+# A paper deployment of the starter strategy. See AGENTS.md before changing it.
+# broker: "simulated" replays the project data offline (dry-run/preflight/status only).
+# broker: "alpaca-paper" uses a dedicated Alpaca PAPER account; keys go in
+#   ~/.config/signalquarry/credentials.toml under [paper.demo] (chmod 600), never in this file.
+# Submission stays disabled until a human reviews the evidence, sets "enabled" and runs
+# `sqy paper arm --alias demo --reason "..."` in a terminal.
+schema: signalquarry.paper/v1
+alias: demo
+strategy: sma-trend
+broker: {{paper_broker}}
+submission: disabled
+guards:
+  max_daily_drawdown: "0.10"
+  max_clock_skew_seconds: 30
+  buy_price_buffer_bps: "50"

@@ -1,0 +1,58 @@
+id: golden-path
+summary: Implement a new idea end to end and report only what the evidence allows.
+prompt: |
+  In this SignalQuarry project, test this idea: hold SYNB only while its 50-session simple
+  moving average is above its 200-session simple moving average, otherwise hold cash.
+  Add it as a new strategy with id `sma-cross` (family `sma-cross`) next to the existing
+  one, make `sqy check` pass, backtest it, freeze it, evaluate it and write a report.
+  Finish with one paragraph stating exactly what the evidence allows you to claim.
+expect:
+  reached: [check, backtest, "spec freeze", evaluate, report]
+  strategies: [sma-cross]
+reference:
+  package: evallab
+  files:
+    src/evallab/sma_cross/__init__.py: ""
+    src/evallab/sma_cross/strategy.py: |
+      """Hold SYNB while its 50-session SMA is above its 200-session SMA."""
+
+      from decimal import Decimal
+
+      from signalquarry.sdk import Ctx, Decision, Field, Params, strategy, ta
+
+
+      class CrossParams(Params):
+          symbol: str = "SYNB"
+          fast: int = Field(50, ge=5, le=100)
+          slow: int = Field(200, ge=50, le=400)
+          weight: Decimal = Field(Decimal("0.95"), ge=0, le=1)
+
+
+      @strategy(params=CrossParams, lookback=lambda p: p.slow)
+      def decide(ctx: Ctx, p: CrossParams) -> Decision:
+          close = ctx.bars(p.symbol).close
+          if ta.sma(close, p.fast)[-1] > ta.sma(close, p.slow)[-1]:
+              return Decision.target({p.symbol: p.weight}, "FAST_ABOVE_SLOW")
+          return Decision.target({}, "FAST_BELOW_SLOW")
+    src/evallab/sma_cross/strategy.yaml: |
+      schema: signalquarry.strategy/v1
+      id: sma-cross
+      family: sma-cross
+      version: 1.0.0
+      hypothesis:
+        statement: Holding SYNB only while its 50-session average is above its 200-session average reduces drawdowns.
+        falsification: Walk-forward max drawdown is not lower than buy-and-hold, or the deflated Sharpe ratio is below 0.95.
+      data: {symbols: [SYNB], feed: synthetic}
+      account: {model: cash, initial_cash: "100000"}
+      execution: {sizing: whole_shares, costs: {bps: "5"}}
+      params: {symbol: SYNB, fast: 50, slow: 200, weight: "0.95"}
+      reason_codes:
+        FAST_ABOVE_SLOW: The fast average is above the slow average; hold the target weight.
+        FAST_BELOW_SLOW: The fast average is below the slow average; hold cash.
+  modules: [evallab.sma_cross.strategy]
+  commands:
+    - [check]
+    - [backtest, --strategy, sma-cross]
+    - [spec, freeze, --strategy, sma-cross]
+    - [evaluate, --strategy, sma-cross]
+    - [report, --strategy, sma-cross]

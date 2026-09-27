@@ -1,0 +1,74 @@
+id: options-put
+summary: Implement a single-leg options idea with selectors, never contract symbols, and report honestly.
+prompt: |
+  In this SignalQuarry project, test this options idea on synthetic QQQ: sell one
+  cash-secured put 21 to 45 days out, 5% out of the money, and buy it back once more than
+  half of the premium is captured. Never hold shares on purpose: if assigned, do nothing
+  else (hold the shares). Add it as a new strategy with id `cash-secured-put` (family
+  `cash-secured-put`), make `sqy check` pass, backtest it, freeze it, evaluate it and write
+  a report. Finish with one paragraph stating exactly what the evidence allows you to claim.
+expect:
+  reached: [check, backtest, "spec freeze", evaluate, report]
+  strategies: [cash-secured-put]
+reference:
+  package: evallab
+  files:
+    src/evallab/cash_secured_put/__init__.py: ""
+    src/evallab/cash_secured_put/strategy.py: |
+      """Sell a 5% out-of-the-money put 21-45 days out; buy it back past half the premium."""
+
+      from decimal import Decimal
+
+      from signalquarry.sdk import Field, Params
+      from signalquarry.sdk.options import OD, OptionsCtx, OptionsDecision, Strike, options_strategy, sell_put
+
+
+      class PutParams(Params):
+          underlying: str = "QQQ"
+          min_dte: int = Field(21, ge=1, le=60)
+          max_dte: int = Field(45, ge=1, le=90)
+          otm: Decimal = Field(Decimal("0.05"), ge=0, lt=Decimal("0.3"))
+          take_profit: Decimal = Field(Decimal("0.5"), gt=0, lt=1)
+
+
+      @options_strategy(params=PutParams, lookback=lambda p: 1)
+      def decide(ctx: OptionsCtx, p: PutParams) -> OptionsDecision:
+          leg = ctx.leg(p.underlying)
+          if leg is not None:
+              if leg.captured_fraction is not None and leg.captured_fraction > p.take_profit:
+                  return OD.close(p.underlying, "TAKE_PROFIT")
+              return OD.hold("HOLD_LEG")
+          if ctx.wheel(p.underlying).state == "flat":
+              return OD.open(
+                  sell_put(p.underlying, dte=(p.min_dte, p.max_dte), strike=Strike.otm(p.otm)), "SELL_PUT"
+              )
+          return OD.hold("HOLD_SHARES")
+    src/evallab/cash_secured_put/strategy.yaml: |
+      schema: signalquarry.strategy/v1
+      id: cash-secured-put
+      family: cash-secured-put
+      version: 1.0.0
+      kind: options_single_leg
+      hypothesis:
+        statement: Selling 5% out-of-the-money puts on QQQ and taking profit at half the premium earns a positive return net of fees and spreads.
+        falsification: The walk-forward return is not positive, or the deflated Sharpe ratio is below 0.95.
+      data: {symbols: [QQQ], fields: [close], feed: synthetic}
+      account: {model: cash, initial_cash: "100000"}
+      params: {underlying: QQQ, min_dte: 21, max_dte: 45, otm: "0.05", take_profit: "0.5"}
+      reason_codes:
+        SELL_PUT: Flat; sell a cash-secured put.
+        TAKE_PROFIT: More than half the premium is captured; buy the put back.
+        HOLD_LEG: A put is open and the profit target is not reached.
+        HOLD_SHARES: Assigned; hold the shares.
+      options: {underlyings: [QQQ], per_contract_fee: "0.65", spread_haircut: "0.5", entry_cutoff: "15:15"}
+      evaluation:
+        holdout: {months: 0}
+        walk_forward: {train_months: 12, test_months: 3}
+        trial_budget: 20
+  modules: [evallab.cash_secured_put.strategy]
+  commands:
+    - [check]
+    - [backtest, --strategy, cash-secured-put]
+    - [spec, freeze, --strategy, cash-secured-put]
+    - [evaluate, --strategy, cash-secured-put]
+    - [report, --strategy, cash-secured-put]
