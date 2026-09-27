@@ -9,11 +9,13 @@ import pytest
 
 from signalquarry._internal.validation.stats import (
     ReturnMoments,
+    _denominator,
     block_bootstrap_sharpe,
     deflated_sharpe,
     expected_max_sharpe,
     min_track_record_length,
     moments,
+    pbo_cscv,
     probabilistic_sharpe,
 )
 
@@ -56,3 +58,94 @@ def test_moments_and_bootstrap_on_known_series() -> None:
     )
     low, high = block_bootstrap_sharpe(returns, samples=300)
     assert low < m.sharpe < high
+
+
+# The tests below close gaps a mutation-testing pass (hardening track A5) found: each
+# one is written against a hand-computed expectation independent of the formula under
+# test, not a directional/self-referential check, because the survivors they kill are
+# exactly the mutations a directional check cannot see (a coefficient or an operator
+# swapped for one that still points the same way).
+
+
+def test_moments_nan_boundary_is_exactly_at_n_equals_3() -> None:
+    # n=2 must be the degenerate (NaN) case and n=3 the first real one -- distinguishes
+    # `n < 3` from `n <= 3`, and confirms the NaN path returns NaN for every moment
+    # (not just the ones a directional test happens to look at).
+    below = moments(np.array([0.01, 0.02]))
+    assert below.n == 2
+    assert math.isnan(below.sharpe) and math.isnan(below.skew) and math.isnan(below.kurtosis)
+    at = moments(np.array([0.01, 0.02, 0.015]))
+    assert at.n == 3
+    assert math.isfinite(at.sharpe) and math.isfinite(at.skew) and math.isfinite(at.kurtosis)
+
+
+def test_denominator_exact_value_distinguishes_multiply_from_divide() -> None:
+    # 1 - skew*sharpe + (kurtosis-1)/4*sharpe**2, hand-computed: a `skew/sharpe` typo
+    # gives a materially different (and directionally plausible, so hard to notice)
+    # number here, not just a slightly-off one.
+    m = ReturnMoments(n=100, sharpe=2.0, skew=-1.0, kurtosis=5.0)
+    assert _denominator(m) == pytest.approx(math.sqrt(7.0), rel=1e-12)  # not sqrt(5.5)
+
+
+def test_denominator_floors_at_1e_minus_12_when_the_expression_goes_negative() -> None:
+    # skew*sharpe alone already exceeds 1, driving the expression well below zero;
+    # nothing exercises this floor otherwise, so `max(value, 1e-12)` could silently
+    # become `max(value, 1.000000000001)` (also always positive) without any test
+    # noticing.
+    m = ReturnMoments(n=100, sharpe=10.0, skew=5.0, kurtosis=1.0)
+    assert _denominator(m) == pytest.approx(1e-6, rel=1e-9)  # sqrt(1e-12)
+
+
+def test_probabilistic_sharpe_nan_paths_are_independent() -> None:
+    # `n < 3 or not isfinite(sharpe)`: each side must independently trigger NaN, or an
+    # `or`-to-`and` typo would only fail when unusual inputs coincide on both sides at
+    # once -- which nothing here otherwise constructs.
+    short_but_finite = ReturnMoments(n=2, sharpe=0.5, skew=0.0, kurtosis=3.0)
+    assert math.isnan(probabilistic_sharpe(short_but_finite))
+    long_but_nan = ReturnMoments(n=100, sharpe=float("nan"), skew=0.0, kurtosis=3.0)
+    assert math.isnan(probabilistic_sharpe(long_but_nan))
+
+
+def test_expected_max_sharpe_is_exactly_zero_at_zero_variance() -> None:
+    # `sharpe_variance <= 0` vs `< 0`: zero variance must itself return 0.0, not just
+    # negative variance.
+    assert expected_max_sharpe(10, 0.0) == 0.0
+
+
+def test_min_track_record_length_is_infinite_when_sharpe_equals_the_benchmark() -> None:
+    # `sharpe <= benchmark` vs `< benchmark`: a strategy exactly at the benchmark can
+    # never demonstrate it is *above* it, however long the track record.
+    m = ReturnMoments(n=100, sharpe=0.3, skew=0.0, kurtosis=3.0)
+    assert min_track_record_length(m, benchmark_sharpe=0.3) == math.inf
+
+
+def test_pbo_rank_denominator_is_configurations_plus_one() -> None:
+    # A minimal, hand-verified 4-period/2-configuration/2-block matrix. Config 0 is
+    # picked as the in-sample best in both splits and ranks first out-of-sample too
+    # (rank 2/3 -> logit=+ln(2), so PBO=0). A `configurations + 1` -> `+ 2` typo in the
+    # rank formula moves the same split to a boundary logit of exactly 0 (<=0 counts as
+    # overfit), flipping PBO to 1.0 -- a difference no directional "noise vs. a
+    # dominant configuration" check would notice, since both scenarios here already
+    # favour config 0.
+    matrix = np.array(
+        [
+            [1.0, 5.0],
+            [3.0, 1.0],
+            [2.0, 8.0],
+            [6.0, 2.0],
+        ]
+    )
+    result = pbo_cscv(matrix, blocks=2)
+    assert result["splits"] == 2
+    assert result["configurations"] == 2
+    assert result["pbo"] == 0.0
+    assert result["median_logit"] == pytest.approx(math.log(2.0), abs=5e-6)
+
+
+def test_pbo_cscv_accepts_exactly_two_configurations() -> None:
+    # `values.shape[1] < 2` vs `<= 2`: two configurations is the documented minimum
+    # ("N configurations of returns", N >= 2), not an off-by-one short of it.
+    matrix = np.zeros((8, 2))
+    matrix[:, 0] = 1.0
+    result = pbo_cscv(matrix, blocks=2)
+    assert result["splits"] > 0
