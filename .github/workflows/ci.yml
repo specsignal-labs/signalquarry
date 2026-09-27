@@ -42,7 +42,7 @@ jobs:
       - name: Lint and format
         run: |
           uv run ruff check src tests tools evals
-          uv run ruff format --check src tests tools/gen_docs.py tools/bench.py tools/check_headers.py tools/check_coverage.py tools/api_snapshot.py tools/public_tree.py evals
+          uv run ruff format --check src tests tools/gen_docs.py tools/bench.py tools/check_headers.py tools/check_coverage.py tools/api_snapshot.py evals
           uv run python tools/check_headers.py
       - name: Import contracts
         run: uv run lint-imports
