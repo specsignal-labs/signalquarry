@@ -164,3 +164,16 @@ def is_half_day(d: date) -> bool:
     default is the ordinary full session.
     """
     return _in_range(d) and d not in EXTRA_HOLIDAYS and d in half_days(d.year).values()
+
+
+def previous_trading_day(d: date) -> date:
+    """The most recent trading day strictly before `d`.
+
+    Mirrors the OCC's own rule for an option whose scheduled expiration lands on an
+    exchange holiday: trading (and expiration) moves to the business day immediately
+    before it, not forward to the next open session.
+    """
+    prior = d - timedelta(days=1)
+    while is_holiday(prior):
+        prior -= timedelta(days=1)
+    return prior

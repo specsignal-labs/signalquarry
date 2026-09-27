@@ -122,3 +122,19 @@ def test_dst_transition_weeks_are_ordinary_sessions() -> None:
     for d in (date(2024, 3, 11), date(2024, 11, 4)):  # the Monday after each 2024 change
         assert not nyse.is_holiday(d)
         assert not nyse.is_half_day(d)
+
+
+def test_previous_trading_day_skips_a_single_holiday() -> None:
+    # Good Friday 2024: March 29 (Friday) is a holiday, March 28 (Thursday) is not.
+    assert nyse.previous_trading_day(date(2024, 3, 29)) == date(2024, 3, 28)
+
+
+def test_previous_trading_day_skips_a_long_weekend() -> None:
+    # Thanksgiving week 2024: Thursday Nov 28 is a holiday and Nov 29-Dec 1 span a
+    # half day, Saturday and Sunday -- none of those are trading days, but the half
+    # day itself (Nov 29) is a trading day, so it is the answer, not Nov 27.
+    assert nyse.previous_trading_day(date(2024, 12, 2)) == date(2024, 11, 29)
+
+
+def test_previous_trading_day_never_lands_on_a_weekend() -> None:
+    assert nyse.previous_trading_day(date(2024, 1, 1)).weekday() < 5  # New Year's Day, a Monday

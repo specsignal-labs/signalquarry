@@ -3,7 +3,8 @@
 
 Volatility is the underlying's trailing 20-session realized volatility times 1.1
 (floored at 10%); quotes are the model price ± a half-spread of 2% of the price
-(at least one tick). Weekly expirations fall on Fridays. Nothing here is market data:
+(at least one tick). Weekly expirations fall on Fridays, moved to the preceding
+trading day on an NYSE holiday (see ``fridays``). Nothing here is market data:
 results that use these chains are graded ``low_evidence_options``.
 """
 
@@ -17,7 +18,7 @@ from statistics import NormalDist
 
 import numpy as np
 
-from signalquarry._internal.calendar.nyse import is_half_day
+from signalquarry._internal.calendar.nyse import is_half_day, is_holiday, previous_trading_day
 from signalquarry._internal.options.contracts import OptionsError, Quote, contract, parse_occ
 from signalquarry._internal.options.resolver import Candidate
 
@@ -66,12 +67,19 @@ def realized_sigma(closes: np.ndarray) -> float:
 
 
 def fridays(start: date, days: int) -> list[date]:
+    """Weekly expirations, moved to the preceding trading day on an NYSE holiday.
+
+    Mirrors the OCC's own rule: an option scheduled to expire on an exchange holiday
+    (Good Friday is the only one that can land on a Friday here) actually expires the
+    business day before, never the next open session.
+    """
     first = start + timedelta(days=(4 - start.weekday()) % 7)
-    return [
+    fridays_in_range = [
         first + timedelta(days=7 * k)
         for k in range((days // 7) + 1)
         if (first + timedelta(days=7 * k) - start).days <= days
     ]
+    return [previous_trading_day(day) if is_holiday(day) else day for day in fridays_in_range]
 
 
 def _strike_step(spot: float) -> Decimal:
