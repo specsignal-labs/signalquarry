@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  design-docs:
+    # Architecture changes in a pull request must update docs/design/ARCHITECTURE.md or an ADR.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Design docs follow architecture changes
+        run: python3 tools/check_design_docs.py --range "origin/${{ github.base_ref }}..HEAD"
+
   secrets:
     # gitleaks over the full history (pinned; the same command is run locally before merging).
     runs-on: ubuntu-24.04
@@ -42,7 +53,7 @@ jobs:
       - name: Lint and format
         run: |
           uv run ruff check src tests tools evals
-          uv run ruff format --check src tests tools/gen_docs.py tools/bench.py tools/check_headers.py tools/check_coverage.py tools/api_snapshot.py evals
+          uv run ruff format --check src tests tools/gen_docs.py tools/bench.py tools/check_headers.py tools/check_coverage.py tools/api_snapshot.py tools/gen_architecture.py tools/check_design_docs.py evals
           uv run python tools/check_headers.py
       - name: Import contracts
         run: uv run lint-imports

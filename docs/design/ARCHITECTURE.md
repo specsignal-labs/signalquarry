@@ -1,7 +1,95 @@
 # SignalQuarry framework: architecture
 
 Status: accepted design for 0.1 → 1.0. Decisions are recorded as ADRs in
-`docs/adr/`. When a decision changes, update the ADR and this document.
+`docs/adr/`. When a decision changes, update the ADR and this document. The
+diagrams under "Generated from the code" are rebuilt from the source by
+`tools/gen_docs.py`; a pre-commit hook and CI keep this page in step with the code
+(see "Keeping this page current").
+
+## 0. Architecture at a glance
+
+### System context
+
+```mermaid
+flowchart LR
+  dev(["Developer + coding agent"]) -->|"sqy … --json"| cli["SignalQuarry CLI / api"]
+  cli --> project[("Strategy project<br/>strategy.py + strategy.yaml<br/>evidence/ ledgers")]
+  cli -->|"read-only market data"| alpacaData["Alpaca data API"]
+  cli -->|"paper orders only"| alpacaPaper["Alpaca paper API"]
+  cli --> cache[("Local cache<br/>raw pages, content-addressed")]
+  cli -->|"evidence export"| bundle[["Evidence bundle<br/>(hashes, tiers)"]]
+  bundle -->|"reviewed PR"| showcase["Showcase site"]
+  cli -. "commitments" .-> ots["OpenTimestamps"]
+  live["Live brokers"]:::forbidden
+  classDef forbidden fill:#fee,stroke:#c00,stroke-dasharray: 4 4
+  cli -. "no path exists" .- live
+```
+
+### One decision function, two clocks
+
+The backtest and the paper runner call the same `decide(ctx, params)` and the same
+order planning; only the clock and the fill source differ. `sqy check --parity`
+replays sessions through both and fails if orders, fills, positions or cash differ.
+
+```mermaid
+flowchart TB
+  subgraph shared["Shared: engine.plan_pre_open / plan_orders"]
+    ctx["Truncated read-only context<br/>(bars through D-1)"] --> decide["decide(ctx, params)<br/>pure strategy code"]
+    decide --> decision["Decision / OptionsDecision<br/>+ declared reason code"]
+    decision --> plan["Order plan<br/>sells before buys, whole shares,<br/>costs and invariants"]
+  end
+  hclock["HistoricalClock<br/>walks the dataset"] --> ctx
+  wclock["WallClock<br/>one tick per run-once / poll"] --> ctx
+  plan --> sim["Simulator fills<br/>next open · costs · volume cap"]
+  plan --> kernel["Paper kernel<br/>lease · journal · guards"] --> broker["Paper broker<br/>(paper_only)"]
+  sim --> result[("result.json · fills · equity")]
+  broker --> journal[("Hash-chained journal")]
+```
+
+### Evidence pipeline and the claim ladder
+
+```mermaid
+flowchart LR
+  idea["Hypothesis in strategy.yaml"] --> check["sqy check<br/>contract · determinism · look-ahead"]
+  check --> bt["sqy backtest"] --> ledger[("Trial ledger<br/>hash-chained, per family")]
+  bt --> freeze["sqy spec freeze<br/>configuration hash + holdout seal"]
+  freeze --> eval["sqy evaluate<br/>G1 sample · G2 walk-forward (DSR over all trials) · G3 stress"]
+  eval -->|"G1–G3 pass"| hold["evaluate --holdout<br/>G4, once per family"]
+  hold --> paper["Paper forward test<br/>G5: 20 clean sessions"]
+  eval --> claim{{"claim level"}}
+  hold --> claim
+  paper --> claim
+  claim --> export["sqy evidence export<br/>default-deny publication.yaml"]
+  export --> showcase["Showcase (verified bundle)"]
+  plugin["Plugin gates<br/>add-only"] -. "can only lower" .-> claim
+```
+
+Claim levels, in order: `none` → `in_sample` → `walk_forward` → `holdout_passed` →
+`paper_forward`. Synthetic data never rises above `none`; options results are graded
+`low_evidence_options` and have no holdout step.
+
+### Paper `run-once` (equities)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant S as Scheduler (systemd timer)
+  participant K as Paper kernel
+  participant J as Journal
+  participant B as Paper broker
+  participant D as decide() (child process)
+  S->>K: sqy paper run-once
+  K->>K: take the run lease (flock)
+  K->>J: verify hash chain and arm token
+  K->>B: account, clock, open orders, positions
+  K->>K: reconcile own orders and activities, guards (skew, drawdown, unmanaged)
+  K->>D: truncated context, no credentials
+  D-->>K: decision + state
+  K->>J: session_started (decision, planned orders)
+  K->>B: submit (client_order_id = sq-alias-intent-retry)
+  B-->>K: order status
+  K->>J: order_final / session_completed
+```
 
 ## 1. Framework design
 
@@ -30,14 +118,14 @@ src/signalquarry/
   testing/   pytest plugin: conformance(), FakeBroker, fixtures
   cli/       argparse adapter over api; command registry; exit codes
   schemas/v1/  templates/
-  _internal/{canonical, contracts, data, project, engine, validation, evidence, publish, paper}
+  _internal/{canonical, contracts, data, project, options, engine, validation, evidence, publish, paper}
 ```
 
 Dependency rules:
 - **Layer order:** cli → api → {paper | evidence | publish} → validation → engine → {data | project} → {sdk | plugins} → contracts → canonical.
 - **No network in pure code:** `sdk`, `engine`, `validation`, `contracts` and `canonical` must not import network, subprocess or paper modules.
 - **Stdlib-only verifiers:** `canonical` and `evidence.verify` use the stdlib only, so the showcase can vendor them.
-- **Network allowlist:** only `data.providers.*`, `paper.brokers.*` and `publish` may use `urllib.request`.
+- **Network allowlist:** only `data.alpaca` and `paper.brokers.*` use `urllib.request`; `publish.commit` and `paper.isolate` start subprocesses (`ots`, the isolated `decide` child).
 - The future MCP server wraps `api`, so no logic is duplicated.
 
 **Stability in 0.x**
@@ -45,7 +133,7 @@ Dependency rules:
 - **Breaking one of these** requires a new schema version, a reader for the old version kept for at least 2 minors (ledger readers forever), and `sqy migrate`.
 - **`api` and `plugins`** may break after one minor of deprecation warnings.
 - **`_internal`** has no guarantees.
-- A griffe API snapshot in CI fails on unlabeled public-surface changes.
+- A public-API snapshot (`tools/api_snapshot.py` → `tools/public_api.txt`) fails CI on unlabeled public-surface changes.
 
 **Authoring API.** One pure function plus pydantic params, and no order management. This is the shape coding agents write most reliably.
 ```python
@@ -270,3 +358,154 @@ Deliberately not pluggable: the context builder and clock, ledger and seal write
 - Scored on artifacts: an envelope was reached; the ledger is intact and monotonic; conformance passes; the count of 64/65 errors; wall time; tokens.
 - Cadence: per release candidate and weekly. Every PR runs a deterministic command-script replay.
 - Bar: 3/3 runs reach `evaluate` in ≤ 15 min, with zero ledger or gate tampering.
+
+## Keeping this page current
+
+- **Generated part.** Everything under "Generated from the code" is rebuilt by
+  `uv run python tools/gen_docs.py`; `gen_docs.py --check` fails in CI, in the test suite
+  and in the pre-commit hook when the code and the page disagree.
+- **Architecture changes need a design update.** Adding, removing or renaming framework
+  modules, or changing the layer contract in `pyproject.toml`, must come with an edit to
+  this page or an ADR in `docs/adr/`. `tools/check_design_docs.py` enforces this in the
+  pre-commit hook (`git config core.hooksPath .githooks`) and over every pull request in
+  CI. When a change really needs no design update, say so with a commit trailer
+  `Architecture: unchanged` (or `SIGNALQUARRY_ARCH_OK=1` for the local hook).
+
+## Generated from the code
+
+<!-- generated:architecture:start -->
+
+*Generated by `tools/gen_architecture.py` from the source; do not edit by hand.*
+
+### Layers
+
+Layers are the import-linter contract (`pyproject.toml`), top to bottom: a component
+may import only from layers below it. Components on one layer cannot import each other.
+
+```mermaid
+flowchart TB
+  L0["<b>cli</b>"]
+  L1["<b>api</b>"]
+  L0 --> L1
+  L2["<b>paper · evidence · publish</b>"]
+  L1 --> L2
+  L3["<b>validation</b>"]
+  L2 --> L3
+  L4["<b>engine</b>"]
+  L3 --> L4
+  L5["<b>data · project · options</b>"]
+  L4 --> L5
+  L6["<b>sdk · plugins</b>"]
+  L5 --> L6
+  L7["<b>contracts</b>"]
+  L6 --> L7
+  L8["<b>canonical</b>"]
+  L7 --> L8
+  testing(["testing<br/>outside the layers"])
+  testing -.-> L1
+  testing -.-> L2
+  testing -.-> L5
+```
+
+### Direct imports
+
+Parsed from the source, so this is what the code does, not what it should do.
+
+| Component | Imports (direct) |
+|---|---|
+| `cli` | `api`, `data`, `contracts` |
+| `api` | `paper`, `evidence`, `publish`, `validation`, `engine`, `data`, `project`, `plugins`, `contracts`, `canonical` |
+| `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
+| `evidence` | `canonical` |
+| `publish` | `validation`, `engine`, `contracts`, `canonical` |
+| `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
+| `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
+| `data` | `contracts`, `canonical` |
+| `project` | `sdk`, `contracts`, `canonical` |
+| `options` | — |
+| `sdk` | — |
+| `plugins` | — |
+| `contracts` | — |
+| `canonical` | — |
+| `testing` | `api`, `paper`, `data` |
+
+### Component inventory
+
+| Component | Modules |
+|---|---|
+| `cli` | `(package)`, `main` |
+| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep` |
+| `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
+| `evidence` | `(package)`, `report`, `runs`, `verify` |
+| `publish` | `(package)`, `commit`, `export` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
+| `engine` | `(package)`, `backtest`, `options_sim`, `run` |
+| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `synthetic` |
+| `project` | `(package)`, `agents_md`, `project` |
+| `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
+| `sdk` | `(package)`, `context`, `decision`, `options`, `strategy`, `ta` |
+| `plugins` | `(package)` |
+| `contracts` | `(package)`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
+| `canonical` | `(package)` |
+| `testing` | `(package)` |
+
+### Command tree
+
+```mermaid
+flowchart LR
+  sqy(["sqy"])
+  sqy --> c_version["version"]
+  sqy --> c_doctor["doctor"]
+  sqy --> c_commands["commands"]
+  sqy --> c_schema["schema"]
+  sqy --> c_explain["explain"]
+  sqy --> c_init["init"]
+  sqy --> c_check["check"]
+  sqy --> c_data["data"]
+  c_data --> c_data_fetch["fetch"]
+  c_data --> c_data_probe["probe"]
+  c_data --> c_data_record["record"]
+  c_data --> c_data_verify["verify"]
+  c_data --> c_data_ls["ls"]
+  sqy --> c_spec["spec"]
+  c_spec --> c_spec_freeze["freeze"]
+  sqy --> c_evaluate["evaluate"]
+  sqy --> c_trials["trials"]
+  c_trials --> c_trials_ls["ls"]
+  c_trials --> c_trials_show["show"]
+  c_trials --> c_trials_extend["extend"]
+  sqy --> c_holdout["holdout"]
+  c_holdout --> c_holdout_status["status"]
+  c_holdout --> c_holdout_seal["seal"]
+  sqy --> c_sweep["sweep"]
+  sqy --> c_backtest["backtest"]
+  sqy --> c_evidence["evidence"]
+  c_evidence --> c_evidence_verify["verify"]
+  c_evidence --> c_evidence_export["export"]
+  sqy --> c_commit["commit"]
+  c_commit --> c_commit_create["create"]
+  c_commit --> c_commit_reveal["reveal"]
+  c_commit --> c_commit_verify["verify"]
+  sqy --> c_perf["perf"]
+  c_perf --> c_perf_publish["publish"]
+  c_perf --> c_perf_capture["capture"]
+  sqy --> c_docs["docs"]
+  sqy --> c_report["report"]
+  sqy --> c_paper["paper"]
+  c_paper --> c_paper_preflight["preflight"]
+  c_paper --> c_paper_dry_run["dry-run"]
+  c_paper --> c_paper_arm["arm"]
+  c_paper --> c_paper_run_once["run-once"]
+  c_paper --> c_paper_status["status"]
+  c_paper --> c_paper_reconcile["reconcile"]
+  c_paper --> c_paper_halt["halt"]
+  c_paper --> c_paper_drift["drift"]
+  c_paper --> c_paper_run["run"]
+  c_paper --> c_paper_backup["backup"]
+  c_paper --> c_paper_verify_continuity["verify-continuity"]
+  c_paper --> c_paper_schedule["schedule"]
+```
+
+**Plugin entry-point groups:** `signalquarry.gates`, `signalquarry.report_sections`, `signalquarry.brokers`.
+
+<!-- generated:architecture:end -->

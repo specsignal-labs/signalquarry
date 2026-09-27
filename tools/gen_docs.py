@@ -4,8 +4,9 @@
     uv run python tools/gen_docs.py          # write
     uv run python tools/gen_docs.py --check  # exit 1 if any generated file is stale
 
-Sources of truth: ``src/signalquarry/guides/*.md``, the CLI command registry and
-the reason-code registry. Never edit the generated files by hand.
+Sources of truth: ``src/signalquarry/guides/*.md``, the CLI command registry, the
+reason-code registry and, for the generated block of ``docs/design/ARCHITECTURE.md``,
+the source tree itself (``tools/gen_architecture.py``). Never edit the generated files by hand.
 """
 
 from __future__ import annotations
@@ -16,6 +17,9 @@ from pathlib import Path
 
 from signalquarry.api.docs import GUIDES, cli_markdown, guide, llms_full, llms_index, reason_codes_markdown
 from signalquarry.cli.main import command_catalog
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gen_architecture  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
@@ -32,6 +36,8 @@ def generated() -> dict[Path, str]:
     files[DOCS / "reference" / "reason-codes.md"] = (
         HEADER.format(source="the reason-code registry") + reason_codes_markdown()
     )
+    architecture = DOCS / "design" / "ARCHITECTURE.md"
+    files[architecture] = gen_architecture.apply(architecture.read_text(encoding="utf-8"))
     files[DOCS / "llms.txt"] = llms_index(catalog)
     files[DOCS / "llms-full.txt"] = llms_full(catalog)
     return files
