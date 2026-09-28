@@ -342,12 +342,17 @@ def actions_from_pages(pages: list[RawPage]) -> tuple[tuple[Split, ...], tuple[D
                     if new_symbol and str(new_symbol).upper() != str(item["symbol"]).upper():
                         raise ProviderError("CORPORATE_ACTION_UNSUPPORTED", f"{kind} symbol change")
                     ratio = Decimal(str(item["new_rate"])) / Decimal(str(item["old_rate"]))
+                    if not ratio.is_finite() or ratio <= 0:
+                        raise ValueError("split ratio must be positive and finite")
                     key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
                     splits[key] = Split(key[0], key[1], ratio)
             for item in actions.get("cash_dividends", []):
                 key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
                 pay = date.fromisoformat(item.get("payable_date") or item["ex_date"])
-                dividends[key] = Dividend(key[0], key[1], pay, Decimal(str(item["rate"])))
+                amount = Decimal(str(item["rate"]))
+                if not amount.is_finite():
+                    raise ValueError("dividend amount must be finite")
+                dividends[key] = Dividend(key[0], key[1], pay, amount)
         except (KeyError, ValueError, ArithmeticError, TypeError, AttributeError) as exc:
             raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action") from exc
     return tuple(splits[k] for k in sorted(splits)), tuple(dividends[k] for k in sorted(dividends))

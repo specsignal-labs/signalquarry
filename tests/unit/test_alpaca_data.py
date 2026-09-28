@@ -103,6 +103,20 @@ def test_missing_corporate_action_collection_is_invalid_provider_data() -> None:
     assert info.value.code == "PROVIDER_RESPONSE_INVALID"
 
 
+@pytest.mark.parametrize(
+    "actions",
+    [
+        {"forward_splits": [{"symbol": "SYNA", "ex_date": "2019-01-04", "new_rate": 0, "old_rate": 1}]},
+        {"cash_dividends": [{"symbol": "SYNA", "ex_date": "2019-01-04", "rate": "NaN"}]},
+    ],
+)
+def test_invalid_corporate_action_amounts_are_rejected(actions: dict) -> None:
+    action = RawPage("/v1/corporate-actions", {}, b"", "", {"corporate_actions": actions})
+    with pytest.raises(ProviderError) as info:
+        actions_from_pages([action])
+    assert info.value.code == "PROVIDER_RESPONSE_INVALID"
+
+
 def test_fetch_surfaces_unsupported_action_without_writing_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
