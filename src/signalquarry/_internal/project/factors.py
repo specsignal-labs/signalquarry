@@ -24,10 +24,11 @@ class LoadedFactor:
     params: Params
     module: ModuleType
     package_dir: Path
+    code_dir: Path
 
     @property
     def code_tree_hash(self) -> str:
-        return code_tree_hash(self.package_dir)
+        return code_tree_hash(self.code_dir)
 
     @property
     def configuration_hash(self) -> str:
@@ -64,6 +65,11 @@ def load_module_factor(module_name: str, root: Path) -> LoadedFactor:
             "FACTOR_MODULE_INVALID", f"{module_name} defines {len(definitions)} @factor functions"
         )
     package_dir = module_file.parent
+    # Helpers may live beside the factor's package. Hash the complete importable
+    # top-level project package so a helper edit cannot retain the same identity.
+    code_dir = package_dir
+    for _ in range(len(module_name.split(".")) - 2):
+        code_dir = code_dir.parent
     spec_path = package_dir / "factor.yaml"
     if not spec_path.is_file() or not spec_path.resolve().is_relative_to(root):
         raise ProjectError("FACTOR_SPEC_MISSING", str(spec_path))
@@ -81,7 +87,7 @@ def load_module_factor(module_name: str, root: Path) -> LoadedFactor:
         params = definition.params.model_validate(spec.params)
     except ValueError as exc:
         raise ProjectError("FACTOR_PARAMS_INVALID", str(exc)[:500]) from exc
-    return LoadedFactor(spec, definition, params, module, package_dir)
+    return LoadedFactor(spec, definition, params, module, package_dir, code_dir)
 
 
 def load_factors(config: ProjectConfig) -> dict[str, LoadedFactor]:

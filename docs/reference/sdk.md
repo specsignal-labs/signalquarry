@@ -74,5 +74,8 @@ an evidence grade. Evaluation settings, universe, and labels still need their
 own trial identity before real-data evaluation is available. Both commands
 import the authored factor module, so inspect untrusted project code before
 running them outside an isolated development environment.
+The code hash covers the factor's full top-level project package, including
+shared helpers; edits elsewhere in that package also change its identity. The
+import policy checks that complete package as well.
 
 ::: signalquarry.sdk.xs

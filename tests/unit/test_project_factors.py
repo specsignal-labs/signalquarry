@@ -98,6 +98,22 @@ def test_invalid_registered_params_are_rejected(tmp_path: Path) -> None:
     assert factor_ls(project=root).reason_codes == ["FACTOR_PARAMS_INVALID"]
 
 
+def test_factor_identity_covers_sibling_helpers(tmp_path: Path) -> None:
+    root, _, package = _project(tmp_path)
+    helper = root / "src" / package / "helper.py"
+    helper.write_text("SCALE = 1\n", encoding="utf-8")
+    factor_file = root / "src" / package / "momentum" / "factor.py"
+    factor_file.write_text(f"from {package} import helper\n" + factor_file.read_text(), encoding="utf-8")
+    before = factor_ls(project=root).data["factors"][0]["configuration_hash"]
+    helper.write_text("SCALE = 2\n", encoding="utf-8")
+    after = factor_ls(project=root).data["factors"][0]["configuration_hash"]
+    assert before != after
+    helper.write_text("import os\nSCALE = 2\n", encoding="utf-8")
+    checked = check_registered_factor("price-momentum", project=root)
+    assert checked.status == "blocked"
+    assert checked.data["checks"][0]["name"] == "import_policy"
+
+
 def test_duplicate_factor_ids_and_config_shape(tmp_path: Path) -> None:
     root, _, _ = _project(tmp_path, extra_module=True)
     assert factor_ls(project=root).reason_codes == ["FACTOR_ID_DUPLICATE"]

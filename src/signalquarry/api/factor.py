@@ -58,7 +58,7 @@ def check_registered_factor(factor_id: str, *, project: Path | None = None) -> E
             data={"factors": sorted(factors)},
         )
     item = factors[factor_id]
-    results = [import_policy(item.package_dir, item.module.__name__.split(".")[0], sdk_only=True)]
+    results = [import_policy(item.code_dir, item.module.__name__.split(".")[0], sdk_only=True)]
     if results[0].ok:
         results.extend(run_factor_checks(item.definition, item.params))
     ok = all(result.ok for result in results)

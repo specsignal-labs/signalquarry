@@ -42,6 +42,9 @@ hashes; `sqy check --factor-id ID` runs synthetic conformance using declared
 parameters. The configuration hash includes the complete factor specification,
 validated parameters, package code, function identity, and framework
 major/minor version. Even a hypothesis edit therefore changes its identity.
+The code hash covers the full top-level project package, including sibling
+helpers; unrelated edits within that package also conservatively change it.
+The import policy checks that same tree.
 Evaluation settings, universe, and labels will form a separate trial
 configuration when real-data evaluation and ledger integration exist. Listing
 and checking registered factors do not consume trials or produce grades.
