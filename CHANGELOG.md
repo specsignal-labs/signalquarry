@@ -67,6 +67,7 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Fixed
+- Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication

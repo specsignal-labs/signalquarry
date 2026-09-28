@@ -184,7 +184,9 @@ class AlpacaDataClient:
             CORPORATE_ACTIONS_PATH,
             {
                 "symbols": ",".join(symbols),
-                "types": "forward_split,reverse_split,cash_dividend",
+                # Omitting `types` requests every category. A filtered request could
+                # silently omit a merger or symbol change affecting the strategy.
+                "data_quality": "all",
                 "start": start.isoformat(),
                 "end": end.isoformat(),
                 "limit": "1000",
@@ -324,10 +326,21 @@ def actions_from_pages(pages: list[RawPage]) -> tuple[tuple[Split, ...], tuple[D
     splits: dict[tuple[str, date], Split] = {}
     dividends: dict[tuple[str, date], Dividend] = {}
     for page in pages:
-        actions = page.payload.get("corporate_actions") or {}
+        actions = page.payload.get("corporate_actions")
+        if not isinstance(actions, dict):
+            raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate actions collection")
+        supported = {"forward_splits", "reverse_splits", "cash_dividends"}
+        for kind, items in actions.items():
+            if not isinstance(items, list):
+                raise ProviderError("PROVIDER_RESPONSE_INVALID", f"corporate actions {kind}")
+            if kind not in supported and items:
+                raise ProviderError("CORPORATE_ACTION_UNSUPPORTED", kind)
         try:
             for kind in ("forward_splits", "reverse_splits"):
                 for item in actions.get(kind, []):
+                    new_symbol = item.get("new_symbol")
+                    if new_symbol and str(new_symbol).upper() != str(item["symbol"]).upper():
+                        raise ProviderError("CORPORATE_ACTION_UNSUPPORTED", f"{kind} symbol change")
                     ratio = Decimal(str(item["new_rate"])) / Decimal(str(item["old_rate"]))
                     key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
                     splits[key] = Split(key[0], key[1], ratio)
@@ -335,6 +348,6 @@ def actions_from_pages(pages: list[RawPage]) -> tuple[tuple[Split, ...], tuple[D
                 key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
                 pay = date.fromisoformat(item.get("payable_date") or item["ex_date"])
                 dividends[key] = Dividend(key[0], key[1], pay, Decimal(str(item["rate"])))
-        except (KeyError, ValueError, ArithmeticError) as exc:
+        except (KeyError, ValueError, ArithmeticError, TypeError, AttributeError) as exc:
             raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action") from exc
     return tuple(splits[k] for k in sorted(splits)), tuple(dividends[k] for k in sorted(dividends))

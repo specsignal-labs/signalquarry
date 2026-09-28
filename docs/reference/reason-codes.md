@@ -27,7 +27,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `COMMITMENT_SALT_MISSING` | evidence | The private salt for this commitment is not on this machine. | Restore $SIGNALQUARRY_CONFIG_DIR/salts from your backup. |
 | `COMMITMENT_SPEC_MISMATCH` | evidence | The opening does not reproduce the committed specification digest. | The configuration or salt differs from what was committed. |
 | `CONFORMANCE_FAILED` | evidence | One or more `sqy check` conformance checks failed. | Fix each failed check listed in data.strategies[].checks. |
-| `CORPORATE_ACTION_UNSUPPORTED` | data | A corporate action the simulator cannot model happened while a position was open. | Exclude the period or the underlying; the run stops rather than guess. |
+| `CORPORATE_ACTION_UNSUPPORTED` | data | Fetched data contains an unmodelled corporate action, or one affected an open options position. | Exclude the period or underlying; data preparation or the run stops rather than guess. |
 | `CREDENTIALS_FILE_PERMISSIONS_TOO_OPEN` | environment | credentials.toml is readable by other users. | Run `chmod 600` on the credentials file. |
 | `DATASET_SYMBOLS_MISSING` | data | The dataset lacks a declared symbol. | Fetch data for every symbol in data.symbols. |
 | `DATA_CREDENTIALS_MISSING` | environment | No Alpaca market-data credentials were found. | Set APCA_API_KEY_ID and APCA_API_SECRET_KEY, or use the synthetic provider. |

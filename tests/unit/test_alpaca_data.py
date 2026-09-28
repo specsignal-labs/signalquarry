@@ -4,12 +4,19 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import urllib.parse
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from signalquarry._internal.data.alpaca import AlpacaDataClient, ProviderError, RateLimiter
+from signalquarry._internal.data.alpaca import (
+    AlpacaDataClient,
+    ProviderError,
+    RateLimiter,
+    RawPage,
+    actions_from_pages,
+)
 from signalquarry._internal.data.credentials import load_data_credentials
 from signalquarry._internal.data.library import build_dataset
 from signalquarry._internal.data.synthetic import synthetic_dataset
@@ -35,6 +42,8 @@ def test_round_trip_through_alpaca_format_preserves_engine_results() -> None:
     client = _client(fake)
     bar_pages = client.daily_bars(("SYNA", "SYNB"), START, END, "sip")
     action_pages = client.corporate_actions(("SYNA", "SYNB"), START, END)
+    action_query = urllib.parse.parse_qs(urllib.parse.urlparse(fake.calls[-1]).query)
+    assert "types" not in action_query and action_query["data_quality"] == ["all"]
     assert len(bar_pages) > 2  # paginated
     rebuilt = build_dataset(bar_pages, action_pages, source="alpaca:sip")
     assert rebuilt.sessions == source.sessions
@@ -42,6 +51,80 @@ def test_round_trip_through_alpaca_format_preserves_engine_results() -> None:
     original = run_backtest(spec(("SYNA",)), definition_of(sma_trend), SmaP(), source)
     replayed = run_backtest(spec(("SYNA",)), definition_of(sma_trend), SmaP(), rebuilt)
     assert original.decisions == replayed.decisions and original.fills == replayed.fills
+
+
+@pytest.mark.parametrize("kind", ["name_changes", "worthless_removals", "cash_mergers", "spin_offs"])
+def test_unmodelled_corporate_actions_block_dataset_creation(kind: str) -> None:
+    source = synthetic_dataset(date(2019, 1, 2), date(2019, 1, 8), symbols=("SYNA",))
+    bars = _client(FakeAlpaca(source)).daily_bars(("SYNA",), date(2019, 1, 2), date(2019, 1, 8), "sip")
+    action = RawPage(
+        "/v1/corporate-actions",
+        {},
+        b"",
+        "",
+        {"corporate_actions": {kind: [{"symbol": "SYNA", "ex_date": "2019-01-04"}]}},
+    )
+    with pytest.raises(ProviderError) as info:
+        build_dataset(bars, [action], source="alpaca:sip")
+    assert info.value.code == "CORPORATE_ACTION_UNSUPPORTED"
+
+
+def test_split_with_new_symbol_cannot_be_applied_as_plain_ratio() -> None:
+    source = synthetic_dataset(date(2019, 1, 2), date(2019, 1, 8), symbols=("SYNA",))
+    bars = _client(FakeAlpaca(source)).daily_bars(("SYNA",), date(2019, 1, 2), date(2019, 1, 8), "sip")
+    action = RawPage(
+        "/v1/corporate-actions",
+        {},
+        b"",
+        "",
+        {
+            "corporate_actions": {
+                "reverse_splits": [
+                    {
+                        "symbol": "SYNA",
+                        "new_symbol": "SYNB",
+                        "ex_date": "2019-01-04",
+                        "new_rate": 1,
+                        "old_rate": 10,
+                    }
+                ]
+            }
+        },
+    )
+    with pytest.raises(ProviderError) as info:
+        build_dataset(bars, [action], source="alpaca:sip")
+    assert info.value.code == "CORPORATE_ACTION_UNSUPPORTED"
+
+
+def test_missing_corporate_action_collection_is_invalid_provider_data() -> None:
+    action = RawPage("/v1/corporate-actions", {}, b"", "", {"next_page_token": None})
+    with pytest.raises(ProviderError) as info:
+        actions_from_pages([action])
+    assert info.value.code == "PROVIDER_RESPONSE_INVALID"
+
+
+def test_fetch_surfaces_unsupported_action_without_writing_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class WithMerger(FakeAlpaca):
+        def _actions(self, params: dict[str, str]) -> dict:
+            response = super()._actions(params)
+            response["corporate_actions"]["cash_mergers"] = [{"symbol": "SPY", "ex_date": "2019-01-04"}]
+            return response
+
+    monkeypatch.setenv("SIGNALQUARRY_CACHE_DIR", str(tmp_path / "cache"))
+    project = tmp_path / "merger-lab"
+    assert init(project, package="merger_lab").status == "ok"
+    fake = WithMerger(synthetic_dataset(date(2019, 1, 2), date(2019, 1, 8), symbols=("SPY",)))
+    fetched = data_fetch(
+        symbols=("SPY",),
+        start=date(2019, 1, 2),
+        end=date(2019, 1, 8),
+        project=project,
+        client=_client(fake),
+    )
+    assert fetched.status == "invalid" and fetched.reason_codes == ["CORPORATE_ACTION_UNSUPPORTED"]
+    assert not list((project / "data/manifests").glob("*.json"))
 
 
 def test_retries_throttling_and_rejects_bad_credentials() -> None:
