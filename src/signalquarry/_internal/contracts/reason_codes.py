@@ -909,6 +909,18 @@ _CODES += (
         "Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive.",
     ),
     ReasonCode(
+        "UNIVERSE_CLASSIFICATION_INVALID",
+        Category.DATA,
+        "A dated instrument classification snapshot is malformed, incomplete, or inconsistent with asset IDs.",
+        "Supply a complete, hashed classification snapshot keyed by the stable asset IDs in the asset snapshot.",
+    ),
+    ReasonCode(
+        "UNIVERSE_INPUT_UNAVAILABLE",
+        Category.DATA,
+        "A required asset, classification, or market-data observation is missing, stale, or later than the cutoff.",
+        "Capture the inputs prospectively and rebuild with a decision cutoff after all required observations.",
+    ),
+    ReasonCode(
         "FACTOR_EVALUATION_IDENTITY_INVALID",
         Category.DATA,
         "A factor evaluation lacks a valid panel or membership identity.",

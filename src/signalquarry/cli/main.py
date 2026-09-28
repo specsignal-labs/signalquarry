@@ -14,6 +14,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -224,6 +225,40 @@ def _configure_universe(parser: argparse.ArgumentParser) -> None:
         required=True,
         help="timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable",
     )
+    build = actions.add_parser(
+        "build", help="Build one dated common-stock universe from verified as-of inputs."
+    )
+    build.add_argument(
+        "--session", type=date.fromisoformat, required=True, help="decision session (YYYY-MM-DD)"
+    )
+    build.add_argument(
+        "--known-at",
+        type=datetime.fromisoformat,
+        required=True,
+        help="timezone-aware cutoff before the decision session (ISO 8601)",
+    )
+    build.add_argument("--dataset-id", required=True, help="verified Alpaca dataset manifest ID")
+    build.add_argument(
+        "--classification-file",
+        type=Path,
+        required=True,
+        help="dated JSON security-master snapshot keyed by stable asset UUID",
+    )
+    build.add_argument(
+        "--minimum-price", type=Decimal, required=True, help="minimum prior-session close in USD"
+    )
+    build.add_argument(
+        "--minimum-listing-age-days",
+        type=int,
+        required=True,
+        help="minimum listing age at the decision session",
+    )
+    build.add_argument(
+        "--minimum-dollar-volume-percentile",
+        type=Decimal,
+        required=True,
+        help="minimum 20-session median dollar-volume percentile (0-100)",
+    )
     for child in actions.choices.values():
         child.add_argument(
             "--project", type=Path, help="project directory (default: search upwards from cwd)"
@@ -236,7 +271,18 @@ def _universe(args: argparse.Namespace) -> Envelope:
         return api.universe_snapshot(project=args.project)
     if args.action == "verify":
         return api.universe_verify(project=args.project)
-    return api.universe_as_of(known_at=args.known_at, project=args.project)
+    if args.action == "as-of":
+        return api.universe_as_of(known_at=args.known_at, project=args.project)
+    return api.universe_build(
+        decision_session=args.session,
+        known_at=args.known_at,
+        dataset_id=args.dataset_id,
+        classification_file=args.classification_file,
+        minimum_price=args.minimum_price,
+        minimum_listing_age_days=args.minimum_listing_age_days,
+        minimum_dollar_volume_percentile=args.minimum_dollar_volume_percentile,
+        project=args.project,
+    )
 
 
 def _configure_spec(parser: argparse.ArgumentParser) -> None:
@@ -469,7 +515,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("factor", "Inspect project-registered research factors.", _factor, _configure_factor),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),
     Command(
-        "universe", "Capture and verify prospective asset-list snapshots.", _universe, _configure_universe
+        "universe", "Build and verify point-in-time common-stock universes.", _universe, _configure_universe
     ),
     Command(
         "spec",

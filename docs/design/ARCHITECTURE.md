@@ -451,7 +451,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
-| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
+| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `strategy`, `ta`, `xs` |
@@ -485,6 +485,7 @@ flowchart LR
   c_universe --> c_universe_snapshot["snapshot"]
   c_universe --> c_universe_verify["verify"]
   c_universe --> c_universe_as_of["as-of"]
+  c_universe --> c_universe_build["build"]
   sqy --> c_spec["spec"]
   c_spec --> c_spec_freeze["freeze"]
   sqy --> c_evaluate["evaluate"]

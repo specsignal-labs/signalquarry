@@ -161,6 +161,7 @@ signalquarry.api.trials_extend(family: 'str', reason: 'str', *, project: 'Path |
 signalquarry.api.trials_ls(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.trials_show(key: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.universe_as_of(*, known_at: 'datetime', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_build(*, decision_session: 'date', known_at: 'datetime', dataset_id: 'str', classification_file: 'Path', minimum_price: 'Decimal', minimum_listing_age_days: 'int', minimum_dollar_volume_percentile: 'Decimal', project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.universe_snapshot(*, project: 'Path | None' = None, source: 'AssetSource | None' = None) -> 'Envelope'
 signalquarry.api.universe_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
