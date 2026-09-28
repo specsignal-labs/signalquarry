@@ -21,7 +21,11 @@ def sma(values: np.ndarray, period: int) -> np.ndarray:
     if period < 1:
         raise ValueError("TA_PERIOD_INVALID")
     if len(data) >= period:
-        csum = np.cumsum(np.insert(data, 0, 0.0))
+        # Preallocate the zero prefix instead of np.insert, which copies and
+        # reshapes on every call in a cross-sectional backtest.
+        csum = np.empty(len(data) + 1, dtype=np.float64)
+        csum[0] = 0.0
+        np.cumsum(data, out=csum[1:])
         out[period - 1 :] = (csum[period:] - csum[:-period]) / period
     return out
 
