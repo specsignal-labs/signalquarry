@@ -58,6 +58,19 @@ def test_only_the_paper_origin_is_accepted() -> None:
     assert "secret" not in repr(broker) and broker.paper_only is True
 
 
+def test_asset_snapshot_reads_all_statuses_without_orders() -> None:
+    import urllib.parse
+
+    broker, script = _broker((200, [{"id": "asset-1", "status": "inactive"}]))
+    page = broker.asset_snapshot()
+    assert page.endpoint == "/v2/assets" and page.params == {"asset_class": "us_equity"}
+    method, url, body = script.calls[0]
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    assert method == "GET" and body is None
+    assert query == {"asset_class": ["us_equity"]}
+    assert b'"inactive"' in page.body
+
+
 def test_account_clock_positions_and_orders_are_parsed() -> None:
     broker, script = _broker(
         (200, {"id": "acct", "status": "ACTIVE", "cash": "1000.5", "equity": "1200", "buying_power": "2000"}),

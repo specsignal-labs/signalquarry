@@ -157,6 +157,9 @@ signalquarry.api.sweep(strategy_id: 'str', assignments: 'list[str]', *, project:
 signalquarry.api.trials_extend(family: 'str', reason: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.trials_ls(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.trials_show(key: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_as_of(*, known_at: 'datetime', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_snapshot(*, project: 'Path | None' = None, source: 'AssetSource | None' = None) -> 'Envelope'
+signalquarry.api.universe_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.version() -> 'Envelope'
 signalquarry.plugins.API_VERSION: int

@@ -42,6 +42,25 @@ are older than 15 minutes when you decide, so free plans can use SIP too.
 Set `SIGNALQUARRY_OFFLINE=1` to forbid every network call (the project CI
 template does this).
 
+## Prospective asset snapshots
+
+```bash
+sqy universe snapshot
+sqy universe verify
+sqy universe as-of --known-at 2026-09-28T16:00:00+00:00
+```
+
+`snapshot` makes one read-only request to Alpaca's **paper** assets endpoint
+using the data credentials. It omits the status filter to capture active and
+inactive US-equity assets together. The raw response stays in the local cache;
+`data/universe/snapshots/` holds a hash-only manifest with the UTC capture time,
+counts, and no asset names or symbols. `verify` re-hashes and re-parses it.
+`as-of` finds the latest verified capture at or before the given cutoff, only
+if it is no more than 31 days old. Earlier dates are unavailable. Alpaca's
+current asset list is not a historical membership archive, and `us_equity`
+does not identify common stocks alone. These snapshots therefore do not yet
+make a factor backtest point-in-time or enable `universe build`.
+
 ## Options coverage
 
 Alpaca's options history starts in February 2024. Check whether expired contracts and

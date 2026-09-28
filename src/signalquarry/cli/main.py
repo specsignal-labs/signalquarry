@@ -13,7 +13,7 @@ import traceback
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -183,6 +183,32 @@ def _data(args: argparse.Namespace) -> Envelope:
     if args.action == "verify":
         return api.data_verify(project=args.project)
     return api.data_ls(project=args.project)
+
+
+def _configure_universe(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    actions.add_parser("snapshot", help="Capture the full current Alpaca US-equity asset list.")
+    actions.add_parser("verify", help="Verify hashed asset snapshots against cached raw pages.")
+    as_of = actions.add_parser("as-of", help="Find a verified snapshot known by a UTC cutoff.")
+    as_of.add_argument(
+        "--known-at",
+        type=datetime.fromisoformat,
+        required=True,
+        help="timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable",
+    )
+    for child in actions.choices.values():
+        child.add_argument(
+            "--project", type=Path, help="project directory (default: search upwards from cwd)"
+        )
+        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _universe(args: argparse.Namespace) -> Envelope:
+    if args.action == "snapshot":
+        return api.universe_snapshot(project=args.project)
+    if args.action == "verify":
+        return api.universe_verify(project=args.project)
+    return api.universe_as_of(known_at=args.known_at, project=args.project)
 
 
 def _configure_spec(parser: argparse.ArgumentParser) -> None:
@@ -413,6 +439,9 @@ COMMANDS: tuple[Command, ...] = (
         _configure_check,
     ),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),
+    Command(
+        "universe", "Capture and verify prospective asset-list snapshots.", _universe, _configure_universe
+    ),
     Command(
         "spec",
         "Freeze a strategy configuration (spec freeze).",

@@ -29,6 +29,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy init`: Create a new strategy project.
 - `sqy check`: Run conformance, determinism and look-ahead checks.
 - `sqy data`: Fetch, verify and list recorded market data.
+- `sqy universe`: Capture and verify prospective asset-list snapshots.
 - `sqy spec`: Freeze a strategy configuration (spec freeze).
 - `sqy evaluate`: Walk-forward, stress and holdout gates; sets the claim level.
 - `sqy trials`: List trials or (humans only) extend a family's budget.
@@ -412,6 +413,25 @@ are older than 15 minutes when you decide, so free plans can use SIP too.
 Set `SIGNALQUARRY_OFFLINE=1` to forbid every network call (the project CI
 template does this).
 
+## Prospective asset snapshots
+
+```bash
+sqy universe snapshot
+sqy universe verify
+sqy universe as-of --known-at 2026-09-28T16:00:00+00:00
+```
+
+`snapshot` makes one read-only request to Alpaca's **paper** assets endpoint
+using the data credentials. It omits the status filter to capture active and
+inactive US-equity assets together. The raw response stays in the local cache;
+`data/universe/snapshots/` holds a hash-only manifest with the UTC capture time,
+counts, and no asset names or symbols. `verify` re-hashes and re-parses it.
+`as-of` finds the latest verified capture at or before the given cutoff, only
+if it is no more than 31 days old. Earlier dates are unavailable. Alpaca's
+current asset list is not a historical membership archive, and `us_equity`
+does not identify common stocks alone. These snapshots therefore do not yet
+make a factor backtest point-in-time or enable `universe build`.
+
 ## Options coverage
 
 Alpaca's options history starts in February 2024. Check whether expired contracts and
@@ -767,6 +787,35 @@ List recorded datasets.
 
 | Option | Meaning |
 |---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy universe`
+
+Capture and verify prospective asset-list snapshots.
+
+### `sqy universe snapshot`
+
+Capture the full current Alpaca US-equity asset list.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe verify`
+
+Verify hashed asset snapshots against cached raw pages.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe as-of`
+
+Find a verified snapshot known by a UTC cutoff.
+
+| Option | Meaning |
+|---|---|
+| `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy spec`
@@ -1237,6 +1286,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |
 | `TRIAL_BUDGET_NEARLY_USED` | evidence | The family has used at least 80% of its trial budget. | Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision. |
 | `TRIAL_NOT_FOUND` | usage | No trial ledger entry matches that sequence number or configuration-hash prefix. | Run `sqy trials ls` to see the entries. |
+| `UNIVERSE_ASOF_UNAVAILABLE` | data | No verified asset snapshot was captured by the requested cutoff within the freshness window. | Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive. |
 | `USAGE_INVALID` | usage | The command line could not be parsed. | Run `sqy commands` or `sqy <command> --help`. |
 | `VCS_DIRTY` | evidence | The project had uncommitted changes when frozen. | Commit before freezing so the frozen code is recoverable. |
 | `VOLUME_CAPPED` | execution | An order was reduced to the fill model's share of that session's volume. | The rest is retried next session; lower weights or accept slower fills for illiquid symbols. |

@@ -112,6 +112,35 @@ List recorded datasets.
 |---|---|
 | `--project` | project directory (default: search upwards from cwd) |
 
+## `sqy universe`
+
+Capture and verify prospective asset-list snapshots.
+
+### `sqy universe snapshot`
+
+Capture the full current Alpaca US-equity asset list.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe verify`
+
+Verify hashed asset snapshots against cached raw pages.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe as-of`
+
+Find a verified snapshot known by a UTC cutoff.
+
+| Option | Meaning |
+|---|---|
+| `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
 ## `sqy spec`
 
 Freeze a strategy configuration (spec freeze).

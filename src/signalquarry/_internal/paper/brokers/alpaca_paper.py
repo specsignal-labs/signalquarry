@@ -8,6 +8,7 @@ by looking the order up by its client order id.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import urllib.error
@@ -20,6 +21,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 
 from signalquarry._internal.data.alpaca import HttpResponse, offline
+from signalquarry._internal.data.universe import ASSETS_PARAMS, ASSETS_PATH, AssetPage
 from signalquarry._internal.paper.models import (
     Activity,
     BrokerAccount,
@@ -179,6 +181,23 @@ class AlpacaPaperBroker:
             is_open=bool(item.get("is_open")),
             next_open=_time(item.get("next_open"), "next_open"),
             next_close=_time(item.get("next_close"), "next_close"),
+        )
+
+    def asset_snapshot(self) -> AssetPage:
+        """Read the complete US-equity master list, including inactive assets.
+
+        This GET has no order or account effect. Omitting ``status`` is required
+        because the provider's default includes every status.
+        """
+        response = self._call("GET", ASSETS_PATH, params=ASSETS_PARAMS)
+        items = self._json(response, ASSETS_PATH)
+        if not isinstance(items, list):
+            raise PaperError("BROKER_RESPONSE_INVALID", "error", "asset list")
+        return AssetPage(
+            ASSETS_PATH,
+            dict(ASSETS_PARAMS),
+            response.body,
+            hashlib.sha256(response.body).hexdigest(),
         )
 
     def calendar(self, start: date, end: date) -> list[date]:
