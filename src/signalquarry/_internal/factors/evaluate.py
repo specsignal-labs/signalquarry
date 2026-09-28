@@ -12,7 +12,7 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 
 import numpy as np
@@ -118,7 +118,7 @@ def score_factor(
             item.observed_at.utcoffset() is None
             or item.decision_cutoff.utcoffset() is None
             or item.observed_at > item.decision_cutoff
-            or item.decision_cutoff.date() != item.session
+            or item.decision_cutoff.astimezone(UTC).date() >= item.session
             or not _IDENTITY.fullmatch(item.identity)
         ):
             raise ValueError("FACTOR_UNIVERSE_TIMING_INVALID")

@@ -1016,6 +1016,12 @@ _CODES += (
         "The requested formula search exceeds the remaining family trial budget.",
         "Reduce the search budget or have a human extend the family budget before searching.",
     ),
+    ReasonCode(
+        "FACTOR_LABEL_ACTIONS_INVALID",
+        Category.DATA,
+        "A modeled split or cash dividend is invalid or duplicated for the requested outcomes.",
+        "Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

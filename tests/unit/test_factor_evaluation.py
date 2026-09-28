@@ -48,7 +48,8 @@ def _membership(panel: LoadedPanel) -> tuple[UniverseAt, ...]:
         UniverseAt(
             session=session,
             observed_at=datetime.combine(session - timedelta(days=1), datetime.min.time(), UTC),
-            decision_cutoff=datetime.combine(session, datetime.min.time(), UTC) + timedelta(hours=14),
+            decision_cutoff=datetime.combine(session - timedelta(days=1), datetime.min.time(), UTC)
+            + timedelta(hours=14),
             symbols=panel.symbols,
             identity="sha256:" + "2" * 64,
         )
@@ -123,6 +124,19 @@ def test_factor_evaluation_rejects_bad_timing_membership_and_labels() -> None:
             P(),
             panel,
             (replace(membership[0], observed_at=membership[0].decision_cutoff + timedelta(seconds=1)),),
+        )
+    with pytest.raises(ValueError, match="FACTOR_UNIVERSE_TIMING_INVALID"):
+        score_factor(
+            definition,
+            P(),
+            panel,
+            (
+                replace(
+                    membership[0],
+                    decision_cutoff=datetime.combine(membership[0].session, datetime.min.time(), UTC)
+                    + timedelta(hours=14),
+                ),
+            ),
         )
     with pytest.raises(ValueError, match="FACTOR_UNIVERSE_INVALID"):
         score_factor(definition, P(), panel, (replace(membership[0], symbols=("S00", "S00")),))
