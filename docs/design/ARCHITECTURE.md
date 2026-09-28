@@ -100,7 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. The internal factor evaluator computes descriptive rank IC and cross-sectional diagnostics from dated scores and explicitly synthetic labels; it cannot issue real-data evidence. Historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. The internal formula interpreter converts a bounded AST whitelist to immutable nodes; operators use only same-row or trailing values, receive an explicit dated-membership mask, and never execute Python source (ADR 0011). Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. The internal factor evaluator computes descriptive rank IC and cross-sectional diagnostics from dated scores and explicitly synthetic labels; it cannot issue real-data evidence. Historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -446,7 +446,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
-| `factors` | `(package)`, `evaluate` |
+| `factors` | `(package)`, `evaluate`, `expr` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |

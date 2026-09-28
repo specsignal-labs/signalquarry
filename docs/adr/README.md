@@ -12,3 +12,4 @@
 | [0008](0008-docs-toolchain.md) | Documentation toolchain |
 | [0009](0009-plugins.md) | Plugins: add-only gates and report sections |
 | [0010](0010-factors-and-universes.md) | Factors and point-in-time universes (proposed) |
+| [0011](0011-formulaic-factor-expressions.md) | Safe formulaic factor expressions (proposed) |
