@@ -7,17 +7,31 @@ prices; corporate actions are stored separately and applied point-in-time.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import numpy as np
 
-from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.canonical import HASH_PREFIX, canonical_bytes
 
 MICRO = 1_000_000
 T_PLUS_ONE_FROM = date(2024, 5, 28)
 FIELDS = ("open", "high", "low", "close")
+IDENTITY_ARRAY_CHUNK = 4096
+
+
+def _hash_array(digest: Any, values: np.ndarray) -> None:
+    """Feed one NumPy array in bounded canonical JSON chunks."""
+    digest.update(b"[")
+    for start in range(0, len(values), IDENTITY_ARRAY_CHUNK):
+        if start:
+            digest.update(b",")
+        chunk = canonical_bytes(values[start : start + IDENTITY_ARRAY_CHUNK].tolist())
+        digest.update(chunk[1:-1])
+    digest.update(b"]")
 
 
 @dataclass(frozen=True)
@@ -89,25 +103,40 @@ class Dataset:
         return trade_index + lag
 
     def identity(self) -> str:
-        return canonical_hash(
-            {
-                "source": self.source,
-                "sessions": [s.isoformat() for s in self.sessions],
-                "series": {
-                    symbol: {
-                        **{name: item.micro[name].tolist() for name in FIELDS},
-                        "volume": item.volume.tolist(),
-                        "present": item.present.tolist(),
-                    }
-                    for symbol, item in sorted(self.series.items())
-                },
-                "splits": [[s.symbol, s.ex_date.isoformat(), s.ratio] for s in self.splits],
-                "dividends": [
-                    [d.symbol, d.ex_date.isoformat(), d.pay_date.isoformat(), d.amount]
-                    for d in self.dividends
-                ],
-            }
+        """Hash the unchanged canonical document without holding all arrays as Python lists."""
+        # Canonical v2 sorts object keys; every literal key below follows that order.
+        digest = hashlib.sha256()
+        digest.update(b'{"dividends":')
+        digest.update(
+            canonical_bytes(
+                [[d.symbol, d.ex_date.isoformat(), d.pay_date.isoformat(), d.amount] for d in self.dividends]
+            )
         )
+        digest.update(b',"series":{')
+        for index, (symbol, item) in enumerate(sorted(self.series.items())):
+            if index:
+                digest.update(b",")
+            digest.update(canonical_bytes(symbol))
+            digest.update(b":{")
+            for field_index, name in enumerate(sorted(FIELDS)):
+                if field_index:
+                    digest.update(b",")
+                digest.update(canonical_bytes(name))
+                digest.update(b":")
+                _hash_array(digest, item.micro[name])
+            digest.update(b',"present":')
+            _hash_array(digest, item.present)
+            digest.update(b',"volume":')
+            _hash_array(digest, item.volume)
+            digest.update(b"}")
+        digest.update(b'},"sessions":')
+        digest.update(canonical_bytes([s.isoformat() for s in self.sessions]))
+        digest.update(b',"source":')
+        digest.update(canonical_bytes(self.source))
+        digest.update(b',"splits":')
+        digest.update(canonical_bytes([[s.symbol, s.ex_date.isoformat(), s.ratio] for s in self.splits]))
+        digest.update(b"}")
+        return HASH_PREFIX + digest.hexdigest()
 
 
 def with_pending_session(dataset: Dataset, session: date) -> Dataset:
