@@ -9,7 +9,10 @@ from decimal import Decimal
 from pathlib import Path
 
 from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.engine.backtest import PlannedOrder, PreOpenPlan
+from signalquarry._internal.paper.models import BrokerAccount
 from signalquarry._internal.paper.runner import client_order_id
+from signalquarry.sdk import Decision
 from tests.paper.harness import hold_syna, paper_spec, rig
 
 
@@ -134,3 +137,115 @@ def test_client_order_id_binds_every_intent_field(tmp_path: Path) -> None:
         ),
     ]
     assert len(set([base, *variants])) == 7
+
+
+def _plan(*orders: PlannedOrder) -> PreOpenPlan:
+    return PreOpenPlan(
+        session=date(2023, 3, 27),
+        decision=Decision.target({}, "GO"),
+        record={},
+        state={},
+        last_target=None,
+        orders=list(orders),
+        complete=True,
+        warnings=[],
+        equity=Decimal("100"),
+        marks={},
+    )
+
+
+def _account(cash: str) -> BrokerAccount:
+    return BrokerAccount("synthetic", "ACTIVE", Decimal(cash), Decimal(cash), Decimal(cash), False)
+
+
+def test_cash_sizing_uses_settled_budget_and_carries_buffered_cost_between_buys(
+    tmp_path: Path,
+) -> None:
+    paper = rig(tmp_path, config={"guards": {"buy_price_buffer_bps": "1000"}})
+    plan = _plan(
+        PlannedOrder("SYNA", Decimal("6"), Decimal("10")),
+        PlannedOrder("SYNB", Decimal("6"), Decimal("10")),
+    )
+    orders, complete, warnings = paper.kernel._size(plan, _account("100"), Decimal("100"))
+    assert [(o["symbol"], o["side"], o["quantity"]) for o in orders] == [
+        ("SYNA", "buy", Decimal("6")),
+        ("SYNB", "buy", Decimal("3")),
+    ]
+    assert complete is False
+    assert warnings == ["INSUFFICIENT_SETTLED_CASH:2023-03-27:SYNB"]
+    assert [o["client_order_id"] for o in orders] == [
+        client_order_id(paper.deployment, plan.session, o["symbol"], o["side"], o["quantity"]) for o in orders
+    ]
+
+    orders, complete, warnings = paper.kernel._size(
+        _plan(PlannedOrder("SYNA", Decimal("5"), Decimal("10"))),
+        _account("100"),
+        Decimal("20"),
+    )
+    assert [(o["symbol"], o["quantity"]) for o in orders] == [("SYNA", Decimal("1"))]
+    assert complete is False and len(warnings) == 1
+
+
+def test_margin_sale_proceeds_can_fund_a_later_buy(tmp_path: Path) -> None:
+    paper = rig(
+        tmp_path,
+        the_spec=paper_spec(account={"model": "margin"}),
+        config={"guards": {"buy_price_buffer_bps": "0"}},
+    )
+    plan = _plan(
+        PlannedOrder("SYNB", Decimal("-4"), Decimal("10")),
+        PlannedOrder("SYNA", Decimal("5"), Decimal("10")),
+    )
+    orders, complete, warnings = paper.kernel._size(plan, _account("20"), Decimal("0"))
+    assert [(o["symbol"], o["side"], o["quantity"]) for o in orders] == [
+        ("SYNB", "sell", Decimal("4")),
+        ("SYNA", "buy", Decimal("5")),
+    ]
+    assert complete is True and warnings == []
+
+
+def test_below_minimum_order_does_not_hide_later_valid_buy(tmp_path: Path) -> None:
+    paper = rig(
+        tmp_path,
+        the_spec=paper_spec(execution={"min_order_notional": "50"}),
+        config={"guards": {"buy_price_buffer_bps": "0"}},
+    )
+    plan = _plan(
+        PlannedOrder("SYNA", Decimal("1"), Decimal("10")),
+        PlannedOrder("SYNB", Decimal("6"), Decimal("10")),
+    )
+    orders, complete, warnings = paper.kernel._size(plan, _account("100"), Decimal("100"))
+    assert [(o["symbol"], o["quantity"]) for o in orders] == [("SYNB", Decimal("6"))]
+    assert complete is True and warnings == []
+
+
+def test_buffer_denominator_respects_exact_cent_boundary(tmp_path: Path) -> None:
+    paper = rig(tmp_path, config={"guards": {"buy_price_buffer_bps": "1000"}})
+    plan = _plan(PlannedOrder("SYNA", Decimal("1"), Decimal("10000")))
+    orders, complete, warnings = paper.kernel._size(plan, _account("10999.95"), Decimal("10999.95"))
+    assert orders == [] and complete is False
+    assert warnings == ["INSUFFICIENT_SETTLED_CASH:2023-03-27:SYNA"]
+
+
+def test_zero_affordability_never_emits_a_zero_share_order(tmp_path: Path) -> None:
+    paper = rig(
+        tmp_path,
+        the_spec=paper_spec(execution={"min_order_notional": "0"}),
+        config={"guards": {"buy_price_buffer_bps": "0"}},
+    )
+    plan = _plan(PlannedOrder("SYNA", Decimal("1"), Decimal("10")))
+    orders, complete, warnings = paper.kernel._size(plan, _account("0"), Decimal("0"))
+    assert orders == [] and complete is False
+    assert warnings == ["INSUFFICIENT_SETTLED_CASH:2023-03-27:SYNA"]
+
+
+def test_exact_minimum_notional_is_eligible(tmp_path: Path) -> None:
+    paper = rig(
+        tmp_path,
+        the_spec=paper_spec(execution={"min_order_notional": "50"}),
+        config={"guards": {"buy_price_buffer_bps": "0"}},
+    )
+    plan = _plan(PlannedOrder("SYNA", Decimal("5"), Decimal("10")))
+    orders, complete, warnings = paper.kernel._size(plan, _account("50"), Decimal("50"))
+    assert [(o["symbol"], o["quantity"]) for o in orders] == [("SYNA", Decimal("5"))]
+    assert complete is True and warnings == []
