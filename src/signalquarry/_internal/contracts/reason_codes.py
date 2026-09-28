@@ -998,6 +998,24 @@ _CODES += (
         "No registered factor has that id.",
         "Run `sqy factor ls` or add the module to signalquarry.toml.",
     ),
+    ReasonCode(
+        "FACTOR_SEARCH_CONFIG_INVALID",
+        Category.USAGE,
+        "Formula-search settings are invalid or exceed the configured bounds.",
+        "Use a bounded seed, horizon, FDR threshold, and family trial budget.",
+    ),
+    ReasonCode(
+        "FACTOR_SEARCH_INPUT_INVALID",
+        Category.DATA,
+        "Formula search needs aligned, dated panel, universe, and synthetic outcome inputs.",
+        "Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff.",
+    ),
+    ReasonCode(
+        "FACTOR_SEARCH_BUDGET_EXHAUSTED",
+        Category.EVIDENCE,
+        "The requested formula search exceeds the remaining family trial budget.",
+        "Reduce the search budget or have a human extend the family budget before searching.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
