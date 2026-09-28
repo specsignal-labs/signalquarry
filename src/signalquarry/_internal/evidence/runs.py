@@ -6,6 +6,8 @@ from __future__ import annotations
 import csv
 import io
 import json
+import shutil
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,30 +28,52 @@ def unique_run_id(root: Path, run_id: str) -> str:
     return candidate
 
 
-def write_run(root: Path, run_id: str, files: dict[str, str | bytes]) -> list[dict[str, str]]:
+def write_run(
+    root: Path, run_id: str, files: dict[str, str | bytes | Iterable[str | bytes]]
+) -> list[dict[str, str]]:
     run_dir = root / ".signalquarry" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     artifacts = []
-    for name, content in files.items():
-        path = run_dir / name
-        path.write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
-        artifacts.append(
-            {"path": str(path.relative_to(root)), "sha256": file_sha256(path), "kind": name.split(".")[0]}
-        )
+    try:
+        for name, content in files.items():
+            path = run_dir / name
+            with path.open("wb") as stream:
+                chunks = (content,) if isinstance(content, (str, bytes)) else content
+                for chunk in chunks:
+                    stream.write(chunk if isinstance(chunk, bytes) else chunk.encode("utf-8"))
+            artifacts.append(
+                {"path": str(path.relative_to(root)), "sha256": file_sha256(path), "kind": name.split(".")[0]}
+            )
+    except Exception:
+        shutil.rmtree(run_dir)
+        raise
     return artifacts
 
 
-def csv_text(header: list[str], rows: list[list[Any]]) -> str:
+def csv_chunks(header: list[str], rows: Iterable[Iterable[Any]]) -> Iterator[str]:
+    """Yield CSV records without holding the completed artifact in memory."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerow(header)
+    yield buffer.getvalue()
     for row in rows:
+        buffer.seek(0)
+        buffer.truncate(0)
         writer.writerow([to_canonical(value) if not isinstance(value, str) else value for value in row])
-    return buffer.getvalue()
+        yield buffer.getvalue()
+
+
+def csv_text(header: list[str], rows: list[list[Any]]) -> str:
+    return "".join(csv_chunks(header, rows))
+
+
+def jsonl_chunks(rows: Iterable[dict[str, Any]]) -> Iterator[str]:
+    for row in rows:
+        yield canonical_json(row) + "\n"
 
 
 def jsonl_text(rows: list[dict[str, Any]]) -> str:
-    return "".join(canonical_json(row) + "\n" for row in rows)
+    return "".join(jsonl_chunks(rows))
 
 
 def result_document(**fields: Any) -> str:

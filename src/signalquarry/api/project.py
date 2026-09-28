@@ -9,14 +9,16 @@ from decimal import Decimal
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from signalquarry._internal.contracts import progress
 from signalquarry._internal.engine.backtest import EngineError
-from signalquarry._internal.engine.run import simulate
+from signalquarry._internal.engine.run import is_options, simulate, simulate_equity_ticks
+from signalquarry._internal.evidence.run_spool import spool_equity_run
 from signalquarry._internal.evidence.runs import (
-    csv_text,
-    jsonl_text,
+    csv_chunks,
+    jsonl_chunks,
     new_run_id,
     result_document,
     unique_run_id,
@@ -278,17 +280,54 @@ def backtest(
             days=1
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
+    scratch: TemporaryDirectory[str] | None = None
     try:
-        result = simulate(
-            strategy.spec,
-            strategy.definition,
-            strategy.params,
-            resolved.dataset,
-            start=start,
-            end=end,
-            recorded_chains=resolved.recorded_chains(),
-        )
+        if is_options(strategy.spec):
+            result = simulate(
+                strategy.spec,
+                strategy.definition,
+                strategy.params,
+                resolved.dataset,
+                start=start,
+                end=end,
+                recorded_chains=resolved.recorded_chains(),
+            )
+            fill_count = len(result.fills)
+            fees = sum((fill.fee for fill in result.fills), Decimal(0))
+            fill_rows = (
+                [
+                    f.session.isoformat(),
+                    f.symbol,
+                    f.side,
+                    f.quantity,
+                    f.price,
+                    f.fee,
+                    f.settle_session.isoformat() if f.settle_session else "",
+                ]
+                for f in result.fills
+            )
+            decision_chunks = jsonl_chunks(result.decisions)
+        else:
+            scratch = TemporaryDirectory(prefix="signalquarry-backtest-")
+            spool = spool_equity_run(
+                simulate_equity_ticks(
+                    strategy.spec,
+                    strategy.definition,
+                    strategy.params,
+                    resolved.dataset,
+                    start=start,
+                    end=end,
+                ),
+                Path(scratch.name),
+            )
+            result = spool.result
+            fill_count = spool.fill_count
+            fees = spool.fees
+            fill_rows = spool.fills_csv_rows()
+            decision_chunks = spool.decisions_chunks()
     except EngineError as exc:
+        if scratch is not None:
+            scratch.cleanup()
         return Envelope(command="backtest", status="invalid", reason_codes=[_code_of(exc)], summary=str(exc))
     returns = equity_returns(result, strategy.spec.account.initial_cash)
     m = moments(returns)
@@ -299,9 +338,8 @@ def backtest(
         moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
         window=(result.sessions[0], result.sessions[-1]),
     )
-    fees = sum((fill.fee for fill in result.fills), Decimal(0))
     metrics = summarize(
-        result.sessions, result.equity, strategy.spec.account.initial_cash, fills=len(result.fills), fees=fees
+        result.sessions, result.equity, strategy.spec.account.initial_cash, fills=fill_count, fees=fees
     )
     run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
     evidence = {
@@ -329,31 +367,22 @@ def backtest(
                 metrics=metrics,
                 warnings=result.warnings,
             ),
-            "equity.csv": csv_text(
+            "equity.csv": csv_chunks(
                 ["session", "equity", "settled_cash"],
                 [
                     [s.isoformat(), e, c]
                     for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
                 ],
             ),
-            "fills.csv": csv_text(
+            "fills.csv": csv_chunks(
                 ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"],
-                [
-                    [
-                        f.session.isoformat(),
-                        f.symbol,
-                        f.side,
-                        f.quantity,
-                        f.price,
-                        f.fee,
-                        f.settle_session.isoformat() if f.settle_session else "",
-                    ]
-                    for f in result.fills
-                ],
+                fill_rows,
             ),
-            "decisions.jsonl": jsonl_text(result.decisions),
+            "decisions.jsonl": decision_chunks,
         },
     )
+    if scratch is not None:
+        scratch.cleanup()
     return Envelope(
         command="backtest",
         summary=f"{strategy_id}: total return {metrics['total_return']:.2%}, max drawdown {metrics['max_drawdown']:.2%} ({resolved.evidence_grade} data: {resolved.dataset_id})",

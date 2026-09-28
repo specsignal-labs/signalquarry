@@ -21,7 +21,7 @@ next unchanged target.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal
@@ -84,6 +84,18 @@ class Fill:
     settle_session: date | None
 
 
+def fill_ledger_row(fill: Fill) -> list[Any]:
+    return [
+        fill.session.isoformat(),
+        fill.symbol,
+        fill.side,
+        fill.quantity,
+        fill.price,
+        fill.fee,
+        fill.settle_session.isoformat() if fill.settle_session else None,
+    ]
+
+
 @dataclass
 class BacktestResult:
     sessions: list[date]
@@ -103,56 +115,59 @@ class BacktestResult:
                 [s.isoformat(), e, c] for s, e, c in zip(self.sessions, self.equity, self.cash, strict=True)
             ],
             "decisions": self.decisions,
-            "fills": [
-                [
-                    f.session.isoformat(),
-                    f.symbol,
-                    f.side,
-                    f.quantity,
-                    f.price,
-                    f.fee,
-                    f.settle_session.isoformat() if f.settle_session else None,
-                ]
-                for f in self.fills
-            ],
+            "fills": [fill_ledger_row(fill) for fill in self.fills],
             "positions": dict(sorted(self.positions.items())),
         }
 
     def compute_ledger_hash(self) -> str:
         """Hash the same canonical ledger document with bounded temporary memory."""
-        # Canonical v2 sorts object keys; the literal keys below follow that order.
-        digest = hashlib.sha256()
-        digest.update(b'{"dataset_identity":')
-        digest.update(canonical_bytes(self.dataset_identity))
-        digest.update(b',"decisions":')
-        _hash_rows(digest, self.decisions, 32)
-        digest.update(b',"equity":')
-        _hash_rows(
-            digest,
+        return ledger_hash_rows(
+            self.dataset_identity,
+            self.decisions,
             ([s.isoformat(), e, c] for s, e, c in zip(self.sessions, self.equity, self.cash, strict=True)),
-            4096,
+            (fill_ledger_row(fill) for fill in self.fills),
+            self.positions,
         )
-        digest.update(b',"fills":')
-        _hash_rows(
-            digest,
-            (
-                [
-                    f.session.isoformat(),
-                    f.symbol,
-                    f.side,
-                    f.quantity,
-                    f.price,
-                    f.fee,
-                    f.settle_session.isoformat() if f.settle_session else None,
-                ]
-                for f in self.fills
-            ),
-            4096,
-        )
-        digest.update(b',"positions":')
-        digest.update(canonical_bytes(dict(sorted(self.positions.items()))))
-        digest.update(b"}")
-        return HASH_PREFIX + digest.hexdigest()
+
+
+def ledger_hash_rows(
+    dataset_identity: str,
+    decisions: Iterable[Any],
+    equity: Iterable[Any],
+    fills: Iterable[Any],
+    positions: dict[str, Decimal],
+) -> str:
+    """Hash rows from any replayable source without depending on its storage."""
+    # Canonical v2 sorts object keys; the literal keys below follow that order.
+    digest = hashlib.sha256()
+    digest.update(b'{"dataset_identity":')
+    digest.update(canonical_bytes(dataset_identity))
+    digest.update(b',"decisions":')
+    _hash_rows(digest, decisions, 32)
+    digest.update(b',"equity":')
+    _hash_rows(digest, equity, 4096)
+    digest.update(b',"fills":')
+    _hash_rows(digest, fills, 4096)
+    digest.update(b',"positions":')
+    digest.update(canonical_bytes(dict(sorted(positions.items()))))
+    digest.update(b"}")
+    return HASH_PREFIX + digest.hexdigest()
+
+
+@dataclass(frozen=True)
+class BacktestTick:
+    session: date
+    decision: dict[str, Any]
+    fills: tuple[Fill, ...]
+    equity: Decimal
+    cash: Decimal
+
+
+@dataclass(frozen=True)
+class BacktestEnd:
+    positions: dict[str, Decimal]
+    warnings: list[str]
+    dataset_identity: str
 
 
 @dataclass
@@ -257,7 +272,7 @@ def _state_or_raise(state: dict[str, Any] | None, current: dict[str, Any]) -> di
     return canonical
 
 
-def run_backtest(
+def iter_equity_backtest(
     spec: StrategySpecV1,
     definition: StrategyDef,
     params: Params,
@@ -265,7 +280,8 @@ def run_backtest(
     *,
     start: date | None = None,
     end: date | None = None,
-) -> BacktestResult:
+) -> Generator[BacktestTick, None, BacktestEnd]:
+    """Yield pure session results; the caller owns storage and artifact I/O."""
     symbols = spec.data.symbols
     missing = [symbol for symbol in symbols if symbol not in dataset.series]
     if missing:
@@ -362,8 +378,6 @@ def run_backtest(
                     min(i + execution.execution_delay_sessions, len(sessions) - 1)
                 ].isoformat()
             last_target = dict(decision.weights)
-        result.decisions.append(record)
-
         # 5. execute at today's open
         pending_decision = queue.pop(i, None)
         if pending_decision is not None:
@@ -384,11 +398,49 @@ def run_backtest(
         # 6. mark at the close
         value = positions_value(i, at_close=True)
         cash_total = account.settled + account.pending_total() + account.receivable_total()
-        result.sessions.append(session)
-        result.equity.append(_quantize_cash(cash_total + value))
-        result.cash.append(_quantize_cash(account.settled))
+        fills = tuple(result.fills)
+        result.fills.clear()
+        yield BacktestTick(
+            session,
+            record,
+            fills,
+            _quantize_cash(cash_total + value),
+            _quantize_cash(account.settled),
+        )
 
-    result.positions = {symbol: quantity for symbol, quantity in sorted(account.quantity.items()) if quantity}
+    return BacktestEnd(
+        {symbol: quantity for symbol, quantity in sorted(account.quantity.items()) if quantity},
+        result.warnings,
+        result.dataset_identity,
+    )
+
+
+def run_backtest(
+    spec: StrategySpecV1,
+    definition: StrategyDef,
+    params: Params,
+    dataset: Dataset,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> BacktestResult:
+    """Collect the pure session stream for existing in-memory callers."""
+    stream = iter_equity_backtest(spec, definition, params, dataset, start=start, end=end)
+    result = BacktestResult([], [], [], [], [], {}, [], "")
+    while True:
+        try:
+            tick = next(stream)
+        except StopIteration as completed:
+            final = completed.value
+            break
+        result.sessions.append(tick.session)
+        result.equity.append(tick.equity)
+        result.cash.append(tick.cash)
+        result.decisions.append(tick.decision)
+        result.fills.extend(tick.fills)
+    result.positions = final.positions
+    result.warnings = final.warnings
+    result.dataset_identity = final.dataset_identity
     result.ledger_hash = result.compute_ledger_hash()
     return result
 
