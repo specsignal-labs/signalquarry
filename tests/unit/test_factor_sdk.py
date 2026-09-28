@@ -81,10 +81,18 @@ def test_factor_contract_rejects_bad_context_and_scores() -> None:
         run_factor(definition, Params(), window, ("A",))
     with pytest.raises(ValueError, match="FACTOR_UNIVERSE_INVALID"):
         factor_context(window, ("A", "A"), lookback=1)
+    with pytest.raises(ValueError, match="FACTOR_UNIVERSE_INVALID"):
+        factor_context(window, ("Z",), lookback=1)
+    with pytest.raises(ValueError, match="FACTOR_LOOKBACK_INVALID"):
+        factor_context(window, ("A",), lookback=0)
+    with pytest.raises(ValueError, match="FACTOR_LOOKBACK_INVALID"):
+        factor_context(window, ("A",), lookback=True)
     with pytest.raises(ValueError, match="FACTOR_INSUFFICIENT_HISTORY"):
         factor_context(window, ("A",), lookback=3)
     with pytest.raises(ValueError, match="FACTOR_LOOKAHEAD"):
         factor_context(replace(window, sessions=(date(2024, 1, 4),)), ("A",), lookback=1)
+    with pytest.raises(ValueError, match="FACTOR_PANEL_SHAPE"):
+        factor_context(replace(window, volume=np.zeros((1, 1))), ("A",), lookback=1)
 
     @factor(params=P, lookback=lambda p: 1)
     def undeclared(ctx: FactorCtx, p: P) -> dict[str, float]:
