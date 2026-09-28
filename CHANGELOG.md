@@ -15,6 +15,8 @@ change provisional surfaces after deprecation).
   action-refusal reference cases.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
+- Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
+  with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.

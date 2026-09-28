@@ -56,3 +56,4 @@ nav:
       - "0007 Packaging": adr/0007-packaging-and-release.md
       - "0008 Docs toolchain": adr/0008-docs-toolchain.md
       - "0009 Plugins": adr/0009-plugins.md
+      - "0010 Factors and universes": adr/0010-factors-and-universes.md
