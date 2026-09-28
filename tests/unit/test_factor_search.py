@@ -9,13 +9,19 @@ import numpy as np
 import pytest
 
 from signalquarry._internal.factors.evaluate import ScorePanel, SyntheticLabels
-from signalquarry._internal.factors.expr import evaluate_expression, parse_expression
+from signalquarry._internal.factors.expr import FactorExpression, _Node, evaluate_expression, parse_expression
 from signalquarry._internal.factors.search import (
     FormulaSearchConfig,
     FormulaTrainingInput,
+    _benjamini_hochberg,
     _crossover,
+    _effective_observations,
+    _expected_max_t,
     _mutate,
+    _parse_root,
     _random_expression,
+    _replace,
+    _t_statistic,
     search_expressions,
 )
 from signalquarry.sdk.factors import FactorCtx
@@ -218,3 +224,129 @@ def test_genetic_tree_operators_return_valid_safe_expressions() -> None:
     for candidate in (*mutations, *crossovers, *randoms):
         if candidate is not None:
             assert parse_expression(candidate.canonical).identity == candidate.identity
+
+
+def test_search_rejects_invalid_config_and_provenance() -> None:
+    data = _training_input()
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_CONFIG_INVALID"):
+        search_expressions(data, replace(_config(), previous_family_p_values=[0.1]))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_CONFIG_INVALID"):
+        search_expressions(data, object())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(None, _config())  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, dataset_identity=_identity("9")), _config())
+
+    invalid_context = replace(data.context, decision_session="not-a-date")
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, context=invalid_context), _config())  # type: ignore[arg-type]
+
+
+def test_search_rejects_invalid_eligibility_and_panels() -> None:
+    data = _training_input()
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, eligible=data.eligible.astype(np.int8)), _config())
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, eligible=data.eligible[:-1]), _config())
+
+    panels = dict(data.context._panels)
+    panels.pop("high")
+    missing_panel = replace(data.context, _panels=MappingProxyType(panels))
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, context=missing_panel), _config())
+
+    panels = dict(data.context._panels)
+    broken_close = np.array(panels["close"], copy=True)
+    broken_close[0, 0] = np.inf
+    panels["close"] = broken_close
+    infinite_panel = replace(data.context, _panels=MappingProxyType(panels))
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(replace(data, context=infinite_panel), _config())
+
+
+def test_search_rejects_malformed_forward_labels_and_end_dates() -> None:
+    data = _training_input()
+    returns = np.array(data.labels.forward_returns[1], copy=True)
+    ends = list(data.labels.outcome_end_sessions[1])
+    invalid_labels = (
+        replace(data.labels, forward_returns={1: returns[:, :-1]}),
+        replace(
+            data.labels, forward_returns={1: np.where(np.indices(returns.shape)[0] == 0, np.inf, returns)}
+        ),
+        replace(
+            data.labels, forward_returns={1: np.where(np.indices(returns.shape)[0] == 0, -1.01, returns)}
+        ),
+        replace(data.labels, outcome_end_sessions={1: tuple(ends[:-1])}),
+    )
+    for labels in invalid_labels:
+        with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+            search_expressions(replace(data, labels=labels), _config())
+
+    ends[0] = data.context.sessions[0]
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(
+            replace(data, labels=replace(data.labels, outcome_end_sessions={1: tuple(ends)})),
+            _config(),
+        )
+
+    ends = list(data.labels.outcome_end_sessions[1])
+    ends[0] = None
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(
+            replace(data, labels=replace(data.labels, outcome_end_sessions={1: tuple(ends)})),
+            _config(),
+        )
+
+    bad_adv = np.ones((1, len(data.context.universe)), dtype=np.float64)
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(
+            replace(data, labels=replace(data.labels, predecision_adv=bad_adv)),
+            _config(),
+        )
+
+
+def test_search_accepts_null_terminal_label_and_valid_adv() -> None:
+    data = _training_input(train_rows=60, future_rows=0)
+    labels = replace(
+        data.labels,
+        predecision_adv=np.full(data.labels.forward_returns[1].shape, 100_000.0),
+    )
+    report = search_expressions(
+        replace(data, labels=labels),
+        _config(training_cutoff=data.context.sessions[-1], budget=1, population_size=2),
+    )
+    assert report.trials_evaluated == 1
+
+
+def test_search_helpers_cover_degenerate_samples_and_invalid_trees() -> None:
+    assert _effective_observations(np.array([0.1, 0.2])) == 2.0
+    assert _effective_observations(np.ones(10)) == 10.0
+    count, effective, icir, statistic = _t_statistic(tuple([0.0] * 30))
+    assert (count, effective, icir, statistic) == (30, 30.0, None, None)
+    assert _expected_max_t(1) == 0.0
+    assert _benjamini_hochberg(()) == ()
+
+    leaf = _Node("panel", ("close",))
+    assert _replace(leaf, (0,), _Node("panel", ("open",))) is leaf
+    assert _parse_root(_Node("unsupported", ())) is None
+
+    malformed = FactorExpression("unknown(x)", "invalid", _Node("unknown", ("x",)))
+    _mutate(malformed, np.random.Generator(np.random.PCG64(0)))
+
+
+def test_search_rejects_invalid_accepted_factor_library() -> None:
+    data = _training_input()
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(data, _config(), accepted=[])  # type: ignore[arg-type]
+
+    values = np.zeros(data.eligible.shape, dtype=np.float64)
+    wrong_dataset = ScorePanel(
+        _identity("9"),
+        data.universe_identity,
+        data.context.sessions,
+        data.context.universe,
+        values,
+        data.eligible,
+    )
+    with pytest.raises(ValueError, match="FACTOR_SEARCH_INPUT_INVALID"):
+        search_expressions(data, _config(), accepted={"wrong-dataset": wrong_dataset})
