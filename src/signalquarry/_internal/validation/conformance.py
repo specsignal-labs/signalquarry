@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """``sqy check``: structural guarantees a strategy must meet before any backtest counts.
 
-* import policy — strategy code may only use the SDK, numpy, pydantic, pure
+* import policy — authored code may only use approved modules, with an SDK-only
+  SignalQuarry boundary for factors; numpy, pydantic and pure
   standard-library modules and its own package; no clocks, randomness, files,
   processes or network;
 * determinism — two runs on the same data produce the same ledger;
@@ -57,21 +58,33 @@ class CheckResult:
         return {"name": self.name, "ok": self.ok, "detail": self.detail}
 
 
-def import_policy(package_dir: Path, own_package: str) -> CheckResult:
+def import_policy(package_dir: Path, own_package: str, *, sdk_only: bool = False) -> CheckResult:
     problems: list[str] = []
     allowed = ALLOWED_IMPORTS | {own_package}
     for path in sorted(package_dir.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            roots: list[str] = []
+            imports: list[str] = []
             if isinstance(node, ast.Import):
-                roots = [alias.name.split(".")[0] for alias in node.names]
+                imports = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-                roots = [node.module.split(".")[0]]
+                imports = [
+                    f"{node.module}.{alias.name}" if node.module == "signalquarry" else node.module
+                    for alias in node.names
+                ]
             problems += [
-                f"{path.name}:{getattr(node, 'lineno', 0)}: import {root}"
-                for root in roots
-                if root not in allowed
+                f"{path.name}:{getattr(node, 'lineno', 0)}: import "
+                f"{module if sdk_only else module.split('.')[0]}"
+                for module in imports
+                if module.split(".")[0] not in allowed
+                or (
+                    sdk_only
+                    and (
+                        (module == "signalquarry" or module.startswith("signalquarry."))
+                        and module != "signalquarry.sdk"
+                        and not module.startswith("signalquarry.sdk.")
+                    )
+                )
             ]
             if (
                 isinstance(node, ast.Call)

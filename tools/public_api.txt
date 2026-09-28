@@ -118,6 +118,7 @@ signalquarry.api.backtest(strategy_id: 'str', *, start: 'date | None' = None, en
 signalquarry.api.bundle_verify(bundle: 'Path', *, max_tier: 'str' = 'public') -> 'Envelope'
 signalquarry.api.cache_dir() -> 'Path'
 signalquarry.api.check(strategy_id: 'str | None' = None, *, project: 'Path | None' = None, parity: 'bool' = False) -> 'Envelope'
+signalquarry.api.check_factor(module_name: 'str', *, project: 'Path | None' = None, params_json: 'str' = '{}') -> 'Envelope'
 signalquarry.api.commit_create(strategy_id: 'str', *, alias: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_reveal(commit_id: 'str', *, out: 'Path', project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_verify(record_path: 'Path', reveal_path: 'Path') -> 'Envelope'

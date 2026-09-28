@@ -28,6 +28,11 @@ may omit symbols it cannot score, but emitted scores must be finite and belong
 to the supplied universe. The engine copies exactly the declared lookback into
 immutable arrays before calling factor code. This is an internal calculation
 boundary, not a historical universe attestation or a factor evidence grade.
+`sqy check --factor <project.module>` imports exactly one decorated factor from
+that project module, checks its package imports, then runs contract, repeated
+score, and future-bar perturbation checks on a fixed synthetic four-symbol
+panel. `--params-json` supplies parameter values. These empirical checks do
+not certify the formula's economics or the provenance of real market data.
 
 Before a panel can support historical factor claims, a separate universe manifest
 must record dated membership and observation cutoffs, including inactive assets.
@@ -52,8 +57,8 @@ paper orders.
 
 Panel materialization and reading can be benchmarked independently of backtests.
 The next stage must add dated membership construction and instrument
-classification, corporate-action knowledge timing, factor-level look-ahead
-checks, trial accounting, and evaluation before factor results can be treated
+classification, corporate-action knowledge timing, trial accounting, and
+evaluation before factor results can be treated
 as point-in-time evidence.
 
 ## Provider references

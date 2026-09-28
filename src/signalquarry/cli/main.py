@@ -105,12 +105,24 @@ def _init(args: argparse.Namespace) -> Envelope:
 
 def _configure_check(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", help="check only this strategy id")
+    parser.add_argument("--factor", help="check one project module defining a @factor function")
+    parser.add_argument("--params-json", default="{}", help="JSON object of factor parameters")
     parser.add_argument(
         "--parity",
         action="store_true",
         help="also replay 60 sessions through the paper kernel and a fake venue; must match the backtest",
     )
     parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
+
+
+def _check(args: argparse.Namespace) -> Envelope:
+    if args.factor:
+        if args.strategy or args.parity:
+            return _usage("check", "--factor cannot be combined with --strategy or --parity")
+        return api.check_factor(args.factor, project=args.project, params_json=args.params_json)
+    if args.params_json != "{}":
+        return _usage("check", "--params-json requires --factor")
+    return api.check(args.strategy, project=args.project, parity=args.parity)
 
 
 def _configure_backtest(parser: argparse.ArgumentParser) -> None:
@@ -435,7 +447,7 @@ COMMANDS: tuple[Command, ...] = (
     Command(
         "check",
         "Run conformance, determinism and look-ahead checks.",
-        lambda args: api.check(args.strategy, project=args.project, parity=args.parity),
+        _check,
         _configure_check,
     ),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),

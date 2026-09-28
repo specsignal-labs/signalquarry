@@ -36,4 +36,12 @@ def momentum(ctx: FactorCtx, p: Momentum) -> dict[str, float]:
     }
 ```
 
+Run `sqy check --factor your_package.momentum --params-json '{"lookback":21}'`
+from the project to check one decorated factor on synthetic panels. The module
+must live under the project and define exactly one factor. The check reports
+import policy, score contract, determinism, and future-bar perturbation results.
+It imports and runs the authored module, so use an isolated development
+environment for untrusted code. It does not establish historical data or
+universe provenance.
+
 ::: signalquarry.sdk.xs

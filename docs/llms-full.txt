@@ -730,6 +730,8 @@ Run conformance, determinism and look-ahead checks.
 | Option | Meaning |
 |---|---|
 | `--strategy` | check only this strategy id |
+| `--factor` | check one project module defining a @factor function |
+| `--params-json` | JSON object of factor parameters |
 | `--parity` | also replay 60 sessions through the paper kernel and a fake venue; must match the backtest |
 | `--project` | project directory (default: search upwards from cwd) |
 
