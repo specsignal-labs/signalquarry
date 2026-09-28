@@ -352,6 +352,7 @@ Reconcile, decide and submit the current session's orders (idempotent).
 |---|---|
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |
 
 ### `sqy paper status`
 
@@ -430,3 +431,4 @@ Write scheduler templates (systemd, launchd, cron, github-actions) for review.
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
 | `--target` | scheduler to write templates for (github-actions is demo-only) (required; one of `systemd`, `launchd`, `cron`, `github-actions`) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |

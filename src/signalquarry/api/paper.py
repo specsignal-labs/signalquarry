@@ -453,7 +453,9 @@ def paper_arm(
     return _run("paper arm", alias, project, action, live_only=True)
 
 
-def paper_schedule(alias: str, target: str, *, project: Path | None = None) -> Envelope:
+def paper_schedule(
+    alias: str, target: str, *, project: Path | None = None, notify_command: Path | None = None
+) -> Envelope:
     context = deployment_context("paper schedule", alias, project)
     if isinstance(context, Envelope):
         return context
@@ -464,6 +466,13 @@ def paper_schedule(alias: str, target: str, *, project: Path | None = None) -> E
             reason_codes=["USAGE_INVALID"],
             summary=f"target must be one of {', '.join(TARGETS)}",
         )
+    if notify_command is not None and (not notify_command.is_absolute() or target == "github-actions"):
+        return Envelope(
+            command="paper schedule",
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="--notify-command requires an absolute path and a local scheduler target",
+        )
     options = context.deployment.spec.kind == "options_single_leg"
     if options and target == "github-actions":
         return Envelope(
@@ -472,7 +481,9 @@ def paper_schedule(alias: str, target: str, *, project: Path | None = None) -> E
             reason_codes=["USAGE_INVALID"],
             summary="options deployments poll every minute; use systemd, launchd or cron",
         )
-    written = write_schedule(context.root, context.deployment.config, target, poll=options)
+    written = write_schedule(
+        context.root, context.deployment.config, target, poll=options, notify_command=notify_command
+    )
     envelope = Envelope(
         command="paper schedule",
         summary=f"wrote {len(written)} {target} file(s); review and install them yourself",

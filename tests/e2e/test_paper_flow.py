@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -157,6 +158,95 @@ def test_schedule_templates(demo: Path, capsys: pytest.CaptureFixture[str], targ
             "commit create --strategy sma-trend --alias demo" in text and "16:30:00 America/New_York" in text
         )
         assert "ots upgrade" in text
+
+
+@pytest.mark.parametrize("target", ["systemd", "launchd", "cron"])
+def test_schedule_opt_in_notification(demo: Path, capsys: pytest.CaptureFixture[str], target: str) -> None:
+    command = Path("/tmp/signalquarry-notify")
+    code, payload = _sqy(
+        capsys,
+        "paper",
+        "schedule",
+        "--alias",
+        "demo",
+        "--target",
+        target,
+        "--notify-command",
+        str(command),
+        "--project",
+        str(demo),
+    )
+    assert code == 0, payload
+    text = "".join((demo / f).read_text() for f in payload["data"]["files"])
+    assert "--notify-command" in text and str(command) in text
+
+
+def test_notification_requires_local_scheduler(demo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code, payload = _sqy(
+        capsys,
+        "paper",
+        "schedule",
+        "--alias",
+        "demo",
+        "--target",
+        "github-actions",
+        "--notify-command",
+        "/tmp/signalquarry-notify",
+        "--project",
+        str(demo),
+    )
+    assert (code, payload["reason_codes"]) == (64, ["USAGE_INVALID"])
+
+
+def test_run_once_notification_preserves_exit_and_scrubs_credentials(
+    demo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+
+    def notify(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr("signalquarry.cli.main.subprocess.run", notify)
+    monkeypatch.setenv("SIGNALQUARRY_PAPER_SECRET_KEY", "test-secret")
+    code, payload = _sqy(
+        capsys,
+        "paper",
+        "run-once",
+        "--alias",
+        "demo",
+        "--project",
+        str(demo),
+        "--notify-command",
+        "/tmp/signalquarry-notify",
+    )
+    assert (code, payload["reason_codes"]) == (78, ["PAPER_BROKER_SIMULATED"])
+    assert len(calls) == 1 and calls[0][0] == ["/tmp/signalquarry-notify"]
+    assert calls[0][1]["env"]["SIGNALQUARRY_EXIT_CODE"] == "78"
+    assert calls[0][1]["env"]["SIGNALQUARRY_ALIAS"] == "demo"
+    assert "SIGNALQUARRY_PAPER_SECRET_KEY" not in calls[0][1]["env"]
+    assert calls[0][1]["timeout"] == 10
+
+
+def test_notification_failure_does_not_hide_run_once_failure(
+    demo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fail(*args, **kwargs):
+        raise subprocess.TimeoutExpired("notify", 10)
+
+    monkeypatch.setattr("signalquarry.cli.main.subprocess.run", fail)
+    code, payload = _sqy(
+        capsys,
+        "paper",
+        "run-once",
+        "--alias",
+        "demo",
+        "--project",
+        str(demo),
+        "--notify-command",
+        "/tmp/signalquarry-notify",
+    )
+    assert (code, payload["reason_codes"]) == (78, ["PAPER_BROKER_SIMULATED"])
 
 
 def test_paper_credentials_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

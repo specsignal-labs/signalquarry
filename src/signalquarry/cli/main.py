@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -29,6 +30,13 @@ class _UsageError(Exception):
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:  # argparse would exit 2; usage errors are 64
         raise _UsageError(message)
+
+
+def _absolute_command(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        raise argparse.ArgumentTypeError("--notify-command requires an absolute executable path")
+    return path
 
 
 @dataclass(frozen=True)
@@ -259,6 +267,12 @@ def _configure_paper(parser: argparse.ArgumentParser) -> None:
                 choices=["systemd", "launchd", "cron", "github-actions"],
                 help="scheduler to write templates for (github-actions is demo-only)",
             )
+        if name in ("run-once", "schedule"):
+            child.add_argument(
+                "--notify-command",
+                type=_absolute_command,
+                help="absolute executable path; called on a non-zero run-once exit with no credential environment",
+            )
 
 
 def _paper(args: argparse.Namespace) -> Envelope:
@@ -268,7 +282,7 @@ def _paper(args: argparse.Namespace) -> Envelope:
     if args.action == "halt":
         return api.paper_halt(alias, args.reason, project=project)
     if args.action == "schedule":
-        return api.paper_schedule(alias, args.target, project=project)
+        return api.paper_schedule(alias, args.target, project=project, notify_command=args.notify_command)
     if args.action == "run":
         return api.paper_run(alias, project=project, interval=args.interval, max_minutes=args.max_minutes)
     if args.action == "backup":
@@ -607,6 +621,7 @@ def main(argv: list[str] | None = None) -> int:
     as_json = "--json" in raw or not sys.stdout.isatty()
     full_detail = False
     started = time.monotonic()
+    args = None
     progress.configure(sys.stderr if as_json or os.environ.get("SIGNALQUARRY_PROGRESS") == "1" else None)
     try:
         full_detail = _pop_detail(raw)
@@ -630,7 +645,32 @@ def main(argv: list[str] | None = None) -> int:
     payload = envelope.as_dict()
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True) if as_json else _render_text(payload)
     print(redact(text))  # credential values never reach the output, whatever a handler put there
+    if (
+        args is not None
+        and getattr(args, "command", None) == "paper"
+        and args.action == "run-once"
+        and args.notify_command is not None
+        and envelope.exit_code != 0
+    ):
+        _notify_on_failure(args.notify_command, args.alias, envelope.exit_code)
     return envelope.exit_code
+
+
+def _notify_on_failure(command: Path, alias: str, exit_code: int) -> None:
+    """Run an explicit local notifier without passing broker or data credentials."""
+    env = {key: os.environ[key] for key in ("HOME", "PATH", "LANG") if key in os.environ}
+    env.update(SIGNALQUARRY_EXIT_CODE=str(exit_code), SIGNALQUARRY_ALIAS=alias)
+    try:
+        subprocess.run(
+            [str(command)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        print("paper notification command failed", file=sys.stderr)
 
 
 if __name__ == "__main__":
