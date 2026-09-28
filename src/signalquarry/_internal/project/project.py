@@ -48,6 +48,7 @@ class ProjectConfig:
     provider: Literal["synthetic", "alpaca"]
     src_dirs: tuple[Path, ...]
     modules: tuple[str, ...]
+    factor_modules: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,13 @@ def load_config(root: Path) -> ProjectConfig:
     project = document.get("project", {})
     data = document.get("data", {})
     strategies = document.get("strategies", {})
+    factors = document.get("factors", {})
+    if (
+        not isinstance(factors, dict)
+        or not isinstance(factors.get("modules", []), list)
+        or any(not isinstance(name, str) or not name for name in factors.get("modules", []))
+    ):
+        raise ProjectError("PROJECT_CONFIG_INVALID", "factors.modules must be a list of module names")
     provider = data.get("provider", "alpaca")
     if provider not in ("synthetic", "alpaca"):
         raise ProjectError("PROJECT_CONFIG_INVALID", f"data.provider={provider}")
@@ -104,6 +112,7 @@ def load_config(root: Path) -> ProjectConfig:
             for path in (sorted(root.glob(item)) if any(c in item for c in "*?[") else [root / item])
         ),
         modules=tuple(strategies.get("modules", [])),
+        factor_modules=tuple(factors.get("modules", [])),
     )
 
 

@@ -50,9 +50,17 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
 | `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
 | `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
+| `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
+| `FACTOR_IMPORT_FAILED` | signal | A registered factor module could not be imported. | Fix the module import and its dependencies in the project environment. |
 | `FACTOR_LABEL_ALIGNMENT_INVALID` | data | Factor scores and outcome labels have incompatible identities or shapes. | Derive labels from the same dated panel and align sessions and symbols exactly. |
 | `FACTOR_LABEL_HORIZONS_INVALID` | data | A factor outcome horizon or forward-return array is invalid. | Use positive horizons and finite, shape-aligned returns no lower than -100%. |
+| `FACTOR_MODULE_INVALID` | signal | A factor module must be inside the project and define exactly one @factor function. | Keep one decorated score function in each registered project module. |
+| `FACTOR_NOT_FOUND` | usage | No registered factor has that id. | Run `sqy factor ls` or add the module to signalquarry.toml. |
+| `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
 | `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
+| `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
+| `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |
 | `FACTOR_UNIVERSE_INVALID` | data | A factor universe has duplicate, empty, or unavailable symbols. | Supply distinct symbols that exist in the verified panel. |
 | `FACTOR_UNIVERSE_TIMING_INVALID` | data | A factor universe was not observed by its decision cutoff. | Use timezone-aware observation and cutoff times from verified manifests. |
 | `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |

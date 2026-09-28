@@ -44,4 +44,35 @@ It imports and runs the authored module, so use an isolated development
 environment for untrusted code. It does not establish historical data or
 universe provenance.
 
+For a project factor that an agent can discover by ID, add its module to
+`signalquarry.toml`:
+
+```toml
+[factors]
+modules = ["your_package.momentum.factor"]
+```
+
+Place `factor.yaml` beside `factor.py`:
+
+```yaml
+schema: signalquarry.factor/v1
+id: price-momentum
+family: momentum
+version: "1"
+hypothesis:
+  statement: Past prices predict next returns.
+  falsification: Rank IC is nonpositive out of sample.
+params:
+  lookback: 21
+```
+
+`sqy factor ls` lists the factor's code-tree and configuration hashes.
+`sqy check --factor-id price-momentum` runs the synthetic checks with the
+declared parameters. Editing code, metadata, or parameters changes the
+configuration identity. Listing and checking do not record a trial or grant
+an evidence grade. Evaluation settings, universe, and labels still need their
+own trial identity before real-data evaluation is available. Both commands
+import the authored factor module, so inspect untrusted project code before
+running them outside an isolated development environment.
+
 ::: signalquarry.sdk.xs

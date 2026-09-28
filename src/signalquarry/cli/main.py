@@ -106,6 +106,7 @@ def _init(args: argparse.Namespace) -> Envelope:
 def _configure_check(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", help="check only this strategy id")
     parser.add_argument("--factor", help="check one project module defining a @factor function")
+    parser.add_argument("--factor-id", help="check a factor id registered in signalquarry.toml")
     parser.add_argument("--params-json", default="{}", help="JSON object of factor parameters")
     parser.add_argument(
         "--parity",
@@ -116,6 +117,10 @@ def _configure_check(parser: argparse.ArgumentParser) -> None:
 
 
 def _check(args: argparse.Namespace) -> Envelope:
+    if args.factor_id:
+        if args.factor or args.strategy or args.parity or args.params_json != "{}":
+            return _usage("check", "--factor-id cannot be combined with other check selectors")
+        return api.check_registered_factor(args.factor_id, project=args.project)
     if args.factor:
         if args.strategy or args.parity:
             return _usage("check", "--factor cannot be combined with --strategy or --parity")
@@ -123,6 +128,17 @@ def _check(args: argparse.Namespace) -> Envelope:
     if args.params_json != "{}":
         return _usage("check", "--params-json requires --factor")
     return api.check(args.strategy, project=args.project, parity=args.parity)
+
+
+def _configure_factor(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    listing = actions.add_parser("ls", help="List explicitly registered project factors and hashes.")
+    listing.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+    listing.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _factor(args: argparse.Namespace) -> Envelope:
+    return api.factor_ls(project=args.project)
 
 
 def _configure_backtest(parser: argparse.ArgumentParser) -> None:
@@ -450,6 +466,7 @@ COMMANDS: tuple[Command, ...] = (
         _check,
         _configure_check,
     ),
+    Command("factor", "Inspect project-registered research factors.", _factor, _configure_factor),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),
     Command(
         "universe", "Capture and verify prospective asset-list snapshots.", _universe, _configure_universe

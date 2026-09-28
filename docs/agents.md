@@ -15,6 +15,14 @@ Each command prints one JSON object on stdout (`schema: signalquarry.cli/v1`):
 command, reason code and exit code; `sqy docs --llms` prints this documentation
 for an agent's context.
 
+For factor research, an agent can add one `@factor` function in a project module,
+declare its hypothesis and parameters in a neighboring `factor.yaml`, and list
+that module under `[factors] modules` in `signalquarry.toml`. `sqy factor ls`
+returns stable configuration identities, and `sqy check --factor-id ID` runs
+synthetic conformance. Neither action records a trial or proves a point-in-time
+factor claim. Real-data factor grading remains unavailable until historical
+universe and outcome-label provenance and trial accounting are implemented.
+
 `data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
 written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
 with kind `data`, warning `DATA_MOVED_TO_ARTIFACT`); `--detail full` keeps it inline

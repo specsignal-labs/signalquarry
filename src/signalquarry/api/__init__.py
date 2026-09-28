@@ -198,6 +198,7 @@ from signalquarry.api.evidence import (  # noqa: E402
     trials_ls,
     trials_show,
 )
+from signalquarry.api.factor import check_registered_factor, factor_ls  # noqa: E402
 from signalquarry.api.paper import (  # noqa: E402
     paper_arm,
     paper_backup,
@@ -226,6 +227,7 @@ __all__ = [
     "cache_dir",
     "check",
     "check_factor",
+    "check_registered_factor",
     "commit_create",
     "commit_reveal",
     "commit_verify",
@@ -237,6 +239,7 @@ __all__ = [
     "docs",
     "doctor",
     "evaluate_command",
+    "factor_ls",
     "evidence_export",
     "evidence_verify",
     "holdout_seal",
