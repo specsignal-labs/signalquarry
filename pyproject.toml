@@ -76,28 +76,20 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Started scoped to validation/stats.py alone to validate
-# the tooling and timing; now covers all of validation/ (the plan's second named
-# target). engine/ and paper/runner.py (the remaining two) are each large enough to
-# need their own pass. Add tests/golden/test_stats_reference.py to test_selection
-# once PR #5 merges.
-only_mutate = ["src/signalquarry/_internal/validation/*"]
+# Hardening plan, track A5. Engine backtest pilot, branched from the validated
+# validation-wide mutmut configuration in PR #6. The remaining engine modules and
+# paper/runner.py will be measured in separate passes.
+only_mutate = ["src/signalquarry/_internal/engine/backtest.py"]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_stats.py",
-  "tests/unit/test_metrics_reference.py",
-  "tests/unit/test_evaluate_reference.py",
-  "tests/unit/test_conformance_reference.py",
-  "tests/unit/test_validation_edges.py",
-  # The full module imports PyArrow during mutmut's forked test discovery.
-  "tests/unit/test_plugins.py::test_plugin_gates_only_lower_claims",
+  "tests/unit/test_engine.py",
+  "tests/unit/test_engine_reference.py",
+  "tests/unit/test_volume_cap.py",
+  "tests/unit/test_engine_contract.py",
+  "tests/golden/test_engine_golden.py",
+  "tests/property/test_properties.py",
   "tests/conformance/test_meta.py",
-  "tests/paper/test_drift.py",
-  "tests/options/test_simulator.py::test_options_lookahead_check_catches_same_day_leaks",
-  "tests/e2e/test_sweep.py",
-  "tests/e2e/test_evidence_flow.py",
-  "tests/e2e/test_evidence_verify.py",
-  "tests/e2e/test_per_family.py",
-  "tests/e2e/test_seal_and_show.py::test_holdout_seal_before_exploring_then_freeze_reuses_it",
+  "tests/paper/test_parity.py",
+  "tests/paper/test_parity_check.py",
 ]
 
 [tool.importlinter]
