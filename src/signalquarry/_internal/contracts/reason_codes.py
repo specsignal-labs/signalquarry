@@ -908,6 +908,48 @@ _CODES += (
         "No verified asset snapshot was captured by the requested cutoff within the freshness window.",
         "Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive.",
     ),
+    ReasonCode(
+        "FACTOR_EVALUATION_IDENTITY_INVALID",
+        Category.DATA,
+        "A factor evaluation lacks a valid panel or membership identity.",
+        "Use verified panel and dated membership manifests before evaluation.",
+    ),
+    ReasonCode(
+        "FACTOR_EVALUATION_SESSIONS_INVALID",
+        Category.DATA,
+        "Factor decision sessions are duplicated, unordered, or outside the panel.",
+        "Use strictly increasing decision sessions recorded in the panel.",
+    ),
+    ReasonCode(
+        "FACTOR_UNIVERSE_TIMING_INVALID",
+        Category.DATA,
+        "A factor universe was not observed by its decision cutoff.",
+        "Use timezone-aware observation and cutoff times from verified manifests.",
+    ),
+    ReasonCode(
+        "FACTOR_UNIVERSE_INVALID",
+        Category.DATA,
+        "A factor universe has duplicate, empty, or unavailable symbols.",
+        "Supply distinct symbols that exist in the verified panel.",
+    ),
+    ReasonCode(
+        "FACTOR_LABEL_ALIGNMENT_INVALID",
+        Category.DATA,
+        "Factor scores and outcome labels have incompatible identities or shapes.",
+        "Derive labels from the same dated panel and align sessions and symbols exactly.",
+    ),
+    ReasonCode(
+        "FACTOR_LABEL_HORIZONS_INVALID",
+        Category.DATA,
+        "A factor outcome horizon or forward-return array is invalid.",
+        "Use positive horizons and finite, shape-aligned returns no lower than -100%.",
+    ),
+    ReasonCode(
+        "FACTOR_REDUNDANCY_ALIGNMENT_INVALID",
+        Category.DATA,
+        "Factor scores cannot be compared across different datasets, dates, or universes.",
+        "Compare factors scored on identical panel and membership identities.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
