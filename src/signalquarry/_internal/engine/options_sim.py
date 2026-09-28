@@ -30,7 +30,6 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
 from signalquarry._internal.contracts.spec import StrategySpecV1
 from signalquarry._internal.data.dataset import Dataset
@@ -232,7 +231,7 @@ def run_options_backtest(
             result.positions[underlying] = Decimal(wheel.shares)
         if wheel.leg is not None:
             result.positions[wheel.leg.contract.symbol] = Decimal(-1)
-    result.ledger_hash = canonical_hash(result.ledger_document())
+    result.ledger_hash = result.compute_ledger_hash()
     if recorded_sessions:
         result.warnings.append(f"OPTIONS_RECORDED_CHAINS_USED:{len(recorded_sessions)}")
     return result
