@@ -40,13 +40,17 @@ a neighboring strict `factor.yaml` with an ID, family, version, hypothesis,
 and parameters. `sqy factor ls` reports their code-tree and configuration
 hashes; `sqy check --factor-id ID` runs synthetic conformance using declared
 parameters. The configuration hash includes the complete factor specification,
+including declared evaluation choices,
 validated parameters, package code, function identity, and framework
 major/minor version. Even a hypothesis edit therefore changes its identity.
 The code hash covers the full top-level project package, including sibling
 helpers; unrelated edits within that package also conservatively change it.
 The import policy checks that same tree.
-Evaluation settings, universe, and labels will form a separate trial
-configuration when real-data evaluation and ledger integration exist. Listing
+The separate, pure factor-trial configuration identity binds the factor hash,
+dataset, dated universe, outcome labels, exact decision sessions, declared
+evaluation choices, and accepted-factor comparison set. It does not verify the
+underlying manifests or write a trial. A future real-data entry point must do
+both before claiming evidence. Listing
 and checking registered factors do not consume trials or produce grades.
 
 The internal factor evaluation core binds each decision to a timezone-aware

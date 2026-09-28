@@ -98,6 +98,15 @@ def test_invalid_registered_params_are_rejected(tmp_path: Path) -> None:
     assert factor_ls(project=root).reason_codes == ["FACTOR_PARAMS_INVALID"]
 
 
+def test_registered_factor_accepts_yaml_list_horizons(tmp_path: Path) -> None:
+    root, spec, _ = _project(tmp_path)
+    spec.write_text(
+        spec.read_text(encoding="utf-8") + "evaluation:\n  horizons: [1, 5, 21]\n",
+        encoding="utf-8",
+    )
+    assert factor_ls(project=root).status == "ok"
+
+
 def test_factor_identity_covers_sibling_helpers(tmp_path: Path) -> None:
     root, _, package = _project(tmp_path)
     helper = root / "src" / package / "helper.py"
@@ -112,6 +121,15 @@ def test_factor_identity_covers_sibling_helpers(tmp_path: Path) -> None:
     checked = check_registered_factor("price-momentum", project=root)
     assert checked.status == "blocked"
     assert checked.data["checks"][0]["name"] == "import_policy"
+
+
+def test_evaluation_choices_change_registered_identity_without_trial(tmp_path: Path) -> None:
+    root, spec, _ = _project(tmp_path)
+    before = factor_ls(project=root).data["factors"][0]["configuration_hash"]
+    spec.write_text(spec.read_text() + "evaluation:\n  cost_bps: 25\n  trial_budget: 25\n", encoding="utf-8")
+    after = factor_ls(project=root).data["factors"][0]["configuration_hash"]
+    assert after != before
+    assert not (root / "evidence" / "trials.jsonl").exists()
 
 
 def test_duplicate_factor_ids_and_config_shape(tmp_path: Path) -> None:

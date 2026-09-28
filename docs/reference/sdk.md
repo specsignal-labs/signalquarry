@@ -64,14 +64,24 @@ hypothesis:
   falsification: Rank IC is nonpositive out of sample.
 params:
   lookback: 21
+evaluation:
+  horizons: [1, 5, 21]
+  chronological_blocks: 6
+  cost_bps: 10
+  capital: 1000000
+  trial_budget: 50
+  holdout:
+    months: 12
 ```
 
 `sqy factor ls` lists the factor's code-tree and configuration hashes.
 `sqy check --factor-id price-momentum` runs the synthetic checks with the
 declared parameters. Editing code, metadata, or parameters changes the
 configuration identity. Listing and checking do not record a trial or grant
-an evidence grade. Evaluation settings, universe, and labels still need their
-own trial identity before real-data evaluation is available. Both commands
+an evidence grade. The pure factor-trial key binds evaluation settings, data,
+dated universe, labels, decision sessions and accepted-factor comparisons.
+Constructing that key does not verify the sources or append a real-data trial;
+those steps still need a controlled evaluator. Both commands
 import the authored factor module, so inspect untrusted project code before
 running them outside an isolated development environment.
 The code hash covers the factor's full top-level project package, including

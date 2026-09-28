@@ -32,7 +32,7 @@ class LoadedFactor:
 
     @property
     def configuration_hash(self) -> str:
-        """Factor formula/config identity; evaluation choices get a separate trial key."""
+        """Declared factor and package identity; trial inputs get a composite key."""
         major_minor = ".".join(__version__.split(".")[:2])
         return canonical_hash(
             {
