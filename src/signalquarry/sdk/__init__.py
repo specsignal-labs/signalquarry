@@ -19,9 +19,25 @@ A strategy is one pure function::
 
 from pydantic import Field
 
-from signalquarry.sdk import ta
+from signalquarry.sdk import ta, xs
 from signalquarry.sdk.context import Bars, Ctx
 from signalquarry.sdk.decision import Decision
+from signalquarry.sdk.factors import FactorCtx, FactorDef, factor, factor_definition_of
 from signalquarry.sdk.strategy import Params, StrategyDef, definition_of, strategy
 
-__all__ = ["Bars", "Ctx", "Decision", "Field", "Params", "StrategyDef", "definition_of", "strategy", "ta"]
+__all__ = [
+    "Bars",
+    "Ctx",
+    "Decision",
+    "FactorCtx",
+    "FactorDef",
+    "Field",
+    "Params",
+    "StrategyDef",
+    "definition_of",
+    "factor",
+    "factor_definition_of",
+    "strategy",
+    "ta",
+    "xs",
+]
