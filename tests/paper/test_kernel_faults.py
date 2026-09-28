@@ -15,7 +15,7 @@ import pytest
 from signalquarry._internal.paper.brokers.fake import FakeBroker
 from signalquarry._internal.paper.journal import Journal
 from signalquarry._internal.paper.lease import RunLease
-from signalquarry._internal.paper.models import BrokerClock, PaperError
+from signalquarry._internal.paper.models import BrokerClock, OrderRequest, PaperError
 from signalquarry._internal.paper.runner import PaperKernel
 from tests.paper.harness import Rig, hold_syna, rig
 
@@ -106,6 +106,42 @@ def test_n2_orphan_filled_order_is_recovered_next_session(tmp_path: Path) -> Non
     assert recovered and journal.last("halted") is None
     finals = [e for e in journal.of_kind("order_final") if e["session"] == sessions[0].isoformat()]
     assert finals and all(e["status"] == "filled" for e in finals)
+
+
+def test_missing_intent_does_not_skip_later_terminal_order(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    prior, current = paper.dataset.sessions[60:62]
+    paper.at(prior)
+    journal = Journal.open(paper.deployment.journal_path)
+    missing, filled = "sq-demo-missing-0", "sq-demo-filled-0"
+    for cid in (missing, filled):
+        journal.append(
+            "order_intent",
+            {
+                "client_order_id": cid,
+                "session": prior,
+                "symbol": "SYNA",
+                "side": "buy",
+                "quantity": Decimal(1),
+            },
+            now=paper.broker.now,
+        )
+    order = paper.broker.submit(OrderRequest(filled, "SYNA", "buy", Decimal(1)))
+    journal.append(
+        "order_submitted",
+        {"client_order_id": filled, "order_id": order.order_id, "status": order.status},
+        now=paper.broker.now,
+    )
+    paper.broker.open_session(prior)
+    paper.at(current)
+    assert paper.kernel.reconcile_orders(journal, current) == [f"PAPER_ORDER_NOT_FOUND:{missing}"]
+    finals = {entry["client_order_id"]: entry for entry in journal.of_kind("order_final")}
+    assert set(finals) == {missing, filled}
+    assert finals[missing]["status"] == "not_found"
+    assert finals[filled]["status"] == "filled"
+    assert finals[filled]["order_id"] == order.order_id
+    assert finals[filled]["filled_quantity"] == "1"
+    assert [entry["client_order_id"] for entry in journal.of_kind("order_submitted")] == [filled]
 
 
 def test_rejected_order_marks_the_target_incomplete_and_retries(tmp_path: Path) -> None:
@@ -206,6 +242,12 @@ def test_stale_open_order_is_canceled_and_the_target_retried(tmp_path: Path) -> 
     outcome = paper.kernel.run_once()
     assert any(w.startswith("PAPER_STALE_ORDER_CANCELED") for w in outcome.warnings)
     assert outcome.data["orders"]
+    finals = [
+        entry
+        for entry in Journal.open(paper.deployment.journal_path).of_kind("order_final")
+        if entry["session"] == sessions[0].isoformat()
+    ]
+    assert finals and all(entry["status"] == "canceled" and entry["order_id"] for entry in finals)
 
 
 def test_position_drift_halts_until_a_human_re_arms(tmp_path: Path) -> None:
@@ -221,6 +263,25 @@ def test_position_drift_halts_until_a_human_re_arms(tmp_path: Path) -> None:
     paper.kernel.arm()
     paper.at(sessions[1], time(9, 14))
     assert paper.kernel.run_once().data["session"] == sessions[1].isoformat()
+
+
+def test_halt_cancels_only_managed_open_orders(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    paper.at(paper.dataset.sessions[60])
+    managed = paper.broker.submit(OrderRequest(f"{paper.deployment.prefix}halt-0", "SYNA", "buy", Decimal(1)))
+    foreign = paper.broker.submit(OrderRequest("manual-halt-0", "SYNA", "buy", Decimal(1)))
+    journal = Journal.open(paper.deployment.journal_path)
+
+    error = paper.kernel._halt(journal, "PAPER_POSITION_DRIFT", "injected drift")
+
+    assert (error.code, error.status, error.detail) == (
+        "PAPER_POSITION_DRIFT",
+        "blocked",
+        "injected drift",
+    )
+    assert journal.last("halted")["detail"] == "injected drift"
+    assert paper.broker.order_by_client_id(managed.client_order_id).status == "canceled"
+    assert paper.broker.order_by_client_id(foreign.client_order_id).status == "accepted"
 
 
 def test_unmanaged_positions_and_orders_block(tmp_path: Path) -> None:
