@@ -41,6 +41,13 @@ def test_ledger_skips_blank_lines_and_rejects_garbage(tmp_path: Path) -> None:
     assert info.value.code == "EVIDENCE_LOG_CORRUPT"
 
 
+def test_ledger_error_keeps_its_reason_and_optional_detail() -> None:
+    assert str(LedgerError("EVIDENCE_LOG_CORRUPT")) == "EVIDENCE_LOG_CORRUPT"
+    assert str(LedgerError("EVIDENCE_LOG_CORRUPT", "trials.jsonl:2")) == (
+        "EVIDENCE_LOG_CORRUPT:trials.jsonl:2"
+    )
+
+
 def test_metrics_and_stats_degenerate_inputs() -> None:
     assert len(daily_returns([Decimal(1)])) == 0
     assert summarize([], [], Decimal(1)) == {"sessions": 0}
@@ -53,6 +60,7 @@ def test_metrics_and_stats_degenerate_inputs() -> None:
     assert math.isnan(low) and math.isnan(high)
     assert max_drawdown(np.array([])) == 0.0
     assert add_months(date(2025, 1, 31), 1) == date(2025, 2, 28)
+    assert add_months(date(2025, 1, 1), 1) == date(2025, 2, 1)
     assert add_months(date(2024, 3, 31), -1) == date(2024, 2, 29)
 
 

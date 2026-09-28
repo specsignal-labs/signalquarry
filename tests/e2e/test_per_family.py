@@ -45,6 +45,9 @@ def test_family_logs_index_and_project_wide_count(lab: Path, capsys: pytest.Capt
     summary = ledger.trial_summary(lab, "beta")
     assert (summary["project_count"], summary["family_count"]) == (3, 1)
     assert summary["head"] == ledger.project_index(lab).entries()[-1]["hash"]
+    assert (lab / "evidence/project_index.jsonl").is_file()
+    assert ledger.project_index(lab).path == lab / "evidence/project_index.jsonl"
+    assert ledger.project_index(lab).entries()[0]["schema"] == "signalquarry.project-index/v1"
 
     assert _sqy(capsys, "spec", "freeze", "--strategy", "sma-trend", "--project", str(lab))[0] == 0
     assert (lab / "families/sma-trend/evidence/freezes.jsonl").is_file()
@@ -69,6 +72,12 @@ def test_rolled_back_family_log_is_detected(lab: Path, capsys: pytest.CaptureFix
     code, payload = _sqy(capsys, "evidence", "verify", "--project", str(lab))
     assert (code, payload["reason_codes"]) == (2, ["EVIDENCE_INDEX_MISMATCH"])
     path.unlink()
+    assert ledger.verify_index(lab) == ["EVIDENCE_INDEX_MISMATCH:alpha/trials"]
+
+
+def test_family_log_without_project_index_is_detected(lab: Path) -> None:
+    assert ledger.record_trial(lab, _trial("alpha", "a"))[1] is True
+    (lab / "evidence/project_index.jsonl").unlink()
     assert ledger.verify_index(lab) == ["EVIDENCE_INDEX_MISMATCH:alpha/trials"]
 
 

@@ -60,6 +60,17 @@ def test_moments_and_bootstrap_on_known_series() -> None:
     assert low < m.sharpe < high
 
 
+def test_block_bootstrap_matches_small_fixed_seed_reference() -> None:
+    # For PCG64(7), the eight two-block draws start at
+    # (2,1), (2,2), (1,2), (2,0), (0,0), (0,2), (2,0), (1,2).
+    # Compute each draw's sample Sharpe independently with sample stdev, then
+    # linearly interpolate the 5th and 95th percentiles.
+    series = np.array([0.01, 0.02, -0.01, 0.03])
+    assert block_bootstrap_sharpe(series, block=2, samples=8, seed=7) == pytest.approx(
+        (0.3638034375544994, 1.944923306528644), abs=1e-12
+    )
+
+
 # The tests below close gaps a mutation-testing pass (hardening track A5) found: each
 # one is written against a hand-computed expectation independent of the formula under
 # test, not a directional/self-referential check, because the survivors they kill are
@@ -149,3 +160,37 @@ def test_pbo_cscv_accepts_exactly_two_configurations() -> None:
     matrix[:, 0] = 1.0
     result = pbo_cscv(matrix, blocks=2)
     assert result["splits"] > 0
+
+
+def test_pbo_ranks_each_configuration_by_its_own_volatility() -> None:
+    # In the first half, configuration 0 has a lower mean but far less variation.
+    # It has the higher Sharpe in both halves, so both out-of-sample ranks are top.
+    matrix = np.array([[1.0, 2.0], [1.1, 10.0], [3.0, 1.0], [3.1, 1.1]])
+    result = pbo_cscv(matrix, blocks=2)
+    assert result == {
+        "pbo": 0.0,
+        "splits": 2,
+        "configurations": 2,
+        "median_logit": 0.693147,
+    }
+
+
+def test_pbo_middle_out_of_sample_rank_counts_as_overfit() -> None:
+    # The winning configuration in each half ranks second of three in the other.
+    # Its relative rank is 1/2, hence logit zero in both CSCV splits.
+    matrix = np.array([[2.9, 1.9, 0.9], [3.1, 2.1, 1.1], [1.9, 2.9, 0.9], [2.1, 3.1, 1.1]])
+    assert pbo_cscv(matrix, blocks=2) == {
+        "pbo": 1.0,
+        "splits": 2,
+        "configurations": 3,
+        "median_logit": 0.0,
+    }
+
+
+def test_pbo_invalid_matrix_reports_the_observed_configuration_count() -> None:
+    one_column = pbo_cscv(np.zeros((8, 1)), blocks=2)
+    one_dimensional = pbo_cscv(np.zeros(8), blocks=2)
+    assert math.isnan(one_column.pop("pbo"))
+    assert one_column == {"splits": 0, "configurations": 1}
+    assert math.isnan(one_dimensional.pop("pbo"))
+    assert one_dimensional == {"splits": 0, "configurations": 0}
