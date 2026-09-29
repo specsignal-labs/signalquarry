@@ -60,7 +60,15 @@ def probabilistic_sharpe(m: ReturnMoments, benchmark_sharpe: float = 0.0) -> flo
 
 
 def expected_max_sharpe(trials: int, sharpe_variance: float) -> float:
-    """SR* : the Sharpe ratio expected from the best of ``trials`` unskilled attempts."""
+    """SR* : the Sharpe ratio expected from the best of ``trials`` unskilled attempts.
+
+    ``sharpe_variance`` is the variance of the *trials'* Sharpe ratios, in the same
+    per-period units as every other Sharpe ratio in this module (see the module
+    docstring) -- not annualized. Passing an annualized variance silently answers a
+    different, much harder question: de-annualize it first by dividing by the number
+    of periods per year (see ``tests/golden/test_stats_reference.py`` for a worked
+    example of exactly this conversion).
+    """
     if trials <= 1 or sharpe_variance <= 0:
         return 0.0
     a = _NORMAL.inv_cdf(1.0 - 1.0 / trials)
