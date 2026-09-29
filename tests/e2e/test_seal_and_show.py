@@ -22,6 +22,7 @@ def test_holdout_seal_before_exploring_then_freeze_reuses_it(
     _sqy(capsys, "init", str(project), "--demo", "--package", "seal_lab")
     code, payload = _sqy(capsys, "holdout", "seal", "--strategy", "sma-trend", "--project", str(project))
     assert code == 0 and payload["data"]["newly_sealed"] is True
+    assert ledger.latest_freeze(project, "sma-trend") is None
     start = payload["data"]["holdout_start"]
     code, payload = _sqy(capsys, "holdout", "seal", "--strategy", "sma-trend", "--project", str(project))
     assert payload["data"] == {"family": "sma-trend", "holdout_start": start, "newly_sealed": False}

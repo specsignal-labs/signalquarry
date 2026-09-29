@@ -54,9 +54,14 @@ class ChainedLog:
                 entry = json.loads(line)
             except ValueError as exc:
                 raise LedgerError("EVIDENCE_LOG_CORRUPT", f"{self.path.name}:{number}") from exc
+            if not isinstance(entry, dict):
+                raise LedgerError("EVIDENCE_LOG_CORRUPT", f"{self.path.name}:{number}")
             body = {k: v for k, v in entry.items() if k != "hash"}
+            sequence = entry.get("seq")
             if (
-                entry.get("seq") != len(entries) + 1
+                (self.schema != "any" and entry.get("schema") != self.schema)
+                or type(sequence) is not int
+                or sequence != len(entries) + 1
                 or entry.get("prev") != previous
                 or canonical_hash(body) != entry.get("hash")
             ):
@@ -109,9 +114,15 @@ def layout(root: Path) -> Layout:
     kind = evidence.get("layout", "project")
     if kind not in ("project", "per_family"):
         raise LedgerError("PROJECT_CONFIG_INVALID", f"evidence.layout={kind}")
-    return Layout(
-        per_family=kind == "per_family", family_root=str(evidence.get("family_root", "families/{family}"))
-    )
+    family_root = str(evidence.get("family_root", "families/{family}"))
+    if kind == "per_family" and family_root.count("{family}") != 1:
+        raise LedgerError("PROJECT_CONFIG_INVALID", "evidence.family_root")
+    if kind == "per_family":
+        try:
+            family_root.format(family="__signalquarry_family__")
+        except (KeyError, ValueError) as exc:
+            raise LedgerError("PROJECT_CONFIG_INVALID", "evidence.family_root") from exc
+    return Layout(per_family=kind == "per_family", family_root=family_root)
 
 
 def _log(root: Path, kind: str, family: str | None) -> ChainedLog:
@@ -176,13 +187,23 @@ def verify_index(root: Path) -> list[str]:
         latest[(entry["family"], entry["log"])] = entry
     problems = []
     seen = set()
+    family_base = root / current.family_root.partition("{family}")[0]
     for kind in KINDS:
         for log in logs(root, kind):
-            family = log.path.parent.parent.name
+            try:
+                family = log.path.relative_to(family_base).parts[0]
+            except (ValueError, IndexError) as exc:
+                raise LedgerError("PROJECT_CONFIG_INVALID", "evidence.family_root") from exc
             seen.add((family, kind))
             entries = log.entries()
             expected = latest.get((family, kind))
-            if expected is None or not entries or entries[-1]["hash"] != expected["head"]:
+            if (
+                expected is None
+                or not entries
+                or entries[-1]["hash"] != expected.get("head")
+                or type(expected.get("entries")) is not int
+                or expected.get("entries") != len(entries)
+            ):
                 problems.append(f"EVIDENCE_INDEX_MISMATCH:{family}/{kind}")
     problems += [f"EVIDENCE_INDEX_MISMATCH:{f}/{k}" for (f, k) in latest if (f, k) not in seen]
     return problems

@@ -7,6 +7,8 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Broader validation mutation coverage with independent reference cases for equity metrics,
+  walk-forward and holdout gates, evidence history, and strategy conformance.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
@@ -67,6 +69,8 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Fixed
+- Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
+  instead of an internal error.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication

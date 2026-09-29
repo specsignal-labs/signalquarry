@@ -12,13 +12,21 @@ import numpy as np
 import pytest
 
 from signalquarry import api
+from signalquarry._internal.canonical import canonical_hash, canonical_json
 from signalquarry._internal.paper import arm
 from signalquarry._internal.paper.journal import Journal
 from signalquarry._internal.paper.models import PaperError
 from signalquarry._internal.project.project import load_config, load_strategies
 from signalquarry._internal.validation.conformance import import_policy, run_checks
 from signalquarry._internal.validation.evaluate import add_months, max_drawdown
-from signalquarry._internal.validation.ledger import ChainedLog, LedgerError
+from signalquarry._internal.validation.ledger import (
+    ChainedLog,
+    LedgerError,
+    append,
+    logs,
+    trial_summary,
+    trials,
+)
 from signalquarry._internal.validation.metrics import daily_returns, summarize
 from signalquarry._internal.validation.stats import (
     ReturnMoments,
@@ -41,6 +49,65 @@ def test_ledger_skips_blank_lines_and_rejects_garbage(tmp_path: Path) -> None:
     assert info.value.code == "EVIDENCE_LOG_CORRUPT"
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("seq", 2), ("seq", True), ("seq", 1.0), ("prev", "sha256:wrong")],
+)
+def test_ledger_rejects_rehashed_sequence_and_previous_hash_mismatches(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    log = ChainedLog(tmp_path / "log.jsonl", "t/v1")
+    entry = log.append({"x": 1})
+    entry[field] = value
+    entry["hash"] = canonical_hash({key: item for key, item in entry.items() if key != "hash"})
+    log.path.write_text(canonical_json(entry) + "\n")
+
+    with pytest.raises(LedgerError) as info:
+        log.entries()
+    assert info.value.code == "EVIDENCE_LOG_CORRUPT"
+
+
+def test_ledger_rejects_a_validly_hashed_record_with_the_wrong_schema(tmp_path: Path) -> None:
+    path = tmp_path / "log.jsonl"
+    ChainedLog(path, "signalquarry.other/v1").append({"x": 1})
+
+    with pytest.raises(LedgerError) as info:
+        ChainedLog(path, "signalquarry.trial/v1").entries()
+
+    assert info.value.code == "EVIDENCE_LOG_CORRUPT"
+
+
+def test_ledger_error_keeps_its_reason_and_optional_detail() -> None:
+    assert str(LedgerError("EVIDENCE_LOG_CORRUPT")) == "EVIDENCE_LOG_CORRUPT"
+    assert str(LedgerError("EVIDENCE_LOG_CORRUPT", "trials.jsonl:2")) == (
+        "EVIDENCE_LOG_CORRUPT:trials.jsonl:2"
+    )
+
+
+def test_project_layout_ledger_paths_keep_their_case(tmp_path: Path) -> None:
+    expected = tmp_path / "evidence" / "trials.jsonl"
+
+    assert trials(tmp_path).path == expected
+    assert logs(tmp_path, "trials")[0].path == expected
+
+
+def test_project_layout_trial_summary_reports_ledger_head(tmp_path: Path) -> None:
+    entry = append(
+        tmp_path,
+        "trials",
+        "alpha",
+        {
+            "kind": "trial",
+            "family": "alpha",
+            "configuration_hash": "sha256:" + "a" * 64,
+            "dataset_identity": "dataset-v1",
+            "sharpe": 0.1,
+        },
+    )
+
+    assert trial_summary(tmp_path)["head"] == entry["hash"]
+
+
 def test_metrics_and_stats_degenerate_inputs() -> None:
     assert len(daily_returns([Decimal(1)])) == 0
     assert summarize([], [], Decimal(1)) == {"sessions": 0}
@@ -53,6 +120,7 @@ def test_metrics_and_stats_degenerate_inputs() -> None:
     assert math.isnan(low) and math.isnan(high)
     assert max_drawdown(np.array([])) == 0.0
     assert add_months(date(2025, 1, 31), 1) == date(2025, 2, 28)
+    assert add_months(date(2025, 1, 1), 1) == date(2025, 2, 1)
     assert add_months(date(2024, 3, 31), -1) == date(2024, 2, 29)
 
 

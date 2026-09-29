@@ -36,7 +36,7 @@ signalquarry = "signalquarry.cli.main:main"
 sqy = "signalquarry.cli.main:main"
 
 [dependency-groups]
-dev = ["pytest>=8.4,<9", "ruff>=0.16,<0.17", "import-linter>=2.1,<3", "hypothesis>=6.100,<7", "coverage[toml]>=7.6,<8", "jsonschema>=4.23,<5", "git-filter-repo>=2.38", "pyright>=1.1.400,<1.2"]
+dev = ["pytest>=8.4,<9", "ruff>=0.16,<0.17", "import-linter>=2.1,<3", "hypothesis>=6.100,<7", "coverage[toml]>=7.6,<8", "jsonschema>=4.23,<5", "git-filter-repo>=2.38", "pyright>=1.1.400,<1.2", "mutmut>=3.8,<4"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "mkdocstrings[python]>=0.29,<2"]
 
 [tool.hatch.build.targets.wheel]
@@ -72,6 +72,33 @@ venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plugins"]
+
+[tool.mutmut]
+process_isolation = "forkserver"
+on_dependency_change = "rerun"
+# Hardening plan, track A5. Started scoped to validation/stats.py alone to validate
+# the tooling and timing; now covers all of validation/ (the plan's second named
+# target). engine/ and paper/runner.py (the remaining two) are each large enough to
+# need their own pass. Add tests/golden/test_stats_reference.py to test_selection
+# once PR #5 merges.
+only_mutate = ["src/signalquarry/_internal/validation/*"]
+pytest_add_cli_args_test_selection = [
+  "tests/unit/test_stats.py",
+  "tests/unit/test_metrics_reference.py",
+  "tests/unit/test_evaluate_reference.py",
+  "tests/unit/test_conformance_reference.py",
+  "tests/unit/test_validation_edges.py",
+  # The full module imports PyArrow during mutmut's forked test discovery.
+  "tests/unit/test_plugins.py::test_plugin_gates_only_lower_claims",
+  "tests/conformance/test_meta.py",
+  "tests/paper/test_drift.py",
+  "tests/options/test_simulator.py::test_options_lookahead_check_catches_same_day_leaks",
+  "tests/e2e/test_sweep.py",
+  "tests/e2e/test_evidence_flow.py",
+  "tests/e2e/test_evidence_verify.py",
+  "tests/e2e/test_per_family.py",
+  "tests/e2e/test_seal_and_show.py::test_holdout_seal_before_exploring_then_freeze_reuses_it",
+]
 
 [tool.importlinter]
 root_package = "signalquarry"
