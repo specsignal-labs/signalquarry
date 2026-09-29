@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 
 from signalquarry._internal.canonical import canonical_hash, canonical_json
+from signalquarry._internal.contracts.factor_spec import FactorEvaluationSpecV1
 from signalquarry._internal.validation import ledger
+from signalquarry._internal.validation.factor_trials import FactorTrialConfiguration, record_factor_trial
 from signalquarry.cli.main import main
 
 
@@ -40,8 +43,25 @@ def test_family_logs_index_and_project_wide_count(lab: Path, capsys: pytest.Capt
     ledger.record_trial(lab, _trial("alpha", "b"))
     ledger.record_trial(lab, _trial("beta", "c"))
     assert ledger.record_trial(lab, _trial("beta", "c"))[1] is False  # same configuration and dataset
+    factor_configuration = FactorTrialConfiguration(
+        factor_configuration_hash="sha256:" + "d" * 64,
+        dataset_identity="sha256:" + "e" * 64,
+        universe_identity="sha256:" + "f" * 64,
+        label_identity="sha256:" + "0" * 64,
+        decision_sessions=(date(2026, 1, 2), date(2026, 1, 5)),
+        evaluation=FactorEvaluationSpecV1(),
+    )
+    record_factor_trial(
+        lab,
+        family="alpha",
+        factor_id="momentum",
+        configuration=factor_configuration,
+        at=datetime(2026, 1, 6, tzinfo=UTC),
+        metrics={"mean_ic": 0.12},
+    )
     assert (lab / "families/alpha/evidence/trials.jsonl").is_file()
     assert (lab / "families/beta/evidence/trials.jsonl").is_file()
+    assert (lab / "families/alpha/evidence/factor_trials.jsonl").is_file()
     assert not (lab / "evidence/trials.jsonl").exists()
     assert ledger.trials(lab, "alpha").schema == ledger.SCHEMAS["trials"]
     assert ledger.logs(lab, "trials")[0].schema == ledger.SCHEMAS["trials"]
@@ -61,6 +81,7 @@ def test_family_logs_index_and_project_wide_count(lab: Path, capsys: pytest.Capt
     assert {row["path"] for row in payload["data"]["logs"]} >= {
         "families/alpha/evidence/trials.jsonl",
         "families/beta/evidence/trials.jsonl",
+        "families/alpha/evidence/factor_trials.jsonl",
         "families/sma-trend/evidence/freezes.jsonl",
         "evidence/project_index.jsonl",
     }
