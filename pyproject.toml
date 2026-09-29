@@ -76,12 +76,21 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Options simulator pass, following the validation and
-# equity backtest passes. paper/runner.py will be measured separately.
-only_mutate = ["src/signalquarry/_internal/engine/options_sim.py"]
+# Hardening plan, track A5. Paper runner pass, following validation and both
+# engine passes. Keep its tests scoped so mutmut can finish a full pass.
+only_mutate = ["src/signalquarry/_internal/paper/runner.py"]
 pytest_add_cli_args_test_selection = [
-  "tests/options/test_options_sim_reference.py",
+  # The broker-plugin CLI test aborts in mutmut's macOS fork process; it remains
+  # in the full pytest suite and is not needed for paper/runner.py coverage.
+  "tests/paper/test_kernel_faults.py",
+  "tests/paper/test_kernel_commands.py",
+  "tests/paper/test_backup_and_run.py",
+  "tests/paper/test_drift.py",
+  "tests/paper/test_snapshot.py",
+  "tests/paper/test_runner_reference.py",
   "tests/paper/test_parity.py",
+  "tests/paper/test_parity_check.py",
+  "tests/paper/test_isolation.py",
 ]
 
 [tool.importlinter]

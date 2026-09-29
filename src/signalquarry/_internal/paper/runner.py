@@ -1049,6 +1049,7 @@ class PaperKernel:
             }
 
         finals = [e for e in journal.of_kind("order_final") if Decimal(e["filled_quantity"]) > 0]
+        selected_finals = finals[-recent_fills:] if recent_fills > 0 else []
         managed = set(self.deployment.spec.data.symbols)
         options = getattr(self.deployment.spec, "options", None)
         underlyings = set(options.underlyings) if options is not None else set()
@@ -1118,7 +1119,7 @@ class PaperKernel:
                     "quantity": str(e["filled_quantity"]),
                     "average_fill_price": str(e["filled_average_price"]),
                 }
-                for e in finals[-recent_fills:]
+                for e in selected_finals
             ],
             "external_cash_flows": [],
             "availability": {

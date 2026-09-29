@@ -13,6 +13,8 @@ change provisional surfaces after deprecation).
   pre-open paper-parity cases.
 - Options-simulator mutation coverage with short wheel, quote, expiry-boundary, and
   action-refusal reference cases.
+- Paper-runner mutation coverage with exact snapshot, drift, and deterministic
+  order-intent reference cases.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
@@ -75,6 +77,8 @@ change provisional surfaces after deprecation).
 ### Fixed
 - Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
   instead of an internal error.
+- A paper snapshot requested with zero recent fills now returns an empty list instead
+  of all historical fills.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication
