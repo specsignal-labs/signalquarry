@@ -1034,6 +1034,12 @@ _CODES += (
         "A modeled split or cash dividend is invalid or duplicated for the requested outcomes.",
         "Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes.",
     ),
+    ReasonCode(
+        "FACTOR_PORTFOLIO_UNAVAILABLE",
+        Category.DATA,
+        "No eligible factor scores or prior-only factor weights are available for this decision.",
+        "Provide completed factor history and a prior-cutoff weight row, or use equal weights.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

@@ -23,6 +23,7 @@ from signalquarry.sdk import ta, xs
 from signalquarry.sdk.context import Bars, Ctx
 from signalquarry.sdk.decision import Decision
 from signalquarry.sdk.factors import FactorCtx, FactorDef, factor, factor_definition_of
+from signalquarry.sdk.portfolio import FactorInput, FactorWeightSnapshot, factor_portfolio
 from signalquarry.sdk.strategy import Params, StrategyDef, definition_of, strategy
 
 __all__ = [
@@ -31,12 +32,15 @@ __all__ = [
     "Decision",
     "FactorCtx",
     "FactorDef",
+    "FactorInput",
+    "FactorWeightSnapshot",
     "Field",
     "Params",
     "StrategyDef",
     "definition_of",
     "factor",
     "factor_definition_of",
+    "factor_portfolio",
     "strategy",
     "ta",
     "xs",

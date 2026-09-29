@@ -46,6 +46,56 @@ Every reason code you return must be declared in `strategy.yaml`; undeclared
 codes stop the run (`REASON_CODE_UNDECLARED`). State must be JSON-serializable
 and at most 16 KB.
 
+## Factor portfolios
+
+Import registered factor functions into a normal `@strategy` and return the
+composite through `factor_portfolio`. It reads only the completed bars in
+`Ctx`, standardizes each factor cross-sectionally, and creates an ordinary
+`Decision.target`:
+
+```python
+from signalquarry.sdk import Ctx, Decision, FactorInput, Params, factor_portfolio, strategy
+from mylab.factors.momentum import P as MomentumParams, momentum
+from mylab.factors.value import P as ValueParams, value
+
+
+class PortfolioParams(Params):
+    period: int = 60
+
+
+@strategy(params=PortfolioParams, lookback=lambda p: p.period)
+def decide(ctx: Ctx, p: PortfolioParams) -> Decision:
+    return factor_portfolio(
+        ctx,
+        (
+            FactorInput("momentum", momentum, MomentumParams(period=p.period)),
+            FactorInput("value", value, ValueParams(period=p.period)),
+        ),
+        top_quantile=0.2,
+        max_weight_per_symbol=0.05,
+        turnover_buffer=0.05,
+    )
+```
+
+This example assumes both factor parameter models have a `period` field.
+Set the strategy lookback to at least the longest factor lookback. The factor
+parameter models and their values are part of the strategy package's hashed
+code; keep them fixed for a run and express alternatives as distinct trials.
+
+The default gives each factor equal weight after cross-sectional z-scoring.
+`FactorWeightSnapshot` can supply dated weights computed from earlier
+walk-forward windows: `known_at` must precede `effective_from`, and the engine
+uses the latest row effective by the current decision. The helper checks these
+dates but does not prove the schedule's provenance. Missing scores are not
+imputed; symbols with no composite score are ineligible. Existing positions
+inside the wider exit rank band are retained to reduce turnover.
+
+The helper returns target weights only. The standard engine and paper planner
+apply the strategy's declared costs, minimum order notional, per-symbol limit,
+evidence gates, and human paper-arming controls. Factor diagnostics marked
+`unverified` remain descriptive and do not become accepted evidence through
+composition.
+
 ## Rules `sqy check` enforces
 
 - Imports: `signalquarry.sdk`, `numpy`, `pydantic`, pure standard-library modules
