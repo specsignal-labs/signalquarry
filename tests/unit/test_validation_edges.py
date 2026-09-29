@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from signalquarry import api
+from signalquarry._internal.canonical import canonical_hash, canonical_json
 from signalquarry._internal.paper import arm
 from signalquarry._internal.paper.journal import Journal
 from signalquarry._internal.paper.models import PaperError
@@ -38,6 +39,34 @@ def test_ledger_skips_blank_lines_and_rejects_garbage(tmp_path: Path) -> None:
     log.path.write_text(log.path.read_text() + "{not json\n")
     with pytest.raises(LedgerError) as info:
         log.entries()
+    assert info.value.code == "EVIDENCE_LOG_CORRUPT"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("seq", 2), ("seq", True), ("seq", 1.0), ("prev", "sha256:wrong")],
+)
+def test_ledger_rejects_rehashed_sequence_and_previous_hash_mismatches(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    log = ChainedLog(tmp_path / "log.jsonl", "t/v1")
+    entry = log.append({"x": 1})
+    entry[field] = value
+    entry["hash"] = canonical_hash({key: item for key, item in entry.items() if key != "hash"})
+    log.path.write_text(canonical_json(entry) + "\n")
+
+    with pytest.raises(LedgerError) as info:
+        log.entries()
+    assert info.value.code == "EVIDENCE_LOG_CORRUPT"
+
+
+def test_ledger_rejects_a_validly_hashed_record_with_the_wrong_schema(tmp_path: Path) -> None:
+    path = tmp_path / "log.jsonl"
+    ChainedLog(path, "signalquarry.other/v1").append({"x": 1})
+
+    with pytest.raises(LedgerError) as info:
+        ChainedLog(path, "signalquarry.trial/v1").entries()
+
     assert info.value.code == "EVIDENCE_LOG_CORRUPT"
 
 

@@ -66,6 +66,16 @@ def test_short_and_zero_equity_boundaries() -> None:
     assert zero["max_drawdown"] == 1.0
 
 
+def test_cagr_handles_subunit_terminal_equity_and_one_session_annualization() -> None:
+    single_session = summarize([date(2025, 1, 2)], [Decimal("101")], Decimal("100"))
+    assert single_session["cagr"] == round(1.01**365.25 - 1.0, 8)
+
+    sessions = [date(2024, 1, 2), date(2025, 1, 2)]
+    near_zero = summarize(sessions, [Decimal("50"), Decimal("0.5")], Decimal("100"))
+    years = (sessions[-1] - sessions[0]).days / 365.25
+    assert near_zero["cagr"] == round((0.5 / 100) ** (1 / years) - 1.0, 8)
+
+
 def test_zero_return_is_excluded_from_downside_deviation() -> None:
     # Return path [0%, -10%]; downside deviation includes only the -10% observation.
     result = summarize([date(2025, 1, 2), date(2025, 1, 3)], [Decimal("100"), Decimal("90")], Decimal("100"))

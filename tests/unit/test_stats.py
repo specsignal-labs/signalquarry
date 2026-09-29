@@ -60,6 +60,17 @@ def test_moments_and_bootstrap_on_known_series() -> None:
     assert low < m.sharpe < high
 
 
+def test_moments_match_hand_computed_skew_and_pearson_kurtosis() -> None:
+    # For [-2, -1, 0, 2], centered population moments are m2=35/16,
+    # m3=45/32, and m4=2261/256. Sharpe uses sample standard deviation.
+    result = moments(np.array([-2.0, -1.0, 0.0, 2.0]))
+
+    assert result.n == 4
+    assert result.sharpe == pytest.approx(-0.25 / math.sqrt(35 / 12), rel=1e-12)
+    assert result.skew == pytest.approx(18 / (7 * math.sqrt(35)), rel=1e-12)
+    assert result.kurtosis == pytest.approx(2261 / 1225, rel=1e-12)
+
+
 def test_block_bootstrap_matches_small_fixed_seed_reference() -> None:
     # For PCG64(7), the eight two-block draws start at
     # (2,1), (2,2), (1,2), (2,0), (0,0), (0,2), (2,0), (1,2).
@@ -69,6 +80,10 @@ def test_block_bootstrap_matches_small_fixed_seed_reference() -> None:
     assert block_bootstrap_sharpe(series, block=2, samples=8, seed=7) == pytest.approx(
         (0.3638034375544994, 1.944923306528644), abs=1e-12
     )
+
+
+def test_block_bootstrap_returns_zero_for_flat_resampled_blocks() -> None:
+    assert block_bootstrap_sharpe(np.full(40, 0.01), block=2, samples=10, seed=3) == (0.0, 0.0)
 
 
 # The tests below close gaps a mutation-testing pass (hardening track A5) found: each
@@ -117,10 +132,21 @@ def test_probabilistic_sharpe_nan_paths_are_independent() -> None:
     assert math.isnan(probabilistic_sharpe(long_but_nan))
 
 
+def test_probabilistic_sharpe_accepts_the_minimum_three_observations() -> None:
+    m = ReturnMoments(n=3, sharpe=0.1, skew=0.0, kurtosis=3.0)
+    expected = NormalDist().cdf(0.1 * math.sqrt(2) / math.sqrt(1.005))
+
+    assert probabilistic_sharpe(m) == pytest.approx(expected, rel=1e-12)
+
+
 def test_expected_max_sharpe_is_exactly_zero_at_zero_variance() -> None:
     # `sharpe_variance <= 0` vs `< 0`: zero variance must itself return 0.0, not just
     # negative variance.
     assert expected_max_sharpe(10, 0.0) == 0.0
+
+
+def test_expected_max_sharpe_matches_a_fixed_reference_value() -> None:
+    assert expected_max_sharpe(10, 0.001) == pytest.approx(0.04979317032084742, rel=1e-12)
 
 
 def test_min_track_record_length_is_infinite_when_sharpe_equals_the_benchmark() -> None:
@@ -128,6 +154,13 @@ def test_min_track_record_length_is_infinite_when_sharpe_equals_the_benchmark() 
     # never demonstrate it is *above* it, however long the track record.
     m = ReturnMoments(n=100, sharpe=0.3, skew=0.0, kurtosis=3.0)
     assert min_track_record_length(m, benchmark_sharpe=0.3) == math.inf
+
+
+def test_min_track_record_length_subtracts_a_nonzero_benchmark() -> None:
+    m = ReturnMoments(500, 0.1, 0.0, 3.0)
+    expected = 1 + 1.005 * (NormalDist().inv_cdf(0.95) / 0.05) ** 2
+
+    assert min_track_record_length(m, benchmark_sharpe=0.05) == pytest.approx(expected, rel=1e-12)
 
 
 def test_pbo_rank_denominator_is_configurations_plus_one() -> None:
@@ -151,6 +184,19 @@ def test_pbo_rank_denominator_is_configurations_plus_one() -> None:
     assert result["configurations"] == 2
     assert result["pbo"] == 0.0
     assert result["median_logit"] == pytest.approx(math.log(2.0), abs=5e-6)
+
+
+def test_pbo_treats_zero_volatility_as_zero_sharpe() -> None:
+    flat = np.full(8, 0.01)
+    variable = np.array([0.01, 0.02, 0.03, 0.04, 0.02, 0.03, 0.04, 0.05])
+    result = pbo_cscv(np.column_stack((flat, variable)), blocks=2)
+
+    assert result == {
+        "pbo": 0.0,
+        "splits": 2,
+        "configurations": 2,
+        "median_logit": 0.693147,
+    }
 
 
 def test_pbo_cscv_accepts_exactly_two_configurations() -> None:

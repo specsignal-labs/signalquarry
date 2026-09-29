@@ -66,6 +66,10 @@ def test_fold_statistics_match_a_compounded_return_path() -> None:
     }
 
 
+def test_max_drawdown_starts_at_initial_equity_of_one() -> None:
+    assert evaluation.max_drawdown(np.array([0.1, 0.1])) == 0.0
+
+
 @pytest.mark.parametrize("failed_gate", ["G1_sample", "G2_walk_forward", "G3_stress"])
 def test_claim_level_requires_each_prerequisite_gate(failed_gate: str) -> None:
     gates = {
@@ -107,12 +111,12 @@ def test_evaluation_clips_holdout_and_keeps_sample_and_walk_forward_gates_strict
 
     def dsr_stub(_moments: object, trials: int, _variance: float) -> float:
         seen_trial_counts.append(trials)
-        return 0.2
+        return 0.23456789
 
     monkeypatch.setattr(evaluation, "simulate", simulate_stub)
-    monkeypatch.setattr(evaluation, "probabilistic_sharpe", lambda _moments: 0.99)
+    monkeypatch.setattr(evaluation, "probabilistic_sharpe", lambda _moments: 0.12345678)
     monkeypatch.setattr(evaluation, "deflated_sharpe", dsr_stub)
-    monkeypatch.setattr(evaluation, "min_track_record_length", lambda _moments: 10.5)
+    monkeypatch.setattr(evaluation, "min_track_record_length", lambda _moments: 10.54)
     monkeypatch.setattr(evaluation, "block_bootstrap_sharpe", lambda _returns: (0.12345, 0.23456))
 
     outcome = evaluation.evaluate(
@@ -141,7 +145,7 @@ def test_evaluation_clips_holdout_and_keeps_sample_and_walk_forward_gates_strict
     assert set(outcome.trial_moments) == {"n", "sharpe", "skew", "kurtosis"}
     assert seen_trial_counts == [1]
     assert outcome.oos["project_trials"] == 0
-    assert outcome.oos["psr"] == 0.99 and outcome.oos["dsr"] == 0.2
+    assert outcome.oos["psr"] == 0.123457 and outcome.oos["dsr"] == 0.234568
     assert outcome.oos["min_track_record_sessions"] == 10.5
     assert outcome.oos["sharpe_annual_90"] == [1.9597, 3.7235]
     assert outcome.gates["G1_sample"] == {
@@ -150,6 +154,8 @@ def test_evaluation_clips_holdout_and_keeps_sample_and_walk_forward_gates_strict
         "rebalancing_sessions": 0,
     }
     assert outcome.gates["G2_walk_forward"]["ok"] is False
+    assert outcome.gates["G2_walk_forward"]["psr"] == 0.123457
+    assert outcome.gates["G2_walk_forward"]["dsr"] == 0.234568
     assert outcome.gates["G3_stress"]["ok"] is False
     assert set(outcome.gates["G3_stress"]["scenarios"]) == {"costs_x2", "delay_1"}
     assert math.isfinite(outcome.oos["sharpe_annual_90"][0])
@@ -249,6 +255,37 @@ def test_evaluation_accepts_exact_sample_and_walk_forward_thresholds(
         "dsr": 0.95,
     }
     assert outcome.folds[-1]["end"] == "2023-12-31"
+
+
+def test_options_evaluation_skips_delay_stress_and_holdout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sessions = weekdays(date(2025, 1, 2), 20)
+    calls: list[dict[str, object]] = []
+
+    def simulate_stub(*_args: object, end: date | None = None, **kwargs: object) -> BacktestResult:
+        calls.append({"end": end, **kwargs})
+        return _result([day for day in sessions if end is None or day <= end])
+
+    monkeypatch.setattr(evaluation, "is_options", lambda _spec: True)
+    monkeypatch.setattr(evaluation, "simulate", simulate_stub)
+    outcome = evaluation.evaluate(
+        spec(("SPY",)),
+        definition_of(sma_trend),
+        SmaP(),
+        Dataset(sessions, {}),
+        holdout_start=date(2025, 1, 21),
+        project_trials=1,
+        sharpe_variance=0.01,
+        open_holdout=True,
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["end"] == date(2025, 1, 20)
+    assert calls[1]["end"] == date(2025, 1, 20)
+    assert calls[1]["cost_multiplier"] == Decimal(2)
+    assert all("delay_sessions" not in call for call in calls)
+    assert "G4_holdout" not in outcome.gates
 
 
 def test_no_holdout_uses_the_last_available_session(monkeypatch: pytest.MonkeyPatch) -> None:

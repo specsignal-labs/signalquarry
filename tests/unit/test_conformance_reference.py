@@ -165,6 +165,40 @@ def test_equity_cut_session_decision_change_is_a_leak(monkeypatch: pytest.Monkey
     assert results["lookahead"].detail.startswith(f"decision for {state['sessions'][45].isoformat()} changed")
 
 
+def test_equity_lookahead_check_compares_all_decisions_before_the_cut(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _harness(monkeypatch, options=False)
+
+    def change_previous_session(original: list[dict[str, Any]], cut: int) -> list[dict[str, Any]]:
+        changed = deepcopy(original)
+        previous_day = state["sessions"][cut - 1].isoformat()
+        for record in changed:
+            if record["session"] == previous_day and record["action"] == "target":
+                record["reason_codes"] = ["CHANGED"]
+        return changed
+
+    state["mutator"] = change_previous_session
+    results = {item.name: item for item in conformance.run_checks(state["strategy"])}
+
+    assert results["lookahead"].ok is False
+
+
+def test_equity_lookahead_check_reports_when_a_suffix_of_known_decisions_disappears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _harness(monkeypatch, options=False)
+
+    def remove_cut_session(original: list[dict[str, Any]], cut: int) -> list[dict[str, Any]]:
+        cut_day = state["sessions"][cut].isoformat()
+        return [record for record in original if record["session"] != cut_day]
+
+    state["mutator"] = remove_cut_session
+    results = {item.name: item for item in conformance.run_checks(state["strategy"])}
+
+    assert results["lookahead"].ok is False
+
+
 def test_determinism_mismatch_and_check_result_document(monkeypatch: pytest.MonkeyPatch) -> None:
     state = _harness(monkeypatch, options=False)
     state["second_hash"] = "other-hash"
@@ -275,3 +309,16 @@ def test_perturb_after_scales_only_the_requested_tail_and_preserves_input() -> N
     for name in ("high", "low", "close"):
         np.testing.assert_array_equal(changed.series["SYNA"].micro[name], [100, 200, 150, 800])
     np.testing.assert_array_equal(changed.series["SYNA"].micro["open"], [100, 200, 300, 800])
+
+
+def test_perturb_after_default_arguments_use_the_default_ramp_and_change_cut_open() -> None:
+    sessions = tuple(weekdays(date(2025, 1, 2), 4))
+    original = np.array([100, 200, 300, 400], dtype=np.int64)
+    series = SymbolSeries(
+        micro={name: original.copy() for name in ("open", "high", "low", "close")},
+        volume=np.array([1.0, 2.0, 3.0, 4.0]),
+        present=np.ones(4, dtype=bool),
+    )
+    changed = conformance.perturb_after(Dataset(sessions, {"SYNA": series}), 2)
+
+    np.testing.assert_array_equal(changed.series["SYNA"].micro["open"], [100, 200, 180, 680])
