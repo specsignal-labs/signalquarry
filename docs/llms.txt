@@ -28,7 +28,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy explain`: Explain a reason code and how to resolve it.
 - `sqy init`: Create a new strategy project.
 - `sqy check`: Run conformance, determinism and look-ahead checks.
-- `sqy factor`: Inspect project-registered research factors.
+- `sqy factor`: List factors or calculate unverified descriptive diagnostics.
 - `sqy data`: Fetch, verify and list recorded market data.
 - `sqy universe`: Build and verify point-in-time common-stock universes.
 - `sqy spec`: Freeze a strategy configuration (spec freeze).

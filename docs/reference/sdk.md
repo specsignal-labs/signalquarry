@@ -80,10 +80,25 @@ declared parameters. Editing code, metadata, or parameters changes the
 configuration identity. Listing and checking do not record a trial or grant
 an evidence grade. The pure factor-trial key binds evaluation settings, data,
 dated universe, labels, decision sessions and accepted-factor comparisons.
-Constructing that key does not verify the sources or append a real-data trial;
-those steps still need a controlled evaluator. Both commands
-import the authored factor module, so inspect untrusted project code before
-running them outside an isolated development environment.
+
+To calculate descriptive metrics from locally cached data, provide the dataset
+ID and one `--universe-manifest` for each dated membership decision:
+
+```shell
+sqy factor evaluate --factor price-momentum --dataset-id DATASET \
+  --universe-manifest data/universe/builds/first.json \
+  --universe-manifest data/universe/builds/next.json --json
+```
+
+The command re-hashes the selected dataset pages and replays each selected
+universe manifest from its cached inputs. Its output has `data.scope` set to
+`unverified`; consistency checks do not establish provider completeness,
+complete corporate-action history, ticker continuity, or delisting outcomes.
+It does not append a strategy or factor trial, calculate significance or a
+grade, or access a holdout. A controlled real-data evidence path still needs
+those controls. All three commands import authored factor code, so inspect
+untrusted project code before running it outside an isolated development
+environment.
 The code hash covers the factor's full top-level project package, including
 shared helpers; edits elsewhere in that package also change its identity. The
 import policy checks that complete package as well.

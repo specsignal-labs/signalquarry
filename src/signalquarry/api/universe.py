@@ -35,7 +35,7 @@ def _store(root: Path) -> AssetSnapshotStore:
     return AssetSnapshotStore(library_for(root).cache_dir, root / "data" / "universe" / "snapshots")
 
 
-def _replay_universe_build(root: Path, manifest: dict[str, Any]) -> None:
+def replay_universe_build(root: Path, manifest: dict[str, Any]) -> None:
     """Recompute a stored membership record from its original cached inputs."""
     library = library_for(root)
     asset_store = _store(root)
@@ -167,7 +167,7 @@ def universe_verify(*, project: Path | None = None) -> Envelope:
                     raise ValueError("manifest must be an object")
                 manifest = cast(dict[str, Any], raw_manifest)
                 verify_universe_manifest(manifest)
-                _replay_universe_build(root, manifest)
+                replay_universe_build(root, manifest)
                 builds.append({"manifest_hash": manifest.get("manifest_hash"), "ok": True})
             except (OSError, ValueError, TypeError, KeyError, LibraryError) as exc:
                 builds.append({"manifest": path.name, "ok": False, "error": str(exc)})

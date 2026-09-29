@@ -49,9 +49,15 @@ The import policy checks that same tree.
 The separate, pure factor-trial configuration identity binds the factor hash,
 dataset, dated universe, outcome labels, exact decision sessions, declared
 evaluation choices, and accepted-factor comparison set. It does not verify the
-underlying manifests or write a trial. A future real-data entry point must do
-both before claiming evidence. Listing
-and checking registered factors do not consume trials or produce grades.
+underlying manifests or write a trial. `sqy factor evaluate` accepts an explicit
+dataset and selected point-in-time universe build manifests, verifies the cached
+dataset pages, and replays each universe build from its cached inputs. Its
+forward-label calculation and diagnostics remain marked `unverified`: replay
+proves internal consistency, not provider completeness, action-history
+completeness, instrument continuity, or delisting outcomes. The command does not
+write either trial ledger, compute significance or a grade, or access a holdout.
+Listing and checking registered factors likewise do not consume trials or
+produce grades.
 
 The internal factor evaluation core binds each decision to a timezone-aware
 membership observation and cutoff whose UTC calendar date precedes the decision
@@ -63,10 +69,12 @@ return after an assumed round-trip cost, long-short spread as a statistic,
 one-way turnover, share of supplied predecision ADV, and correlation with
 accepted factors. Quintile returns are mean horizon outcomes, not a compounded
 portfolio backtest. The report carries its declared panel, universe, and label
-identities and is marked synthetic. These calculations currently accept only
-explicitly synthetic outcome labels. Matching hashes and timestamps are consistency
-checks; a future real-data entry point must verify the underlying universe,
-label-adjustment, and code identities and record trials before giving a grade.
+identities. Synthetic labels are marked `synthetic`; calculated forward-return
+labels are marked `unverified` even if a caller supplies an inconsistent
+provenance flag. Matching hashes and timestamps are consistency checks, not
+proof of upstream source completeness. A future real-data evidence path must
+verify universe, label-adjustment, instrument-lifecycle and code identities,
+record trials, and enforce the sealed holdout protocol before giving a grade.
 
 The first pure forward-label calculation uses the close before a decision
 session as its entry mark and the close of the horizon-th session, counting the
@@ -138,8 +146,9 @@ paper orders.
 Panel materialization and reading can be benchmarked independently of backtests.
 The dated membership builder consumes, but does not source, external instrument
 classification history. Corporate-action knowledge timing, verified outcome
-labels, trial accounting, and a real-data evaluation entry point remain
-necessary before factor results can be treated as point-in-time evidence.
+labels, trial accounting, accepted-factor library comparisons, and sealed
+holdout enforcement remain necessary before factor results can be treated as
+point-in-time evidence.
 
 ## Provider references
 

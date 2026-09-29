@@ -136,10 +136,32 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
     listing = actions.add_parser("ls", help="List explicitly registered project factors and hashes.")
     listing.add_argument("--project", type=Path, help="project directory (default: search upwards)")
     listing.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    evaluate = actions.add_parser(
+        "evaluate",
+        help="Compute descriptive, unverified diagnostics from selected local manifests.",
+    )
+    evaluate.add_argument("--factor", required=True, help="registered factor ID")
+    evaluate.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    evaluate.add_argument(
+        "--universe-manifest",
+        type=Path,
+        action="append",
+        required=True,
+        help="dated universe build manifest path; repeat for each decision session",
+    )
+    evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+    evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
 
 def _factor(args: argparse.Namespace) -> Envelope:
-    return api.factor_ls(project=args.project)
+    if args.action == "ls":
+        return api.factor_ls(project=args.project)
+    return api.factor_evaluate(
+        args.factor,
+        args.dataset_id,
+        universe_manifests=args.universe_manifest,
+        project=args.project,
+    )
 
 
 def _configure_backtest(parser: argparse.ArgumentParser) -> None:
@@ -512,7 +534,9 @@ COMMANDS: tuple[Command, ...] = (
         _check,
         _configure_check,
     ),
-    Command("factor", "Inspect project-registered research factors.", _factor, _configure_factor),
+    Command(
+        "factor", "List factors or calculate unverified descriptive diagnostics.", _factor, _configure_factor
+    ),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),
     Command(
         "universe", "Build and verify point-in-time common-stock universes.", _universe, _configure_universe

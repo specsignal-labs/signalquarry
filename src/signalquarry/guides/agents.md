@@ -17,9 +17,14 @@ For factor research, an agent can add one `@factor` function in a project module
 declare its hypothesis and parameters in a neighboring `factor.yaml`, and list
 that module under `[factors] modules` in `signalquarry.toml`. `sqy factor ls`
 returns stable configuration identities, and `sqy check --factor-id ID` runs
-synthetic conformance. Neither action records a trial or proves a point-in-time
-factor claim. Real-data factor grading remains unavailable until historical
-universe and outcome-label provenance and trial accounting are implemented.
+synthetic conformance. To inspect a registered factor on cached data, run
+`sqy factor evaluate --factor ID --dataset-id DATASET --universe-manifest PATH`
+and repeat `--universe-manifest` for each dated membership decision. The
+command verifies and replays those manifests, then returns descriptive metrics
+with `data.scope: "unverified"`. It does not record a trial, assign an evidence
+grade, or access a holdout. Source completeness, full action history, ticker
+continuity and delisting outcomes remain unverified, so the output is not
+point-in-time evidence or a profitability claim.
 
 `data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
 written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
