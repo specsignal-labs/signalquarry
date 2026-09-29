@@ -399,7 +399,7 @@ flowchart TB
   L5 --> L6
   L7["<b>contracts</b>"]
   L6 --> L7
-  L8["<b>canonical</b>"]
+  L8["<b>canonical · calendar</b>"]
   L7 --> L8
   testing(["testing<br/>outside the layers"])
   testing -.-> L1
@@ -422,11 +422,12 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
 | `data` | `contracts`, `canonical` |
 | `project` | `sdk`, `contracts`, `canonical` |
-| `options` | — |
+| `options` | `calendar` |
 | `sdk` | — |
 | `plugins` | — |
 | `contracts` | — |
 | `canonical` | — |
+| `calendar` | — |
 | `testing` | `api`, `paper`, `data` |
 
 ### Component inventory
@@ -447,6 +448,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `plugins` | `(package)` |
 | `contracts` | `(package)`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |
+| `calendar` | `(package)`, `nyse` |
 | `testing` | `(package)` |
 
 ### Command tree
