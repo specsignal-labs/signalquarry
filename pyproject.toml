@@ -76,20 +76,12 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Engine backtest pilot, branched from the validated
-# validation-wide mutmut configuration in PR #6. The remaining engine modules and
-# paper/runner.py will be measured in separate passes.
-only_mutate = ["src/signalquarry/_internal/engine/backtest.py"]
+# Hardening plan, track A5. Options simulator pass, following the validation and
+# equity backtest passes. paper/runner.py will be measured separately.
+only_mutate = ["src/signalquarry/_internal/engine/options_sim.py"]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_engine.py",
-  "tests/unit/test_engine_reference.py",
-  "tests/unit/test_volume_cap.py",
-  "tests/unit/test_engine_contract.py",
-  "tests/golden/test_engine_golden.py",
-  "tests/property/test_properties.py",
-  "tests/conformance/test_meta.py",
+  "tests/options/test_options_sim_reference.py",
   "tests/paper/test_parity.py",
-  "tests/paper/test_parity_check.py",
 ]
 
 [tool.importlinter]

@@ -11,6 +11,8 @@ change provisional surfaces after deprecation).
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
   pre-open paper-parity cases.
+- Options-simulator mutation coverage with short wheel, quote, expiry-boundary, and
+  action-refusal reference cases.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
