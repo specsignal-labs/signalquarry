@@ -90,7 +90,7 @@ layers = [
   "(signalquarry._internal.data) | (signalquarry._internal.project) | (signalquarry._internal.options)",
   "(signalquarry.sdk) | (signalquarry.plugins)",
   "signalquarry._internal.contracts",
-  "signalquarry._internal.canonical",
+  "signalquarry._internal.canonical | signalquarry._internal.calendar",
 ]
 exhaustive = false
 

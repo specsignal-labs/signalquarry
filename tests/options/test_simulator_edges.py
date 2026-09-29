@@ -85,7 +85,10 @@ def test_contract_violations() -> None:
 
 
 def test_split_while_the_wheel_is_open_stops_the_run() -> None:
-    split_day = DATA.sessions[200]
+    # Index chosen to fall inside an open leg's interval, not on the session it opens
+    # or closes on (both of those legitimately find the wheel flat); re-derive it with
+    # a script like the one in this test's PR if a chains.py change shifts it again.
+    split_day = DATA.sessions[203]
     data = replace(DATA, splits=(Split("QQQ", split_day, Decimal(2)),))
     data.__post_init__()
     with pytest.raises(EngineError, match="CORPORATE_ACTION_UNSUPPORTED"):
@@ -95,7 +98,7 @@ def test_split_while_the_wheel_is_open_stops_the_run() -> None:
 def test_missing_price_at_expiry_stops_the_run() -> None:
     item = DATA.series["QQQ"]
     present = item.present.copy()
-    present[120:] = False
+    present[115:] = False  # inside the open leg's interval that expires while missing
     data = replace(DATA, series={"QQQ": SymbolSeries(item.micro, item.volume, present)})
     with pytest.raises(EngineError, match="PRICE_MISSING"):
         simulate(wheel_spec(), definition_of(wheel), WheelParams(take_profit=Decimal("0.99")), data)
