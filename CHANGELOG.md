@@ -25,6 +25,8 @@ change provisional surfaces after deprecation).
 - Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure
   per-session engine iterator. Run artifacts are written incrementally; failed streams remove
   partial run directories. Artifact formats and ledger hashes are unchanged.
+- Developer tooling for private, read-only Alpaca HTTP cassette capture and strict offline replay;
+  response fixtures are source-labeled, credential-redacted, hash-verified, and stored outside Git worktrees.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.

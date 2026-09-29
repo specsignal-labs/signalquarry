@@ -33,6 +33,55 @@ Every source file starts with an SPDX license header. Engine changes must keep
 the golden tests and the backtest↔paper parity test green; benchmark with
 `uv run python tools/bench.py`.
 
+## Private Alpaca response cassettes
+
+`tools/alpaca_cassette.py` can capture an explicit, ordered session of
+allowlisted Alpaca `GET` responses and replay it through the existing data and
+paper broker transports. The recorder excludes credentials and request headers,
+redacts known credential values, refuses request URLs containing credentials,
+rejects account/order endpoints and every mutating request, and refuses cassette
+destinations inside any Git worktree. A cassette checksum covers request and
+response metadata; each response body has a separately verified SHA-256 hash.
+Generated `private-provider` cassette files can contain market data; keep them
+outside the repository and never attach them to a pull request. Test examples
+must use `recording_kind="synthetic"` and are not real provider evidence.
+
+The allowed paper-origin reads are the clock, calendar, asset list and option
+contract catalog. Account, position, order and activity responses are not
+recordable. Replay is strict and offline: it fails on a request mismatch or an
+unconsumed entry, and has no network fallback. This is transport plumbing only;
+the A2 real-provider and paper-lifecycle verification gates still require
+separate owner-approved evidence.
+
+For a deliberate local data capture, load credentials from the configured
+credential store and choose a destination under a private cache directory:
+
+```python
+from datetime import date
+from pathlib import Path
+
+from signalquarry._internal.data.alpaca import AlpacaDataClient, UrllibTransport
+from signalquarry._internal.data.credentials import load_data_credentials
+from tools.alpaca_cassette import RecordingAlpacaTransport
+
+credentials = load_data_credentials()
+if credentials is None:
+    raise RuntimeError("configure data credentials first")
+cassette_path = Path.home() / ".cache/signalquarry/cassettes/spy-bars.json"
+with RecordingAlpacaTransport(
+    UrllibTransport(),
+    cassette_path,
+    recording_kind="private-provider",
+    credentials=(credentials.key_id, credentials.secret_key),
+) as recording:
+    client = AlpacaDataClient(credentials.key_id, credentials.secret_key, transport=recording)
+    client.daily_bars(("SPY",), date(2025, 1, 2), date(2025, 1, 3), "iex")
+```
+
+Replay the same request with `ReplayTransport.read(cassette_path)` as the
+client's `transport`, then call `assert_complete()` to ensure the request
+sequence matched the cassette exactly.
+
 ## Design docs
 
 `docs/design/ARCHITECTURE.md` must match the code. Its "Generated from the code" section
