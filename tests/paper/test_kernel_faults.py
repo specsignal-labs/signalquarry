@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import json
+import time as time_module
 from dataclasses import replace
-from datetime import date, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
 
@@ -14,7 +15,7 @@ import pytest
 from signalquarry._internal.paper.brokers.fake import FakeBroker
 from signalquarry._internal.paper.journal import Journal
 from signalquarry._internal.paper.lease import RunLease
-from signalquarry._internal.paper.models import PaperError
+from signalquarry._internal.paper.models import BrokerClock, PaperError
 from signalquarry._internal.paper.runner import PaperKernel
 from tests.paper.harness import Rig, hold_syna, rig
 
@@ -131,6 +132,43 @@ def test_clock_skew_blocks(tmp_path: Path) -> None:
     paper.broker.skew = timedelta(seconds=90)
     paper.at(sessions[0])
     assert _code(paper.kernel.run_once) == ("PAPER_CLOCK_SKEW", "blocked")
+
+
+def test_clock_skew_limit_is_inclusive(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    now = datetime(2023, 3, 27, 13, 0, tzinfo=UTC)
+    limit = paper.deployment.config.guards.max_clock_skew_seconds
+
+    def clock(delta: timedelta) -> BrokerClock:
+        return BrokerClock(now + delta, False, now, now)
+
+    paper.kernel._check_skew(clock(timedelta(seconds=limit)), now)
+    paper.kernel._check_skew(clock(timedelta(seconds=-limit)), now)
+    with pytest.raises(PaperError) as info:
+        paper.kernel._check_skew(clock(timedelta(seconds=limit, microseconds=1)), now)
+    assert info.value.code == "PAPER_CLOCK_SKEW"
+    assert info.value.detail == f"{limit:.1f}s"
+
+
+def test_pre_open_window_uses_exchange_time_and_includes_both_bounds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paper = rig(tmp_path)
+
+    # 2023-03-27 is in EDT: 13:00 UTC is 09:00 in New York.
+    def at(hour: int, minute: int, second: int = 0) -> datetime:
+        return datetime(2023, 3, 27, hour, minute, second, tzinfo=UTC)
+
+    try:
+        with monkeypatch.context() as env:
+            env.setenv("TZ", "UTC")
+            time_module.tzset()
+            assert not paper.kernel._in_window(at(12, 59, 59))
+            assert paper.kernel._in_window(at(13, 0))
+            assert paper.kernel._in_window(at(13, 25))
+            assert not paper.kernel._in_window(at(13, 25, 1))
+    finally:
+        time_module.tzset()
 
 
 def test_window_weekend_and_open_market(tmp_path: Path) -> None:
