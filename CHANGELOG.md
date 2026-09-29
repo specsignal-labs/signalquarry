@@ -69,6 +69,8 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Fixed
+- Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
+  instead of an internal error.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication

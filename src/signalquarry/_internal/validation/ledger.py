@@ -54,6 +54,8 @@ class ChainedLog:
                 entry = json.loads(line)
             except ValueError as exc:
                 raise LedgerError("EVIDENCE_LOG_CORRUPT", f"{self.path.name}:{number}") from exc
+            if not isinstance(entry, dict):
+                raise LedgerError("EVIDENCE_LOG_CORRUPT", f"{self.path.name}:{number}")
             body = {k: v for k, v in entry.items() if k != "hash"}
             if (
                 entry.get("seq") != len(entries) + 1
