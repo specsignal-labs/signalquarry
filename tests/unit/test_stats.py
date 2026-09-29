@@ -86,6 +86,12 @@ def test_block_bootstrap_returns_zero_for_flat_resampled_blocks() -> None:
     assert block_bootstrap_sharpe(np.full(40, 0.01), block=2, samples=10, seed=3) == (0.0, 0.0)
 
 
+def test_block_bootstrap_defaults_match_the_documented_parameters() -> None:
+    returns = np.sin(np.arange(200) * 0.1) * 0.01 + 0.001
+
+    assert block_bootstrap_sharpe(returns) == block_bootstrap_sharpe(returns, block=20, samples=1000, seed=0)
+
+
 # The tests below close gaps a mutation-testing pass (hardening track A5) found: each
 # one is written against a hand-computed expectation independent of the formula under
 # test, not a directional/self-referential check, because the survivors they kill are
@@ -187,7 +193,7 @@ def test_pbo_rank_denominator_is_configurations_plus_one() -> None:
 
 
 def test_pbo_treats_zero_volatility_as_zero_sharpe() -> None:
-    flat = np.full(8, 0.01)
+    flat = np.zeros(8)
     variable = np.array([0.01, 0.02, 0.03, 0.04, 0.02, 0.03, 0.04, 0.05])
     result = pbo_cscv(np.column_stack((flat, variable)), blocks=2)
 
@@ -197,6 +203,30 @@ def test_pbo_treats_zero_volatility_as_zero_sharpe() -> None:
         "configurations": 2,
         "median_logit": 0.693147,
     }
+
+
+def test_pbo_initializes_masked_sharpes_for_flat_configurations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_divide = np.divide
+
+    def divide_with_nan_for_uninitialized_output(
+        numerator: np.ndarray,
+        denominator: np.ndarray,
+        *,
+        out: np.ndarray | None = None,
+        where: np.ndarray | bool = True,
+    ) -> np.ndarray:
+        # NumPy leaves masked lanes unspecified when a new output array is allocated.
+        # Poison those lanes with NaN so omission of the initialized zero output is visible.
+        target = np.full(np.shape(numerator), np.nan) if out is None else out
+        return original_divide(numerator, denominator, out=target, where=where)
+
+    monkeypatch.setattr(np, "divide", divide_with_nan_for_uninitialized_output)
+    flat = np.zeros(8)
+    variable = np.array([0.01, 0.02, 0.03, 0.04, 0.02, 0.03, 0.04, 0.05])
+
+    assert pbo_cscv(np.column_stack((flat, variable)), blocks=2)["pbo"] == 0.0
 
 
 def test_pbo_cscv_accepts_exactly_two_configurations() -> None:

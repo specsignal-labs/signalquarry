@@ -76,6 +76,18 @@ def test_cagr_handles_subunit_terminal_equity_and_one_session_annualization() ->
     assert near_zero["cagr"] == round((0.5 / 100) ** (1 / years) - 1.0, 8)
 
 
+def test_summary_keeps_fixed_eight_decimal_metric_precision() -> None:
+    result = summarize(
+        [date(2024, 1, 2), date(2024, 1, 3)],
+        [Decimal("110"), Decimal("96.41975321")],
+        Decimal("100"),
+    )
+
+    assert result["total_return"] == -0.03580247
+    assert result["annual_volatility"] == 2.50829624
+    assert result["max_drawdown"] == 0.12345679
+
+
 def test_zero_return_is_excluded_from_downside_deviation() -> None:
     # Return path [0%, -10%]; downside deviation includes only the -10% observation.
     result = summarize([date(2025, 1, 2), date(2025, 1, 3)], [Decimal("100"), Decimal("90")], Decimal("100"))

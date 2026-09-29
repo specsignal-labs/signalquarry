@@ -43,6 +43,8 @@ def test_family_logs_index_and_project_wide_count(lab: Path, capsys: pytest.Capt
     assert (lab / "families/alpha/evidence/trials.jsonl").is_file()
     assert (lab / "families/beta/evidence/trials.jsonl").is_file()
     assert not (lab / "evidence/trials.jsonl").exists()
+    assert ledger.trials(lab, "alpha").schema == ledger.SCHEMAS["trials"]
+    assert ledger.logs(lab, "trials")[0].schema == ledger.SCHEMAS["trials"]
     summary = ledger.trial_summary(lab, "beta")
     assert (summary["project_count"], summary["family_count"]) == (3, 1)
     assert summary["head"] == ledger.project_index(lab).entries()[-1]["hash"]

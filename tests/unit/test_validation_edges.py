@@ -19,7 +19,14 @@ from signalquarry._internal.paper.models import PaperError
 from signalquarry._internal.project.project import load_config, load_strategies
 from signalquarry._internal.validation.conformance import import_policy, run_checks
 from signalquarry._internal.validation.evaluate import add_months, max_drawdown
-from signalquarry._internal.validation.ledger import ChainedLog, LedgerError
+from signalquarry._internal.validation.ledger import (
+    ChainedLog,
+    LedgerError,
+    append,
+    logs,
+    trial_summary,
+    trials,
+)
 from signalquarry._internal.validation.metrics import daily_returns, summarize
 from signalquarry._internal.validation.stats import (
     ReturnMoments,
@@ -75,6 +82,30 @@ def test_ledger_error_keeps_its_reason_and_optional_detail() -> None:
     assert str(LedgerError("EVIDENCE_LOG_CORRUPT", "trials.jsonl:2")) == (
         "EVIDENCE_LOG_CORRUPT:trials.jsonl:2"
     )
+
+
+def test_project_layout_ledger_paths_keep_their_case(tmp_path: Path) -> None:
+    expected = tmp_path / "evidence" / "trials.jsonl"
+
+    assert trials(tmp_path).path == expected
+    assert logs(tmp_path, "trials")[0].path == expected
+
+
+def test_project_layout_trial_summary_reports_ledger_head(tmp_path: Path) -> None:
+    entry = append(
+        tmp_path,
+        "trials",
+        "alpha",
+        {
+            "kind": "trial",
+            "family": "alpha",
+            "configuration_hash": "sha256:" + "a" * 64,
+            "dataset_identity": "dataset-v1",
+            "sharpe": 0.1,
+        },
+    )
+
+    assert trial_summary(tmp_path)["head"] == entry["hash"]
 
 
 def test_metrics_and_stats_degenerate_inputs() -> None:
