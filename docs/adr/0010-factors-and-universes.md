@@ -95,6 +95,38 @@ prove common-stock subtype or listing age. A separate point-in-time archive
 and instrument classification are needed for earlier dates and the planned
 common-stock universe. A local capture timestamp is not independent proof of
 when Alpaca first knew a particular asset state.
+
+`universe build` constructs one monthly membership manifest when matching dated
+inputs exist. It requires a complete local classification JSON snapshot with
+schema `signalquarry.instrument-classification-snapshot/v1`, a source label, an
+`observed_at` timestamp, and one row per asset from the full asset snapshot.
+Rows identify either the stable asset UUID or an unambiguous symbol, and carry
+`security_type` (`common_stock` or `other`) plus `listed_at` for common stocks.
+The canonical classification hash is recorded in the universe manifest, and
+the normalized snapshot is retained in the private local cache for offline
+replay. The source file is supplied by the caller and its provenance remains
+the caller's responsibility. Symbol-keyed snapshots are refused if the asset
+snapshot has a duplicate symbol.
+
+The build requires asset and classification snapshots no more than 31 days old
+and observed by the UTC cutoff, plus an Alpaca dataset fetched by that cutoff.
+The dataset must end no later than the cutoff date and provide 20 complete
+sessions strictly before the decision session. When its latest session and
+fetch share a date, the fetch must occur at least 16:15 America/New_York so the
+regular-session daily bar has finished. Price uses the latest prior
+close. Liquidity ranks the median of 20 daily close-times-volume values among
+common stocks that pass listing-age, price and data-coverage checks; tied ranks
+use their average percentile. Price floor, listing age and minimum percentile
+are required inputs, with no hidden defaults. The manifest binds every source
+identity, policy value and sorted member-symbol list. API output reports counts
+and hashes; the local manifest contains membership and is marked
+nonredistributable.
+
+This is a prospective construction path. A historical build is available only
+when the asset, classification and market-data observations were captured by
+each historical cutoff. The current bars are raw; the price/liquidity filter
+does not provide corporate-action-adjusted factor outcomes or prove that an
+external classification source was complete when captured.
 Factor evaluation must use frozen panel, universe, formula and trial identities.
 An agent may propose a formula, but the engine owns truncation, trial accounting,
 holdout access and evidence grades. The current panel cache is an internal
@@ -104,10 +136,10 @@ paper orders.
 ## Consequences
 
 Panel materialization and reading can be benchmarked independently of backtests.
-The next stage must add dated membership construction and instrument
-classification, corporate-action knowledge timing, verified outcome labels,
-trial accounting, and a real-data evaluation entry point before factor results
-can be treated as point-in-time evidence.
+The dated membership builder consumes, but does not source, external instrument
+classification history. Corporate-action knowledge timing, verified outcome
+labels, trial accounting, and a real-data evaluation entry point remain
+necessary before factor results can be treated as point-in-time evidence.
 
 ## Provider references
 

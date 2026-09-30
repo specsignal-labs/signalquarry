@@ -30,7 +30,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy check`: Run conformance, determinism and look-ahead checks.
 - `sqy factor`: Inspect project-registered research factors.
 - `sqy data`: Fetch, verify and list recorded market data.
-- `sqy universe`: Capture and verify prospective asset-list snapshots.
+- `sqy universe`: Build and verify point-in-time common-stock universes.
 - `sqy spec`: Freeze a strategy configuration (spec freeze).
 - `sqy evaluate`: Walk-forward, stress and holdout gates; sets the claim level.
 - `sqy trials`: List trials or (humans only) extend a family's budget.
@@ -437,7 +437,68 @@ counts, and no asset names or symbols. `verify` re-hashes and re-parses it.
 if it is no more than 31 days old. Earlier dates are unavailable. Alpaca's
 current asset list is not a historical membership archive, and `us_equity`
 does not identify common stocks alone. These snapshots therefore do not yet
-make a factor backtest point-in-time or enable `universe build`.
+make a factor backtest point-in-time.
+
+## Building a dated common-stock universe
+
+`sqy universe build` constructs membership for one decision session. It needs
+an asset snapshot, an Alpaca dataset with 20 prior sessions, and a complete
+classification snapshot that was observed by the cutoff. The classification
+file uses this shape:
+
+```json
+{
+  "schema": "signalquarry.instrument-classification-snapshot/v1",
+  "source": "your dated security-master source",
+  "observed_at": "2026-09-28T19:00:00Z",
+  "records": [
+    {"symbol": "AAA", "security_type": "common_stock", "listed_at": "2020-01-02"},
+    {"symbol": "ETF", "security_type": "other", "listed_at": null}
+  ]
+}
+```
+
+Include exactly one record for every asset in the captured asset snapshot,
+including inactive assets and non-common instruments. Records may use stable
+`asset_id` UUIDs instead of symbols. Symbol keys require unique symbols across
+the full asset snapshot. Common stocks need a listing date. The caller supplies
+the classification source; SignalQuarry hashes and keeps the snapshot in its
+private local cache so `universe verify` can replay the build.
+
+Choose explicit thresholds for each build. This example uses illustrative
+values; it does not prescribe a trading universe:
+
+```bash
+sqy universe build \
+  --session 2026-09-29 \
+  --known-at 2026-09-28T21:00:00+00:00 \
+  --dataset-id alpaca-sip-1day-example \
+  --classification-file ./security-master.json \
+  --minimum-price 5 \
+  --minimum-listing-age-days 90 \
+  --minimum-dollar-volume-percentile 20
+sqy universe verify
+```
+
+The cutoff must precede the decision session. Asset and classification
+snapshots must be no more than 31 days old, and the dataset must have been
+fetched by the cutoff and end no later than its UTC date. The build uses the
+last 20 complete sessions before the decision session. If fetched on the date
+of its latest session, the dataset must be fetched at least 16:15
+America/New_York so the regular session's daily bar has finished. It filters on the latest
+prior raw close, listing age, then the cross-sectional percentile rank of each
+eligible stock's 20-session median close-times-volume. A missing bar in the
+lookback excludes that name from the ranking. No provider metadata or bars are
+downloaded by `universe build`.
+
+The manifest records the filter policy, source hashes, counts, and member
+symbols. Command output exposes only the summary and hashes. Verification
+replays membership from the cached classification snapshot, asset pages, and
+dataset pages. Earlier periods require dated snapshots that actually existed by
+each cutoff; a current source file cannot reconstruct them. Raw close and
+volume filters do not establish corporate-action-adjusted factor returns.
+The command reports classification provenance as unverified because it cannot
+independently establish when or how the caller's classification was assembled.
 
 ## Options coverage
 
@@ -821,7 +882,7 @@ List recorded datasets.
 
 ## `sqy universe`
 
-Capture and verify prospective asset-list snapshots.
+Build and verify point-in-time common-stock universes.
 
 ### `sqy universe snapshot`
 
@@ -846,6 +907,21 @@ Find a verified snapshot known by a UTC cutoff.
 | Option | Meaning |
 |---|---|
 | `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe build`
+
+Build one dated common-stock universe from verified as-of inputs.
+
+| Option | Meaning |
+|---|---|
+| `--session` | decision session (YYYY-MM-DD) (required) |
+| `--known-at` | timezone-aware cutoff before the decision session (ISO 8601) (required) |
+| `--dataset-id` | verified Alpaca dataset manifest ID (required) |
+| `--classification-file` | dated JSON security-master snapshot keyed by stable asset UUID (required) |
+| `--minimum-price` | minimum prior-session close in USD (required) |
+| `--minimum-listing-age-days` | minimum listing age at the decision session (required) |
+| `--minimum-dollar-volume-percentile` | minimum 20-session median dollar-volume percentile (0-100) (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy spec`
@@ -1336,6 +1412,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `TRIAL_BUDGET_NEARLY_USED` | evidence | The family has used at least 80% of its trial budget. | Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision. |
 | `TRIAL_NOT_FOUND` | usage | No trial ledger entry matches that sequence number or configuration-hash prefix. | Run `sqy trials ls` to see the entries. |
 | `UNIVERSE_ASOF_UNAVAILABLE` | data | No verified asset snapshot was captured by the requested cutoff within the freshness window. | Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive. |
+| `UNIVERSE_CLASSIFICATION_INVALID` | data | A dated instrument classification snapshot is malformed, incomplete, or inconsistent with asset IDs. | Supply a complete, hashed classification snapshot keyed by the stable asset IDs in the asset snapshot. |
+| `UNIVERSE_INPUT_UNAVAILABLE` | data | A required asset, classification, or market-data observation is missing, stale, or later than the cutoff. | Capture the inputs prospectively and rebuild with a decision cutoff after all required observations. |
 | `USAGE_INVALID` | usage | The command line could not be parsed. | Run `sqy commands` or `sqy <command> --help`. |
 | `VCS_DIRTY` | evidence | The project had uncommitted changes when frozen. | Commit before freezing so the frozen code is recoverable. |
 | `VOLUME_CAPPED` | execution | An order was reduced to the fill model's share of that session's volume. | The rest is retried next session; lower weights or accept slower fills for illiquid symbols. |

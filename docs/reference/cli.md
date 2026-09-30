@@ -129,7 +129,7 @@ List recorded datasets.
 
 ## `sqy universe`
 
-Capture and verify prospective asset-list snapshots.
+Build and verify point-in-time common-stock universes.
 
 ### `sqy universe snapshot`
 
@@ -154,6 +154,21 @@ Find a verified snapshot known by a UTC cutoff.
 | Option | Meaning |
 |---|---|
 | `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe build`
+
+Build one dated common-stock universe from verified as-of inputs.
+
+| Option | Meaning |
+|---|---|
+| `--session` | decision session (YYYY-MM-DD) (required) |
+| `--known-at` | timezone-aware cutoff before the decision session (ISO 8601) (required) |
+| `--dataset-id` | verified Alpaca dataset manifest ID (required) |
+| `--classification-file` | dated JSON security-master snapshot keyed by stable asset UUID (required) |
+| `--minimum-price` | minimum prior-session close in USD (required) |
+| `--minimum-listing-age-days` | minimum listing age at the decision session (required) |
+| `--minimum-dollar-volume-percentile` | minimum 20-session median dollar-volume percentile (0-100) (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy spec`

@@ -218,7 +218,12 @@ from signalquarry.api.project import backtest, check, check_factor, init, upgrad
 from signalquarry.api.publish import bundle_verify, evidence_export  # noqa: E402
 from signalquarry.api.report import report  # noqa: E402
 from signalquarry.api.sweep import sweep  # noqa: E402
-from signalquarry.api.universe import universe_as_of, universe_snapshot, universe_verify  # noqa: E402
+from signalquarry.api.universe import (  # noqa: E402
+    universe_as_of,
+    universe_build,
+    universe_snapshot,
+    universe_verify,
+)
 
 __all__ = [
     "Envelope",
@@ -271,6 +276,7 @@ __all__ = [
     "schema",
     "version",
     "universe_as_of",
+    "universe_build",
     "universe_snapshot",
     "universe_verify",
 ]

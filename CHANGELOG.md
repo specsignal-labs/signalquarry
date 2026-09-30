@@ -22,6 +22,9 @@ change provisional surfaces after deprecation).
   trial ledger, issues no evidence grade, and does not access a holdout.
 - Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
   with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
+- `sqy universe build` creates a hashed, replay-verifiable common-stock membership manifest from
+  dated asset and caller-supplied classification snapshots, explicit price/listing-age/liquidity
+  filters, and 20 completed prior sessions. It fails closed when required as-of inputs are missing.
 - Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure
   per-session engine iterator. Run artifacts are written incrementally; failed streams remove
   partial run directories. Artifact formats and ledger hashes are unchanged.

@@ -59,7 +59,68 @@ counts, and no asset names or symbols. `verify` re-hashes and re-parses it.
 if it is no more than 31 days old. Earlier dates are unavailable. Alpaca's
 current asset list is not a historical membership archive, and `us_equity`
 does not identify common stocks alone. These snapshots therefore do not yet
-make a factor backtest point-in-time or enable `universe build`.
+make a factor backtest point-in-time.
+
+## Building a dated common-stock universe
+
+`sqy universe build` constructs membership for one decision session. It needs
+an asset snapshot, an Alpaca dataset with 20 prior sessions, and a complete
+classification snapshot that was observed by the cutoff. The classification
+file uses this shape:
+
+```json
+{
+  "schema": "signalquarry.instrument-classification-snapshot/v1",
+  "source": "your dated security-master source",
+  "observed_at": "2026-09-28T19:00:00Z",
+  "records": [
+    {"symbol": "AAA", "security_type": "common_stock", "listed_at": "2020-01-02"},
+    {"symbol": "ETF", "security_type": "other", "listed_at": null}
+  ]
+}
+```
+
+Include exactly one record for every asset in the captured asset snapshot,
+including inactive assets and non-common instruments. Records may use stable
+`asset_id` UUIDs instead of symbols. Symbol keys require unique symbols across
+the full asset snapshot. Common stocks need a listing date. The caller supplies
+the classification source; SignalQuarry hashes and keeps the snapshot in its
+private local cache so `universe verify` can replay the build.
+
+Choose explicit thresholds for each build. This example uses illustrative
+values; it does not prescribe a trading universe:
+
+```bash
+sqy universe build \
+  --session 2026-09-29 \
+  --known-at 2026-09-28T21:00:00+00:00 \
+  --dataset-id alpaca-sip-1day-example \
+  --classification-file ./security-master.json \
+  --minimum-price 5 \
+  --minimum-listing-age-days 90 \
+  --minimum-dollar-volume-percentile 20
+sqy universe verify
+```
+
+The cutoff must precede the decision session. Asset and classification
+snapshots must be no more than 31 days old, and the dataset must have been
+fetched by the cutoff and end no later than its UTC date. The build uses the
+last 20 complete sessions before the decision session. If fetched on the date
+of its latest session, the dataset must be fetched at least 16:15
+America/New_York so the regular session's daily bar has finished. It filters on the latest
+prior raw close, listing age, then the cross-sectional percentile rank of each
+eligible stock's 20-session median close-times-volume. A missing bar in the
+lookback excludes that name from the ranking. No provider metadata or bars are
+downloaded by `universe build`.
+
+The manifest records the filter policy, source hashes, counts, and member
+symbols. Command output exposes only the summary and hashes. Verification
+replays membership from the cached classification snapshot, asset pages, and
+dataset pages. Earlier periods require dated snapshots that actually existed by
+each cutoff; a current source file cannot reconstruct them. Raw close and
+volume filters do not establish corporate-action-adjusted factor returns.
+The command reports classification provenance as unverified because it cannot
+independently establish when or how the caller's classification was assembled.
 
 ## Options coverage
 
