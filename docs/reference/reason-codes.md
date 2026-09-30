@@ -58,6 +58,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_MODULE_INVALID` | signal | A factor module must be inside the project and define exactly one @factor function. | Keep one decorated score function in each registered project module. |
 | `FACTOR_NOT_FOUND` | usage | No registered factor has that id. | Run `sqy factor ls` or add the module to signalquarry.toml. |
 | `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
+| `FACTOR_PORTFOLIO_UNAVAILABLE` | data | No eligible factor scores or prior-only factor weights are available for this decision. | Provide completed factor history and a prior-cutoff weight row, or use equal weights. |
 | `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
 | `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |

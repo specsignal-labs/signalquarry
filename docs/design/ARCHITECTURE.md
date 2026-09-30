@@ -454,7 +454,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
-| `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `strategy`, `ta`, `xs` |
+| `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
 | `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |
