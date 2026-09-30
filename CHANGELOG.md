@@ -15,6 +15,7 @@ change provisional surfaces after deprecation).
   action-refusal reference cases.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
+- An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
 - A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
 - A deterministic genetic formula-search core over synthetic training inputs, with family-budget
   checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no

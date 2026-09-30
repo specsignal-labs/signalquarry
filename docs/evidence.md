@@ -24,6 +24,12 @@ try raises the bar for all of them. Each family has a trial budget
 and at the limit, runs stop with
 `TRIAL_BUDGET_EXHAUSTED` until a human records `sqy trials extend --reason ...`.
 
+Factor research has a separate internal `evidence/factor_trials.jsonl` log. It
+counts unique factor-configuration hashes project-wide and within each family,
+without changing strategy trial counts or budgets. Recording an entry does not
+verify its data provenance, assign an evidence grade, or authorize a holdout
+evaluation.
+
 `sqy evidence verify` checks every ledger and paper journal; with
 `--base <git ref>` it also fails if any of them changed other than by appending.
 New projects run both in `.github/workflows/check.yml`.

@@ -235,6 +235,9 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - Each line records n_obs, Sharpe, skew, kurtosis and `returns_sha256`; the return series are stored per run for PBO.
   - Trial budget: a warning at 80%; runs are blocked at 100% until `sqy trials extend --reason`, which is itself a ledger entry.
   - CI rejects a ledger that shrinks or whose chain breaks.
+- **Factor trial ledger (`evidence/factor_trials.jsonl`):**
+  - A separate hash-chained log counts unique factor-configuration hashes by project and family; it does not change strategy counts or budgets.
+  - Recording an entry does not verify data provenance, assign an evidence grade, or authorize a holdout evaluation.
 - **Holdout:**
   - `spec freeze` writes `holdout.seal.json` covering the last 12 months, or from a declared model training cutoff if earlier.
   - Every command clips data at the seal, except a single `evaluate --holdout --freeze <hash>` once the walk-forward gates have passed.

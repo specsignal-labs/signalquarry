@@ -1,20 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Pure identity for a future, provenance-verified factor evaluation trial.
+"""Identity and persistence helpers for factor evaluation trials.
 
-Constructing a key does not authorize evaluation or append to the trial ledger.
-The real-data entry point must verify each supplied identity before recording it.
+Constructing a key does not authorize evaluation. Callers must verify data and
+label provenance before recording a real-data evaluation.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any
 
 from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.contracts.factor_spec import FactorEvaluationSpecV1
+from signalquarry._internal.contracts.spec import SLUG_PATTERN
+from signalquarry._internal.validation import ledger
 
 _IDENTITY = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_SLUG = re.compile(SLUG_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -62,3 +67,47 @@ class FactorTrialConfiguration:
                 "accepted_factor_hashes": self.accepted_factor_hashes,
             }
         )
+
+
+def record_factor_trial(
+    root: Path,
+    *,
+    family: str,
+    factor_id: str,
+    configuration: FactorTrialConfiguration,
+    at: datetime,
+    metrics: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Persist one verified evaluation identity; repeated identities are idempotent.
+
+    This is a storage helper, not a provenance verifier or evaluation gate.
+    """
+    if not _SLUG.fullmatch(family) or not _SLUG.fullmatch(factor_id):
+        raise ValueError("FACTOR_TRIAL_FAMILY_INVALID")
+    if at.tzinfo is None or at.utcoffset() is None:
+        raise ValueError("FACTOR_TRIAL_TIME_INVALID")
+    if not isinstance(metrics, dict):
+        raise ValueError("FACTOR_TRIAL_METRICS_INVALID")
+    trial = {
+        "kind": "factor_trial",
+        "at": at,
+        "family": family,
+        "factor_id": factor_id,
+        "factor_configuration_hash": configuration.factor_configuration_hash,
+        "trial_configuration_hash": configuration.configuration_hash,
+        "dataset_identity": configuration.dataset_identity,
+        "universe_identity": configuration.universe_identity,
+        "label_identity": configuration.label_identity,
+        "decision_sessions": configuration.decision_sessions,
+        "evaluation": configuration.evaluation.model_dump(mode="json"),
+        "accepted_factor_hashes": configuration.accepted_factor_hashes,
+        "metrics": metrics,
+    }
+    log = ledger.factor_trials(root, family)
+    for entry in log.entries():
+        if (
+            entry.get("kind") == "factor_trial"
+            and entry.get("trial_configuration_hash") == trial["trial_configuration_hash"]
+        ):
+            return entry, False
+    return ledger.append(root, "factor_trials", family, trial), True

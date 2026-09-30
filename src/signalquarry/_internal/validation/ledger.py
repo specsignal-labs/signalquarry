@@ -4,13 +4,15 @@
 * ``trials.jsonl`` — one line per distinct (configuration, dataset) evaluated on
   real data. Written by the engine-facing commands only. The project-wide count
   of distinct configurations is the ``N`` of the deflated Sharpe ratio.
+* ``factor_trials.jsonl`` — one line per distinct factor evaluation identity,
+  separate from strategy trials and counted by factor configuration hash.
 * ``freezes.jsonl`` — ``sqy spec freeze`` records (hypothesis, gates, holdout seal) and
   ``sqy holdout seal`` records (``kind: seal``: a family's seal without a freeze).
 * ``holdouts.jsonl`` — the single permitted opening of each family's holdout.
 
 Layouts (``signalquarry.toml`` → ``[evidence] layout``):
 
-* ``project`` (default): the three logs live in ``<project>/evidence/``.
+* ``project`` (default): the logs live in ``<project>/evidence/``.
 * ``per_family``: each family's logs live in ``<family_root>/evidence/`` (default
   ``families/{family}``) so a family can be transferred with its own verifiable
   history. Every family append is mirrored in ``evidence/project_index.jsonl``
@@ -91,9 +93,10 @@ class ChainedLog:
         return entry
 
 
-KINDS = ("trials", "freezes", "holdouts")
+KINDS = ("trials", "factor_trials", "freezes", "holdouts")
 SCHEMAS = {
     "trials": "signalquarry.trial/v1",
+    "factor_trials": "signalquarry.factor-trial/v1",
     "freezes": "signalquarry.freeze/v1",
     "holdouts": "signalquarry.holdout-opening/v1",
 }
@@ -151,6 +154,10 @@ def project_index(root: Path) -> ChainedLog:
 
 def trials(root: Path, family: str | None = None) -> ChainedLog:
     return _log(root, "trials", family)
+
+
+def factor_trials(root: Path, family: str | None = None) -> ChainedLog:
+    return _log(root, "factor_trials", family)
 
 
 def freezes(root: Path, family: str | None = None) -> ChainedLog:
@@ -235,6 +242,25 @@ def trial_summary(root: Path, family: str | None = None) -> dict[str, Any]:
             for e in entries
             if e.get("kind") == "budget_extension" and (family is None or e["family"] == family)
         ),
+        "head": _head(root, entries),
+    }
+
+
+def factor_trial_summary(root: Path, family: str | None = None) -> dict[str, Any]:
+    """Count unique factor configurations without mixing strategy trials."""
+    entries = all_entries(root, "factor_trials")
+    runs = [entry for entry in entries if entry.get("kind") == "factor_trial"]
+    project_configs = {entry["factor_configuration_hash"] for entry in runs}
+    family_configs = {
+        entry["factor_configuration_hash"]
+        for entry in runs
+        if family is None or entry.get("family") == family
+    }
+    selected = [entry for entry in runs if family is None or entry.get("family") == family]
+    return {
+        "project_count": len(project_configs),
+        "family_count": len(family_configs),
+        "trial_count": len(selected),
         "head": _head(root, entries),
     }
 
