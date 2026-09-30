@@ -198,7 +198,7 @@ from signalquarry.api.evidence import (  # noqa: E402
     trials_ls,
     trials_show,
 )
-from signalquarry.api.factor import check_registered_factor, factor_ls  # noqa: E402
+from signalquarry.api.factor import check_registered_factor, factor_evaluate, factor_ls  # noqa: E402
 from signalquarry.api.paper import (  # noqa: E402
     paper_arm,
     paper_backup,
@@ -244,6 +244,7 @@ __all__ = [
     "docs",
     "doctor",
     "evaluate_command",
+    "factor_evaluate",
     "factor_ls",
     "evidence_export",
     "evidence_verify",

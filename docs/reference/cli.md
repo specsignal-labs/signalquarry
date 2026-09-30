@@ -61,7 +61,7 @@ Run conformance, determinism and look-ahead checks.
 
 ## `sqy factor`
 
-Inspect project-registered research factors.
+List factors or calculate unverified descriptive diagnostics.
 
 ### `sqy factor ls`
 
@@ -69,6 +69,17 @@ List explicitly registered project factors and hashes.
 
 | Option | Meaning |
 |---|---|
+| `--project` | project directory (default: search upwards) |
+
+### `sqy factor evaluate`
+
+Compute descriptive, unverified diagnostics from selected local manifests.
+
+| Option | Meaning |
+|---|---|
+| `--factor` | registered factor ID (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
 | `--project` | project directory (default: search upwards) |
 
 ## `sqy data`
