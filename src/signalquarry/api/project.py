@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import importlib
+import json
 import re
+import sys
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from importlib import resources
@@ -32,9 +35,12 @@ from signalquarry._internal.project.project import (
     load_config,
     load_strategies,
 )
-from signalquarry._internal.validation.conformance import run_checks
+from signalquarry._internal.validation.conformance import import_policy, run_checks
+from signalquarry._internal.validation.factor_conformance import run_factor_checks
 from signalquarry._internal.validation.metrics import summarize
 from signalquarry.api.envelope import Envelope
+from signalquarry.sdk.factors import ATTRIBUTE as FACTOR_ATTRIBUTE
+from signalquarry.sdk.factors import FactorDef
 
 SYNTHETIC_START, SYNTHETIC_END = date(2014, 1, 2), date(2025, 12, 31)
 _RENAMES = {"gitignore.txt": ".gitignore", "gitkeep.txt": ".gitkeep", "github": ".github"}
@@ -253,6 +259,50 @@ def check(strategy_id: str | None = None, *, project: Path | None = None, parity
             {"command": f"sqy backtest --strategy {first}", "why": "Conformance passed."}
         )
     return envelope
+
+
+def check_factor(module_name: str, *, project: Path | None = None, params_json: str = "{}") -> Envelope:
+    """Check one explicitly named project factor against synthetic panels."""
+    try:
+        root = find_root(project)
+        config = load_config(root)
+        for directory in reversed(config.src_dirs):
+            location = str(directory)
+            if directory.is_dir() and location not in sys.path:
+                sys.path.insert(0, location)
+        module = importlib.import_module(module_name)
+        module_file = Path(module.__file__ or "").resolve()
+        if not module_file.is_relative_to(root):
+            raise ValueError("factor module must be inside the project")
+        # @factor attaches the definition to its function; imported factors do not count.
+        found = {
+            id(definition): definition
+            for value in vars(module).values()
+            if (definition := getattr(value, FACTOR_ATTRIBUTE, None)) is not None
+            and isinstance(definition, FactorDef)
+            and definition.module == module_name
+        }
+        if len(found) != 1:
+            raise ValueError(f"{module_name} defines {len(found)} @factor functions; expected one")
+        definition = next(iter(found.values()))
+        raw_params = json.loads(params_json)
+        if not isinstance(raw_params, dict):
+            raise ValueError("factor params must be a JSON object")
+        params = definition.params.model_validate(raw_params)
+    except Exception as exc:
+        code = exc.code if isinstance(exc, ProjectError) else "USAGE_INVALID"
+        return Envelope(command="check", status="invalid", reason_codes=[code], summary=str(exc)[:500])
+    results = [import_policy(module_file.parent, module_name.split(".")[0], sdk_only=True)]
+    if results[0].ok:
+        results.extend(run_factor_checks(definition, params))
+    ok = all(item.ok for item in results)
+    return Envelope(
+        command="check",
+        status="ok" if ok else "blocked",
+        reason_codes=[] if ok else ["CONFORMANCE_FAILED"],
+        summary=f"factor {module_name} {'passes' if ok else 'fails'} synthetic conformance",
+        data={"factor": module_name, "checks": [item.as_dict() for item in results]},
+    )
 
 
 def backtest(

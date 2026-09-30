@@ -213,7 +213,7 @@ from signalquarry.api.paper import (  # noqa: E402
     paper_verify_continuity,
 )
 from signalquarry.api.perf import perf_capture, perf_publish  # noqa: E402
-from signalquarry.api.project import backtest, check, init, upgrade_agents_md  # noqa: E402
+from signalquarry.api.project import backtest, check, check_factor, init, upgrade_agents_md  # noqa: E402
 from signalquarry.api.publish import bundle_verify, evidence_export  # noqa: E402
 from signalquarry.api.report import report  # noqa: E402
 from signalquarry.api.sweep import sweep  # noqa: E402
@@ -225,6 +225,7 @@ __all__ = [
     "bundle_verify",
     "cache_dir",
     "check",
+    "check_factor",
     "commit_create",
     "commit_reveal",
     "commit_verify",

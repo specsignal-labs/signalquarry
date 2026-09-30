@@ -100,7 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores; historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. `sqy check --factor` probes contract, repeatability and future-bar isolation on synthetic panels; historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -419,7 +419,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Imports (direct) |
 |---|---|
 | `cli` | `api`, `data`, `contracts` |
-| `api` | `paper`, `evidence`, `publish`, `validation`, `engine`, `data`, `project`, `plugins`, `contracts`, `canonical` |
+| `api` | `paper`, `evidence`, `publish`, `validation`, `engine`, `data`, `project`, `sdk`, `plugins`, `contracts`, `canonical` |
 | `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
 | `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
@@ -444,7 +444,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `ledger`, `metrics`, `stats` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
 | `project` | `(package)`, `agents_md`, `project` |
