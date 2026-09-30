@@ -24,6 +24,25 @@ signalquarry.sdk.Decision.state: field dict[str, Any] | None
 signalquarry.sdk.Decision.hold(cls, *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
 signalquarry.sdk.Decision.target(cls, weights: 'dict[str, Decimal | float | int | str]', *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
 signalquarry.sdk.Decision.unavailable(cls, *reason_codes: 'str') -> 'Decision'
+signalquarry.sdk.FactorCtx: class(object)
+signalquarry.sdk.FactorCtx.decision_session: field date
+signalquarry.sdk.FactorCtx.sessions: field tuple[date, ...]
+signalquarry.sdk.FactorCtx.universe: field tuple[str, ...]
+signalquarry.sdk.FactorCtx.panel(self, field: 'str') -> 'np.ndarray'
+signalquarry.sdk.FactorDef: class(object)
+signalquarry.sdk.FactorDef.score: field Callable[[FactorCtx, Params], Mapping[str, float]]
+signalquarry.sdk.FactorDef.params: field type[Params]
+signalquarry.sdk.FactorDef.lookback: field Callable[[Params], int]
+signalquarry.sdk.FactorDef.module: field str
+signalquarry.sdk.FactorDef.name: field str
+signalquarry.sdk.FactorInput: class(object)
+signalquarry.sdk.FactorInput.id: field str
+signalquarry.sdk.FactorInput.function: field Callable[..., Mapping[str, float]]
+signalquarry.sdk.FactorInput.params: field Params
+signalquarry.sdk.FactorWeightSnapshot: class(object)
+signalquarry.sdk.FactorWeightSnapshot.known_at: field date
+signalquarry.sdk.FactorWeightSnapshot.effective_from: field date
+signalquarry.sdk.FactorWeightSnapshot.weights: field Mapping[str, float]
 signalquarry.sdk.Field: re-export of pydantic.fields.Field
 signalquarry.sdk.Params: class(BaseModel)
 signalquarry.sdk.StrategyDef: class(object)
@@ -34,8 +53,12 @@ signalquarry.sdk.StrategyDef.module: field str
 signalquarry.sdk.StrategyDef.name: field str
 signalquarry.sdk.StrategyDef.kind: field str
 signalquarry.sdk.definition_of(obj: 'object') -> 'StrategyDef'
+signalquarry.sdk.factor(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[FactorCtx, P], Mapping[str, float]]], Callable[[FactorCtx, P], Mapping[str, float]]]'
+signalquarry.sdk.factor_definition_of(obj: 'object') -> 'FactorDef'
+signalquarry.sdk.factor_portfolio(ctx: 'Ctx', factors: 'Sequence[FactorInput]', *, top_quantile: 'float', max_weight_per_symbol: 'float', turnover_buffer: 'float' = 0.0, weight_schedule: 'Sequence[FactorWeightSnapshot]' = ()) -> 'Decision'
 signalquarry.sdk.strategy(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[Ctx, P], Decision]], Callable[[Ctx, P], Decision]]'
 signalquarry.sdk.ta: module
+signalquarry.sdk.xs: module
 signalquarry.sdk.options.LegView: class(object)
 signalquarry.sdk.options.LegView.symbol: field str
 signalquarry.sdk.options.LegView.right: field Literal['PUT', 'CALL']
@@ -104,6 +127,8 @@ signalquarry.api.backtest(strategy_id: 'str', *, start: 'date | None' = None, en
 signalquarry.api.bundle_verify(bundle: 'Path', *, max_tier: 'str' = 'public') -> 'Envelope'
 signalquarry.api.cache_dir() -> 'Path'
 signalquarry.api.check(strategy_id: 'str | None' = None, *, project: 'Path | None' = None, parity: 'bool' = False) -> 'Envelope'
+signalquarry.api.check_factor(module_name: 'str', *, project: 'Path | None' = None, params_json: 'str' = '{}') -> 'Envelope'
+signalquarry.api.check_registered_factor(factor_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_create(strategy_id: 'str', *, alias: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_reveal(commit_id: 'str', *, out: 'Path', project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_verify(record_path: 'Path', reveal_path: 'Path') -> 'Envelope'
@@ -118,6 +143,8 @@ signalquarry.api.evaluate_command(strategy_id: 'str', *, stress: 'bool' = True, 
 signalquarry.api.evidence_export(family: 'str', *, tier: 'str' = 'public', out: 'Path | None' = None, project: 'Path | None' = None, today: 'date | None' = None) -> 'Envelope'
 signalquarry.api.evidence_verify(*, base: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.explain(code: 'str') -> 'Envelope'
+signalquarry.api.factor_evaluate(factor_id: 'str', dataset_id: 'str', *, universe_manifests: 'Sequence[Path]', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.factor_ls(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_seal(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_status(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.init(path: 'Path', *, demo: 'bool' = False, package: 'str | None' = None, lab: 'bool' = False, kind: 'str' = 'equity') -> 'Envelope'
@@ -130,7 +157,7 @@ signalquarry.api.paper_preflight(alias: 'str', *, project: 'Path | None' = None)
 signalquarry.api.paper_reconcile(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_run(alias: 'str', *, project: 'Path | None' = None, interval: 'float' = 60.0, max_minutes: 'float' = 30.0, sleep: 'Callable[[float], None]' = <built-in function sleep>, clock: 'Callable[[], float]' = <built-in function monotonic>) -> 'Envelope'
 signalquarry.api.paper_run_once(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
-signalquarry.api.paper_schedule(alias: 'str', target: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_schedule(alias: 'str', target: 'str', *, project: 'Path | None' = None, notify_command: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_status(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_verify_continuity(alias: 'str', backup: 'Path', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.perf_capture(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
@@ -143,6 +170,10 @@ signalquarry.api.sweep(strategy_id: 'str', assignments: 'list[str]', *, project:
 signalquarry.api.trials_extend(family: 'str', reason: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.trials_ls(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.trials_show(key: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_as_of(*, known_at: 'datetime', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_build(*, decision_session: 'date', known_at: 'datetime', dataset_id: 'str', classification_file: 'Path', minimum_price: 'Decimal', minimum_listing_age_days: 'int', minimum_dollar_volume_percentile: 'Decimal', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.universe_snapshot(*, project: 'Path | None' = None, source: 'AssetSource | None' = None) -> 'Envelope'
+signalquarry.api.universe_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.version() -> 'Envelope'
 signalquarry.plugins.API_VERSION: int
@@ -208,3 +239,8 @@ signalquarry.sdk.ta.rolling_std(values: 'np.ndarray', period: 'int') -> 'np.ndar
 signalquarry.sdk.ta.rsi(values: 'np.ndarray', period: 'int' = 14) -> 'np.ndarray'
 signalquarry.sdk.ta.sma(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
 signalquarry.sdk.ta.zscore(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
+signalquarry.sdk.xs.demean(values: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.neutralize(values: 'np.ndarray', exposures: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.rank(values: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.winsorize(values: 'np.ndarray', lower: 'float' = 0.01, upper: 'float' = 0.99) -> 'np.ndarray'
+signalquarry.sdk.xs.zscore(values: 'np.ndarray') -> 'np.ndarray'

@@ -12,6 +12,7 @@ from __future__ import annotations
 import shlex
 import sys
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from signalquarry._internal.contracts.paper import PaperDeploymentV1
 
@@ -19,11 +20,14 @@ TARGETS = ("systemd", "launchd", "cron", "github-actions")
 MINUTES = (0, 5, 10, 15, 20, 25)
 
 
-def _command(root: Path, alias: str) -> str:
-    return f"{shlex.quote(sys.executable)} -m signalquarry.cli.main --json paper run-once --alias {alias} --project {shlex.quote(str(root))}"
+def _command(root: Path, alias: str, notify_command: Path | None = None) -> str:
+    command = f"{shlex.quote(sys.executable)} -m signalquarry.cli.main --json paper run-once --alias {alias} --project {shlex.quote(str(root))}"
+    if notify_command is not None:
+        command += f" --notify-command {shlex.quote(str(notify_command))}"
+    return command
 
 
-def _systemd(root: Path, alias: str) -> dict[str, str]:
+def _systemd(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
     unit = f"signalquarry-paper-{alias}"
     return {
         f"{unit}.service": f"""# Install as a user unit: ~/.config/systemd/user/, then `systemctl --user enable --now {unit}.timer`.
@@ -35,7 +39,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory={root}
-ExecStart={_command(root, alias)}
+ExecStart={_command(root, alias, notify_command)}
 # 75 = retry on the next tick, 69 = broker/provider unavailable: not failures of the unit.
 SuccessExitStatus=75 69
 NoNewPrivileges=yes
@@ -58,14 +62,16 @@ WantedBy=timers.target
     }
 
 
-def _launchd(root: Path, alias: str) -> dict[str, str]:
+def _launchd(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
     intervals = "\n".join(
         f"    <dict><key>Weekday</key><integer>{day}</integer><key>Hour</key><integer>9</integer>"
         f"<key>Minute</key><integer>{minute}</integer></dict>"
         for day in range(1, 6)
         for minute in MINUTES
     )
-    arguments = "\n".join(f"    <string>{part}</string>" for part in shlex.split(_command(root, alias)))
+    arguments = "\n".join(
+        f"    <string>{escape(part)}</string>" for part in shlex.split(_command(root, alias, notify_command))
+    )
     return {
         f"dev.signalquarry.paper.{alias}.plist": f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -90,12 +96,12 @@ def _launchd(root: Path, alias: str) -> dict[str, str]:
     }
 
 
-def _cron(root: Path, alias: str) -> dict[str, str]:
+def _cron(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
     minutes = ",".join(str(m) for m in MINUTES)
     return {
         f"{alias}.crontab": f"""# SignalQuarry paper run-once ({alias}). Install with `crontab -e`; needs a cron with CRON_TZ.
 CRON_TZ=America/New_York
-{minutes} 9 * * 1-5 cd {shlex.quote(str(root))} && {_command(root, alias)} >> paper/{alias}/cron.log 2>&1
+{minutes} 9 * * 1-5 cd {shlex.quote(str(root))} && {_command(root, alias, notify_command)} >> paper/{alias}/cron.log 2>&1
 """,
     }
 
@@ -159,8 +165,8 @@ jobs:
     }
 
 
-def _systemd_poll(root: Path, alias: str) -> dict[str, str]:
-    files = _systemd(root, alias)
+def _systemd_poll(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
+    files = _systemd(root, alias, notify_command)
     unit = f"signalquarry-paper-{alias}"
     files[f"{unit}.timer"] = f"""[Unit]
 Description=SignalQuarry options poll ({alias}), every minute of the regular session
@@ -177,8 +183,8 @@ WantedBy=timers.target
     return files
 
 
-def _cron_poll(root: Path, alias: str) -> dict[str, str]:
-    command = f"cd {shlex.quote(str(root))} && {_command(root, alias)} >> paper/{alias}/cron.log 2>&1"
+def _cron_poll(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
+    command = f"cd {shlex.quote(str(root))} && {_command(root, alias, notify_command)} >> paper/{alias}/cron.log 2>&1"
     return {
         f"{alias}.crontab": f"""# SignalQuarry options poll ({alias}): every minute of the regular session. Needs CRON_TZ.
 CRON_TZ=America/New_York
@@ -188,8 +194,8 @@ CRON_TZ=America/New_York
     }
 
 
-def _launchd_poll(root: Path, alias: str) -> dict[str, str]:
-    files = _launchd(root, alias)
+def _launchd_poll(root: Path, alias: str, notify_command: Path | None = None) -> dict[str, str]:
+    files = _launchd(root, alias, notify_command)
     name = next(iter(files))
     text = files[name]
     start = text.index("  <key>StartCalendarInterval</key>")
@@ -268,17 +274,30 @@ WantedBy=timers.target
     }
 
 
-def write_schedule(root: Path, config: PaperDeploymentV1, target: str, *, poll: bool = False) -> list[Path]:
+def write_schedule(
+    root: Path,
+    config: PaperDeploymentV1,
+    target: str,
+    *,
+    poll: bool = False,
+    notify_command: Path | None = None,
+) -> list[Path]:
     """``poll``: an options deployment, which runs every minute of the regular session."""
     builders = {"systemd": _systemd, "launchd": _launchd, "cron": _cron, "github-actions": _github_actions}
     if poll:
         if target == "github-actions":
             raise ValueError("SCHEDULE_TARGET_UNSUPPORTED_FOR_OPTIONS")
         builders = {"systemd": _systemd_poll, "launchd": _launchd_poll, "cron": _cron_poll}
+    if notify_command is not None and (not notify_command.is_absolute() or target == "github-actions"):
+        raise ValueError("SCHEDULE_NOTIFY_COMMAND_UNSUPPORTED")
     directory = root / "paper" / "schedule" / target
     directory.mkdir(parents=True, exist_ok=True)
     written = []
-    files = builders[target](root, config.alias)
+    files = (
+        builders[target](root, config.alias)
+        if target == "github-actions"
+        else builders[target](root, config.alias, notify_command)
+    )
     if target == "systemd":
         files.update(_systemd_commitments(root, config.alias, config.strategy))
     for name, text in files.items():

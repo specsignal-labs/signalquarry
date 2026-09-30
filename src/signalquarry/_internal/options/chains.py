@@ -3,7 +3,8 @@
 
 Volatility is the underlying's trailing 20-session realized volatility times 1.1
 (floored at 10%); quotes are the model price ± a half-spread of 2% of the price
-(at least one tick). Weekly expirations fall on Fridays. Nothing here is market data:
+(at least one tick). Weekly expirations fall on Fridays, moved to the preceding
+trading day on an NYSE holiday (see ``fridays``). Nothing here is market data:
 results that use these chains are graded ``low_evidence_options``.
 """
 
@@ -11,17 +12,36 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from statistics import NormalDist
 
 import numpy as np
 
+from signalquarry._internal.calendar.nyse import is_half_day, is_holiday, previous_trading_day
 from signalquarry._internal.options.contracts import OptionsError, Quote, contract, parse_occ
 from signalquarry._internal.options.resolver import Candidate
 
 _N = NormalDist()
 RATE = 0.04
+
+OPEN_CHECKPOINT = time(9, 35)
+_NORMAL_CLOSE_CHECKPOINT = time(15, 55)
+_HALF_DAY_CLOSE_CHECKPOINT = time(12, 55)
+
+
+def session_checkpoints(session: date) -> tuple[tuple[str, time], tuple[str, time]]:
+    """The (open, close) checkpoint moments for `session`.
+
+    Both are 5 minutes before the exchange's actual session close, so that quotes
+    are never modelled at the closing bell itself. The close checkpoint moves from
+    15:55 to 12:55 on an NYSE 1pm early close (``_internal.calendar.nyse``); every
+    other checkpoint concern (holiday sessions in a synthetic or demo dataset, dates
+    outside the calendar's tracked range) falls back to the ordinary full session,
+    since ``is_half_day`` only ever answers "yes, definitely a half day".
+    """
+    close = _HALF_DAY_CLOSE_CHECKPOINT if is_half_day(session) else _NORMAL_CLOSE_CHECKPOINT
+    return (("open", OPEN_CHECKPOINT), ("close", close))
 
 
 def black_scholes(
@@ -47,12 +67,19 @@ def realized_sigma(closes: np.ndarray) -> float:
 
 
 def fridays(start: date, days: int) -> list[date]:
+    """Weekly expirations, moved to the preceding trading day on an NYSE holiday.
+
+    Mirrors the OCC's own rule: an option scheduled to expire on an exchange holiday
+    (Good Friday is the only one that can land on a Friday here) actually expires the
+    business day before, never the next open session.
+    """
     first = start + timedelta(days=(4 - start.weekday()) % 7)
-    return [
+    fridays_in_range = [
         first + timedelta(days=7 * k)
         for k in range((days // 7) + 1)
         if (first + timedelta(days=7 * k) - start).days <= days
     ]
+    return [previous_trading_day(day) if is_holiday(day) else day for day in fridays_in_range]
 
 
 def _strike_step(spot: float) -> Decimal:

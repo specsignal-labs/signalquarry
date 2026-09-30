@@ -100,6 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. The internal formula interpreter converts a bounded AST whitelist to immutable nodes; operators use only same-row or trailing values, receive an explicit dated-membership mask, and never execute Python source (ADR 0011). Its deterministic formula-search core is limited to synthetic training labels, checks a caller-supplied family budget, and reports multiple-testing diagnostics without writing evidence or opening holdouts. Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. `sqy factor evaluate` replays selected cached dataset and universe manifests, then reports descriptive metrics from action-aware labels with scope `unverified`; it writes no trial, assigns no grade, and cannot access a holdout. Historical universe, corporate-action, source-completeness, and instrument-lifecycle provenance are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -196,13 +197,16 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - Sim and paper share one resolver: nearest expiry in the DTE window, then nearest OTM strike.
   - The `delta` strike rule is paper-only.
 - **Determinism:** prices stored as int64 micro-units; a Decimal ledger (precision 28, HALF_EVEN); float64 signals; PCG64 randomness seeded from `configuration_hash`.
-- **Performance targets** (CI benchmark warns at 1.5×, fails at 2×):
+- Dataset identities and backtest ledgers stream canonical JSON chunks into SHA-256, preserving existing hashes while bounding temporary memory.
+- **Performance targets:** the default CI benchmark warns at 1.5× and fails at 2× for the existing workloads. `tools/bench.py --full` also checks both 3,000-symbol cases against strict 3-minute and 2-GB ceilings in isolated native processes. The spooled engine case is diagnostic only; it bypasses the public 500-symbol spec cap in memory.
 
 | Workload | Target |
 |---|---|
 | 10 years × 1 symbol | < 1 s |
 | 10 years × 100 symbols | < 10 s |
 | 10 years × 500 symbols | < 60 s, < 1 GB |
+| 10 years × 3,000 symbols, spooled equity diagnostic | < 180 s, < 2 GB |
+| 10 years × 3,000 symbols, research panel | < 180 s, < 2 GB |
 | 10-fold walk-forward | < 15 s |
 
 **Data**
@@ -231,6 +235,9 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - Each line records n_obs, Sharpe, skew, kurtosis and `returns_sha256`; the return series are stored per run for PBO.
   - Trial budget: a warning at 80%; runs are blocked at 100% until `sqy trials extend --reason`, which is itself a ledger entry.
   - CI rejects a ledger that shrinks or whose chain breaks.
+- **Factor trial ledger (`evidence/factor_trials.jsonl`):**
+  - A separate hash-chained log counts unique factor-configuration hashes by project and family; it does not change strategy counts or budgets.
+  - Recording an entry does not verify data provenance, assign an evidence grade, or authorize a holdout evaluation.
 - **Holdout:**
   - `spec freeze` writes `holdout.seal.json` covering the last 12 months, or from a declared model training cutoff if earlier.
   - Every command clips data at the seal, except a single `evaluate --holdout --freeze <hash>` once the walk-forward gates have passed.
@@ -251,6 +258,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Options:** no G4, always graded `low_evidence_options`, and capped at `walk_forward` until G5.
 - **Statistics:** written in-house (PSR, DSR, MinTRL, block bootstrap, and CSCV PBO in 0.2) using numpy + `statistics.NormalDist`, with no SciPy. Goldens reproduce the published numeric examples.
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
+- **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
 - `RunLease` (flock) on every state-changing command.
@@ -389,7 +397,7 @@ flowchart TB
   L0 --> L1
   L2["<b>paper · evidence · publish</b>"]
   L1 --> L2
-  L3["<b>validation</b>"]
+  L3["<b>validation · factors</b>"]
   L2 --> L3
   L4["<b>engine</b>"]
   L3 --> L4
@@ -399,7 +407,7 @@ flowchart TB
   L5 --> L6
   L7["<b>contracts</b>"]
   L6 --> L7
-  L8["<b>canonical</b>"]
+  L8["<b>canonical · calendar</b>"]
   L7 --> L8
   testing(["testing<br/>outside the layers"])
   testing -.-> L1
@@ -414,19 +422,21 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Imports (direct) |
 |---|---|
 | `cli` | `api`, `data`, `contracts` |
-| `api` | `paper`, `evidence`, `publish`, `validation`, `engine`, `data`, `project`, `plugins`, `contracts`, `canonical` |
+| `api` | `paper`, `evidence`, `publish`, `validation`, `factors`, `engine`, `data`, `project`, `sdk`, `plugins`, `contracts`, `canonical` |
 | `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
-| `evidence` | `canonical` |
+| `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
 | `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
+| `factors` | `engine`, `data`, `sdk`, `canonical` |
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
 | `data` | `contracts`, `canonical` |
 | `project` | `sdk`, `contracts`, `canonical` |
-| `options` | — |
+| `options` | `calendar` |
 | `sdk` | — |
 | `plugins` | — |
 | `contracts` | — |
 | `canonical` | — |
+| `calendar` | — |
 | `testing` | `api`, `paper`, `data` |
 
 ### Component inventory
@@ -434,19 +444,21 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Modules |
 |---|---|
 | `cli` | `(package)`, `main` |
-| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep` |
+| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep`, `universe` |
 | `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
-| `evidence` | `(package)`, `report`, `runs`, `verify` |
+| `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
-| `engine` | `(package)`, `backtest`, `options_sim`, `run` |
-| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `synthetic` |
-| `project` | `(package)`, `agents_md`, `project` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
+| `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
+| `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
+| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe`, `universe_build` |
+| `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
-| `sdk` | `(package)`, `context`, `decision`, `options`, `strategy`, `ta` |
+| `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
-| `contracts` | `(package)`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
+| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |
+| `calendar` | `(package)`, `nyse` |
 | `testing` | `(package)` |
 
 ### Command tree
@@ -461,12 +473,20 @@ flowchart LR
   sqy --> c_explain["explain"]
   sqy --> c_init["init"]
   sqy --> c_check["check"]
+  sqy --> c_factor["factor"]
+  c_factor --> c_factor_ls["ls"]
+  c_factor --> c_factor_evaluate["evaluate"]
   sqy --> c_data["data"]
   c_data --> c_data_fetch["fetch"]
   c_data --> c_data_probe["probe"]
   c_data --> c_data_record["record"]
   c_data --> c_data_verify["verify"]
   c_data --> c_data_ls["ls"]
+  sqy --> c_universe["universe"]
+  c_universe --> c_universe_snapshot["snapshot"]
+  c_universe --> c_universe_verify["verify"]
+  c_universe --> c_universe_as_of["as-of"]
+  c_universe --> c_universe_build["build"]
   sqy --> c_spec["spec"]
   c_spec --> c_spec_freeze["freeze"]
   sqy --> c_evaluate["evaluate"]

@@ -7,6 +7,29 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Broader validation mutation coverage with independent reference cases for equity metrics,
+  walk-forward and holdout gates, evidence history, and strategy conformance.
+- Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
+  pre-open paper-parity cases.
+- Options-simulator mutation coverage with short wheel, quote, expiry-boundary, and
+  action-refusal reference cases.
+- Paper-runner mutation coverage with exact snapshot, drift, and deterministic
+  order-intent reference cases.
+- An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
+- A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
+- A deterministic genetic formula-search core over synthetic training inputs, with family-budget
+  checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no
+  trial ledger, issues no evidence grade, and does not access a holdout.
+- Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
+  with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
+- `sqy universe build` creates a hashed, replay-verifiable common-stock membership manifest from
+  dated asset and caller-supplied classification snapshots, explicit price/listing-age/liquidity
+  filters, and 20 completed prior sessions. It fails closed when required as-of inputs are missing.
+- Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure
+  per-session engine iterator. Run artifacts are written incrementally; failed streams remove
+  partial run directories. Artifact formats and ledger hashes are unchanged.
+- Developer tooling for private, read-only Alpaca HTTP cassette capture and strict offline replay;
+  response fixtures are source-labeled, credential-redacted, hash-verified, and stored outside Git worktrees.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
@@ -68,6 +91,10 @@ change provisional surfaces after deprecation).
 
 ### Fixed
 - Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
+- Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
+  instead of an internal error.
+- A paper snapshot requested with zero recent fills now returns an empty list instead
+  of all historical fills.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication

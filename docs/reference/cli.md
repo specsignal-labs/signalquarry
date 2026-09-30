@@ -53,8 +53,34 @@ Run conformance, determinism and look-ahead checks.
 | Option | Meaning |
 |---|---|
 | `--strategy` | check only this strategy id |
+| `--factor` | check one project module defining a @factor function |
+| `--factor-id` | check a factor id registered in signalquarry.toml |
+| `--params-json` | JSON object of factor parameters |
 | `--parity` | also replay 60 sessions through the paper kernel and a fake venue; must match the backtest |
 | `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy factor`
+
+List factors or calculate unverified descriptive diagnostics.
+
+### `sqy factor ls`
+
+List explicitly registered project factors and hashes.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards) |
+
+### `sqy factor evaluate`
+
+Compute descriptive, unverified diagnostics from selected local manifests.
+
+| Option | Meaning |
+|---|---|
+| `--factor` | registered factor ID (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
+| `--project` | project directory (default: search upwards) |
 
 ## `sqy data`
 
@@ -110,6 +136,50 @@ List recorded datasets.
 
 | Option | Meaning |
 |---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy universe`
+
+Build and verify point-in-time common-stock universes.
+
+### `sqy universe snapshot`
+
+Capture the full current Alpaca US-equity asset list.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe verify`
+
+Verify hashed asset snapshots against cached raw pages.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe as-of`
+
+Find a verified snapshot known by a UTC cutoff.
+
+| Option | Meaning |
+|---|---|
+| `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe build`
+
+Build one dated common-stock universe from verified as-of inputs.
+
+| Option | Meaning |
+|---|---|
+| `--session` | decision session (YYYY-MM-DD) (required) |
+| `--known-at` | timezone-aware cutoff before the decision session (ISO 8601) (required) |
+| `--dataset-id` | verified Alpaca dataset manifest ID (required) |
+| `--classification-file` | dated JSON security-master snapshot keyed by stable asset UUID (required) |
+| `--minimum-price` | minimum prior-session close in USD (required) |
+| `--minimum-listing-age-days` | minimum listing age at the decision session (required) |
+| `--minimum-dollar-volume-percentile` | minimum 20-session median dollar-volume percentile (0-100) (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy spec`
@@ -352,6 +422,7 @@ Reconcile, decide and submit the current session's orders (idempotent).
 |---|---|
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |
 
 ### `sqy paper status`
 
@@ -430,3 +501,4 @@ Write scheduler templates (systemd, launchd, cron, github-actions) for review.
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
 | `--target` | scheduler to write templates for (github-actions is demo-only) (required; one of `systemd`, `launchd`, `cron`, `github-actions`) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |

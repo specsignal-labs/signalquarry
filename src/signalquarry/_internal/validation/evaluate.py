@@ -16,11 +16,11 @@ pre-holdout data, a ``train_months`` burn-in excluded, and consecutive
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -52,7 +52,12 @@ def add_months(day: date, months: int) -> date:
     raise ValueError("DATE_INVALID")
 
 
-def equity_returns(result: BacktestResult, initial: Decimal) -> np.ndarray:
+class EquityCurve(Protocol):
+    @property
+    def equity(self) -> Sequence[Decimal]: ...
+
+
+def equity_returns(result: EquityCurve, initial: Decimal) -> np.ndarray:
     values = np.array([float(initial), *(float(e) for e in result.equity)])
     return values[1:] / values[:-1] - 1.0
 

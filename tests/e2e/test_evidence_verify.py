@@ -67,6 +67,19 @@ def test_evidence_verify_detects_a_broken_chain(tmp_path: Path, capsys: pytest.C
     assert (code, payload["reason_codes"]) == (2, ["EVIDENCE_LOG_CORRUPT"])
 
 
+@pytest.mark.parametrize("record", ["[]", "null", "true", '"text"', "1"])
+def test_evidence_verify_rejects_non_object_json_records(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], record: str
+) -> None:
+    project = tmp_path / "non_object"
+    _sqy(capsys, "init", str(project), "--demo", "--package", "non_object_lab")
+    (project / "evidence" / "trials.jsonl").write_text(record + "\n")
+
+    code, payload = _sqy(capsys, "evidence", "verify", "--project", str(project))
+
+    assert (code, payload["reason_codes"]) == (2, ["EVIDENCE_LOG_CORRUPT"])
+
+
 def test_offline_mode_forbids_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SIGNALQUARRY_OFFLINE", "1")
     with pytest.raises(ProviderError) as data_error:

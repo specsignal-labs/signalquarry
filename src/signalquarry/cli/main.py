@@ -6,13 +6,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -29,6 +31,13 @@ class _UsageError(Exception):
 class _Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:  # argparse would exit 2; usage errors are 64
         raise _UsageError(message)
+
+
+def _absolute_command(value: str) -> Path:
+    path = Path(value)
+    if not path.is_absolute():
+        raise argparse.ArgumentTypeError("--notify-command requires an absolute executable path")
+    return path
 
 
 @dataclass(frozen=True)
@@ -97,12 +106,62 @@ def _init(args: argparse.Namespace) -> Envelope:
 
 def _configure_check(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", help="check only this strategy id")
+    parser.add_argument("--factor", help="check one project module defining a @factor function")
+    parser.add_argument("--factor-id", help="check a factor id registered in signalquarry.toml")
+    parser.add_argument("--params-json", default="{}", help="JSON object of factor parameters")
     parser.add_argument(
         "--parity",
         action="store_true",
         help="also replay 60 sessions through the paper kernel and a fake venue; must match the backtest",
     )
     parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
+
+
+def _check(args: argparse.Namespace) -> Envelope:
+    if args.factor_id:
+        if args.factor or args.strategy or args.parity or args.params_json != "{}":
+            return _usage("check", "--factor-id cannot be combined with other check selectors")
+        return api.check_registered_factor(args.factor_id, project=args.project)
+    if args.factor:
+        if args.strategy or args.parity:
+            return _usage("check", "--factor cannot be combined with --strategy or --parity")
+        return api.check_factor(args.factor, project=args.project, params_json=args.params_json)
+    if args.params_json != "{}":
+        return _usage("check", "--params-json requires --factor")
+    return api.check(args.strategy, project=args.project, parity=args.parity)
+
+
+def _configure_factor(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    listing = actions.add_parser("ls", help="List explicitly registered project factors and hashes.")
+    listing.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+    listing.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    evaluate = actions.add_parser(
+        "evaluate",
+        help="Compute descriptive, unverified diagnostics from selected local manifests.",
+    )
+    evaluate.add_argument("--factor", required=True, help="registered factor ID")
+    evaluate.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    evaluate.add_argument(
+        "--universe-manifest",
+        type=Path,
+        action="append",
+        required=True,
+        help="dated universe build manifest path; repeat for each decision session",
+    )
+    evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+    evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _factor(args: argparse.Namespace) -> Envelope:
+    if args.action == "ls":
+        return api.factor_ls(project=args.project)
+    return api.factor_evaluate(
+        args.factor,
+        args.dataset_id,
+        universe_manifests=args.universe_manifest,
+        project=args.project,
+    )
 
 
 def _configure_backtest(parser: argparse.ArgumentParser) -> None:
@@ -175,6 +234,77 @@ def _data(args: argparse.Namespace) -> Envelope:
     if args.action == "verify":
         return api.data_verify(project=args.project)
     return api.data_ls(project=args.project)
+
+
+def _configure_universe(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    actions.add_parser("snapshot", help="Capture the full current Alpaca US-equity asset list.")
+    actions.add_parser("verify", help="Verify hashed asset snapshots against cached raw pages.")
+    as_of = actions.add_parser("as-of", help="Find a verified snapshot known by a UTC cutoff.")
+    as_of.add_argument(
+        "--known-at",
+        type=datetime.fromisoformat,
+        required=True,
+        help="timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable",
+    )
+    build = actions.add_parser(
+        "build", help="Build one dated common-stock universe from verified as-of inputs."
+    )
+    build.add_argument(
+        "--session", type=date.fromisoformat, required=True, help="decision session (YYYY-MM-DD)"
+    )
+    build.add_argument(
+        "--known-at",
+        type=datetime.fromisoformat,
+        required=True,
+        help="timezone-aware cutoff before the decision session (ISO 8601)",
+    )
+    build.add_argument("--dataset-id", required=True, help="verified Alpaca dataset manifest ID")
+    build.add_argument(
+        "--classification-file",
+        type=Path,
+        required=True,
+        help="dated JSON security-master snapshot keyed by stable asset UUID",
+    )
+    build.add_argument(
+        "--minimum-price", type=Decimal, required=True, help="minimum prior-session close in USD"
+    )
+    build.add_argument(
+        "--minimum-listing-age-days",
+        type=int,
+        required=True,
+        help="minimum listing age at the decision session",
+    )
+    build.add_argument(
+        "--minimum-dollar-volume-percentile",
+        type=Decimal,
+        required=True,
+        help="minimum 20-session median dollar-volume percentile (0-100)",
+    )
+    for child in actions.choices.values():
+        child.add_argument(
+            "--project", type=Path, help="project directory (default: search upwards from cwd)"
+        )
+        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _universe(args: argparse.Namespace) -> Envelope:
+    if args.action == "snapshot":
+        return api.universe_snapshot(project=args.project)
+    if args.action == "verify":
+        return api.universe_verify(project=args.project)
+    if args.action == "as-of":
+        return api.universe_as_of(known_at=args.known_at, project=args.project)
+    return api.universe_build(
+        decision_session=args.session,
+        known_at=args.known_at,
+        dataset_id=args.dataset_id,
+        classification_file=args.classification_file,
+        minimum_price=args.minimum_price,
+        minimum_listing_age_days=args.minimum_listing_age_days,
+        minimum_dollar_volume_percentile=args.minimum_dollar_volume_percentile,
+        project=args.project,
+    )
 
 
 def _configure_spec(parser: argparse.ArgumentParser) -> None:
@@ -259,6 +389,12 @@ def _configure_paper(parser: argparse.ArgumentParser) -> None:
                 choices=["systemd", "launchd", "cron", "github-actions"],
                 help="scheduler to write templates for (github-actions is demo-only)",
             )
+        if name in ("run-once", "schedule"):
+            child.add_argument(
+                "--notify-command",
+                type=_absolute_command,
+                help="absolute executable path; called on a non-zero run-once exit with no credential environment",
+            )
 
 
 def _paper(args: argparse.Namespace) -> Envelope:
@@ -268,7 +404,7 @@ def _paper(args: argparse.Namespace) -> Envelope:
     if args.action == "halt":
         return api.paper_halt(alias, args.reason, project=project)
     if args.action == "schedule":
-        return api.paper_schedule(alias, args.target, project=project)
+        return api.paper_schedule(alias, args.target, project=project, notify_command=args.notify_command)
     if args.action == "run":
         return api.paper_run(alias, project=project, interval=args.interval, max_minutes=args.max_minutes)
     if args.action == "backup":
@@ -395,10 +531,16 @@ COMMANDS: tuple[Command, ...] = (
     Command(
         "check",
         "Run conformance, determinism and look-ahead checks.",
-        lambda args: api.check(args.strategy, project=args.project, parity=args.parity),
+        _check,
         _configure_check,
     ),
+    Command(
+        "factor", "List factors or calculate unverified descriptive diagnostics.", _factor, _configure_factor
+    ),
     Command("data", "Fetch, verify and list recorded market data.", _data, _configure_data),
+    Command(
+        "universe", "Build and verify point-in-time common-stock universes.", _universe, _configure_universe
+    ),
     Command(
         "spec",
         "Freeze a strategy configuration (spec freeze).",
@@ -607,6 +749,7 @@ def main(argv: list[str] | None = None) -> int:
     as_json = "--json" in raw or not sys.stdout.isatty()
     full_detail = False
     started = time.monotonic()
+    args = None
     progress.configure(sys.stderr if as_json or os.environ.get("SIGNALQUARRY_PROGRESS") == "1" else None)
     try:
         full_detail = _pop_detail(raw)
@@ -630,7 +773,32 @@ def main(argv: list[str] | None = None) -> int:
     payload = envelope.as_dict()
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True) if as_json else _render_text(payload)
     print(redact(text))  # credential values never reach the output, whatever a handler put there
+    if (
+        args is not None
+        and getattr(args, "command", None) == "paper"
+        and args.action == "run-once"
+        and args.notify_command is not None
+        and envelope.exit_code != 0
+    ):
+        _notify_on_failure(args.notify_command, args.alias, envelope.exit_code)
     return envelope.exit_code
+
+
+def _notify_on_failure(command: Path, alias: str, exit_code: int) -> None:
+    """Run an explicit local notifier without passing broker or data credentials."""
+    env = {key: os.environ[key] for key in ("HOME", "PATH", "LANG") if key in os.environ}
+    env.update(SIGNALQUARRY_EXIT_CODE=str(exit_code), SIGNALQUARRY_ALIAS=alias)
+    try:
+        subprocess.run(
+            [str(command)],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        print("paper notification command failed", file=sys.stderr)
 
 
 if __name__ == "__main__":

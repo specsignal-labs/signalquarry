@@ -14,6 +14,8 @@ CRITICAL = (
     "src/signalquarry/_internal/canonical.py",
     "src/signalquarry/_internal/engine/",
     "src/signalquarry/_internal/validation/",
+    "src/signalquarry/_internal/factors/",
+    "src/signalquarry/_internal/data/universe_build.py",
     "src/signalquarry/_internal/paper/runner.py",
     "src/signalquarry/_internal/paper/journal.py",
     "src/signalquarry/_internal/paper/lease.py",

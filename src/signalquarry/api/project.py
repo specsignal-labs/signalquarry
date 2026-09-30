@@ -3,20 +3,25 @@
 
 from __future__ import annotations
 
+import importlib
+import json
 import re
+import sys
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from signalquarry._internal.contracts import progress
 from signalquarry._internal.engine.backtest import EngineError
-from signalquarry._internal.engine.run import simulate
+from signalquarry._internal.engine.run import is_options, simulate, simulate_equity_ticks
+from signalquarry._internal.evidence.run_spool import spool_equity_run
 from signalquarry._internal.evidence.runs import (
-    csv_text,
-    jsonl_text,
+    csv_chunks,
+    jsonl_chunks,
     new_run_id,
     result_document,
     unique_run_id,
@@ -30,9 +35,12 @@ from signalquarry._internal.project.project import (
     load_config,
     load_strategies,
 )
-from signalquarry._internal.validation.conformance import run_checks
+from signalquarry._internal.validation.conformance import import_policy, run_checks
+from signalquarry._internal.validation.factor_conformance import run_factor_checks
 from signalquarry._internal.validation.metrics import summarize
 from signalquarry.api.envelope import Envelope
+from signalquarry.sdk.factors import ATTRIBUTE as FACTOR_ATTRIBUTE
+from signalquarry.sdk.factors import FactorDef
 
 SYNTHETIC_START, SYNTHETIC_END = date(2014, 1, 2), date(2025, 12, 31)
 _RENAMES = {"gitignore.txt": ".gitignore", "gitkeep.txt": ".gitkeep", "github": ".github"}
@@ -253,6 +261,50 @@ def check(strategy_id: str | None = None, *, project: Path | None = None, parity
     return envelope
 
 
+def check_factor(module_name: str, *, project: Path | None = None, params_json: str = "{}") -> Envelope:
+    """Check one explicitly named project factor against synthetic panels."""
+    try:
+        root = find_root(project)
+        config = load_config(root)
+        for directory in reversed(config.src_dirs):
+            location = str(directory)
+            if directory.is_dir() and location not in sys.path:
+                sys.path.insert(0, location)
+        module = importlib.import_module(module_name)
+        module_file = Path(module.__file__ or "").resolve()
+        if not module_file.is_relative_to(root):
+            raise ValueError("factor module must be inside the project")
+        # @factor attaches the definition to its function; imported factors do not count.
+        found = {
+            id(definition): definition
+            for value in vars(module).values()
+            if (definition := getattr(value, FACTOR_ATTRIBUTE, None)) is not None
+            and isinstance(definition, FactorDef)
+            and definition.module == module_name
+        }
+        if len(found) != 1:
+            raise ValueError(f"{module_name} defines {len(found)} @factor functions; expected one")
+        definition = next(iter(found.values()))
+        raw_params = json.loads(params_json)
+        if not isinstance(raw_params, dict):
+            raise ValueError("factor params must be a JSON object")
+        params = definition.params.model_validate(raw_params)
+    except Exception as exc:
+        code = exc.code if isinstance(exc, ProjectError) else "USAGE_INVALID"
+        return Envelope(command="check", status="invalid", reason_codes=[code], summary=str(exc)[:500])
+    results = [import_policy(module_file.parent, module_name.split(".")[0], sdk_only=True)]
+    if results[0].ok:
+        results.extend(run_factor_checks(definition, params))
+    ok = all(item.ok for item in results)
+    return Envelope(
+        command="check",
+        status="ok" if ok else "blocked",
+        reason_codes=[] if ok else ["CONFORMANCE_FAILED"],
+        summary=f"factor {module_name} {'passes' if ok else 'fails'} synthetic conformance",
+        data={"factor": module_name, "checks": [item.as_dict() for item in results]},
+    )
+
+
 def backtest(
     strategy_id: str, *, start: date | None = None, end: date | None = None, project: Path | None = None
 ) -> Envelope:
@@ -278,17 +330,54 @@ def backtest(
             days=1
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
+    scratch: TemporaryDirectory[str] | None = None
     try:
-        result = simulate(
-            strategy.spec,
-            strategy.definition,
-            strategy.params,
-            resolved.dataset,
-            start=start,
-            end=end,
-            recorded_chains=resolved.recorded_chains(),
-        )
+        if is_options(strategy.spec):
+            result = simulate(
+                strategy.spec,
+                strategy.definition,
+                strategy.params,
+                resolved.dataset,
+                start=start,
+                end=end,
+                recorded_chains=resolved.recorded_chains(),
+            )
+            fill_count = len(result.fills)
+            fees = sum((fill.fee for fill in result.fills), Decimal(0))
+            fill_rows = (
+                [
+                    f.session.isoformat(),
+                    f.symbol,
+                    f.side,
+                    f.quantity,
+                    f.price,
+                    f.fee,
+                    f.settle_session.isoformat() if f.settle_session else "",
+                ]
+                for f in result.fills
+            )
+            decision_chunks = jsonl_chunks(result.decisions)
+        else:
+            scratch = TemporaryDirectory(prefix="signalquarry-backtest-")
+            spool = spool_equity_run(
+                simulate_equity_ticks(
+                    strategy.spec,
+                    strategy.definition,
+                    strategy.params,
+                    resolved.dataset,
+                    start=start,
+                    end=end,
+                ),
+                Path(scratch.name),
+            )
+            result = spool.result
+            fill_count = spool.fill_count
+            fees = spool.fees
+            fill_rows = spool.fills_csv_rows()
+            decision_chunks = spool.decisions_chunks()
     except EngineError as exc:
+        if scratch is not None:
+            scratch.cleanup()
         return Envelope(command="backtest", status="invalid", reason_codes=[_code_of(exc)], summary=str(exc))
     returns = equity_returns(result, strategy.spec.account.initial_cash)
     m = moments(returns)
@@ -299,9 +388,8 @@ def backtest(
         moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
         window=(result.sessions[0], result.sessions[-1]),
     )
-    fees = sum((fill.fee for fill in result.fills), Decimal(0))
     metrics = summarize(
-        result.sessions, result.equity, strategy.spec.account.initial_cash, fills=len(result.fills), fees=fees
+        result.sessions, result.equity, strategy.spec.account.initial_cash, fills=fill_count, fees=fees
     )
     run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
     evidence = {
@@ -329,31 +417,22 @@ def backtest(
                 metrics=metrics,
                 warnings=result.warnings,
             ),
-            "equity.csv": csv_text(
+            "equity.csv": csv_chunks(
                 ["session", "equity", "settled_cash"],
                 [
                     [s.isoformat(), e, c]
                     for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
                 ],
             ),
-            "fills.csv": csv_text(
+            "fills.csv": csv_chunks(
                 ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"],
-                [
-                    [
-                        f.session.isoformat(),
-                        f.symbol,
-                        f.side,
-                        f.quantity,
-                        f.price,
-                        f.fee,
-                        f.settle_session.isoformat() if f.settle_session else "",
-                    ]
-                    for f in result.fills
-                ],
+                fill_rows,
             ),
-            "decisions.jsonl": jsonl_text(result.decisions),
+            "decisions.jsonl": decision_chunks,
         },
     )
+    if scratch is not None:
+        scratch.cleanup()
     return Envelope(
         command="backtest",
         summary=f"{strategy_id}: total return {metrics['total_return']:.2%}, max drawdown {metrics['max_drawdown']:.2%} ({resolved.evidence_grade} data: {resolved.dataset_id})",

@@ -37,6 +37,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `DATA_MANIFEST_INVALID` | data | A dataset manifest is malformed or its manifest_hash does not match. | Restore the manifest from version control or re-fetch. |
 | `DATA_PAGE_CORRUPT` | data | A cached raw page no longer matches its recorded hash. | Delete the cache entry and re-fetch. |
 | `DATA_PAGE_MISSING` | data | A raw page referenced by a manifest is not in the local cache. | Re-run `sqy data fetch` for that dataset. |
+| `DATA_PANEL_INVALID` | data | A derived research panel is missing, malformed, or has a file-hash mismatch. | Rebuild the panel from verified cached pages and its dataset manifest. |
+| `DATA_PANEL_LOOKBACK_INVALID` | usage | A research panel lookback must be a positive number of sessions. | Set lookback to a positive integer, or omit it for all prior sessions. |
+| `DATA_PANEL_SYMBOL_INVALID` | data | A research panel request has duplicate or unavailable symbols. | Select each symbol once from the panel's recorded symbol list. |
 | `DECISION_SYMBOL_NOT_DECLARED` | signal | A target used a symbol not declared in strategy.yaml data.symbols. | Declare the symbol or remove it from the target. |
 | `DECISION_WEIGHT_ABOVE_LIMIT` | risk | A target weight exceeds limits.max_weight_per_symbol. | Lower the weight or raise the declared limit. |
 | `DEPENDENCY_MISSING` | environment | A required runtime dependency cannot be imported. | Reinstall with `pip install signalquarry`. |
@@ -45,6 +48,26 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
 | `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
+| `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
+| `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
+| `FACTOR_IMPORT_FAILED` | signal | A registered factor module could not be imported. | Fix the module import and its dependencies in the project environment. |
+| `FACTOR_LABEL_ACTIONS_INVALID` | data | A modeled split or cash dividend is invalid or duplicated for the requested outcomes. | Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes. |
+| `FACTOR_LABEL_ALIGNMENT_INVALID` | data | Factor scores and outcome labels have incompatible identities or shapes. | Derive labels from the same dated panel and align sessions and symbols exactly. |
+| `FACTOR_LABEL_HORIZONS_INVALID` | data | A factor outcome horizon or forward-return array is invalid. | Use positive horizons and finite, shape-aligned returns no lower than -100%. |
+| `FACTOR_MODULE_INVALID` | signal | A factor module must be inside the project and define exactly one @factor function. | Keep one decorated score function in each registered project module. |
+| `FACTOR_NOT_FOUND` | usage | No registered factor has that id. | Run `sqy factor ls` or add the module to signalquarry.toml. |
+| `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
+| `FACTOR_PORTFOLIO_UNAVAILABLE` | data | No eligible factor scores or prior-only factor weights are available for this decision. | Provide completed factor history and a prior-cutoff weight row, or use equal weights. |
+| `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
+| `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
+| `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
+| `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
+| `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
+| `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |
+| `FACTOR_UNIVERSE_INVALID` | data | A factor universe has duplicate, empty, or unavailable symbols. | Supply distinct symbols that exist in the verified panel. |
+| `FACTOR_UNIVERSE_TIMING_INVALID` | data | A factor universe was not observed by its decision cutoff. | Use timezone-aware observation and cutoff times from verified manifests. |
 | `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |
 | `FREEZE_STALE` | evidence | The strategy changed after its last freeze. | Freeze again; the new configuration counts as a new trial. |
 | `GATE_FAILED` | evidence | A qualification gate did not pass. | Report the failed gate; do not relax gates. Try a new hypothesis. |
@@ -144,6 +167,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |
 | `TRIAL_BUDGET_NEARLY_USED` | evidence | The family has used at least 80% of its trial budget. | Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision. |
 | `TRIAL_NOT_FOUND` | usage | No trial ledger entry matches that sequence number or configuration-hash prefix. | Run `sqy trials ls` to see the entries. |
+| `UNIVERSE_ASOF_UNAVAILABLE` | data | No verified asset snapshot was captured by the requested cutoff within the freshness window. | Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive. |
+| `UNIVERSE_CLASSIFICATION_INVALID` | data | A dated instrument classification snapshot is malformed, incomplete, or inconsistent with asset IDs. | Supply a complete, hashed classification snapshot keyed by the stable asset IDs in the asset snapshot. |
+| `UNIVERSE_INPUT_UNAVAILABLE` | data | A required asset, classification, or market-data observation is missing, stale, or later than the cutoff. | Capture the inputs prospectively and rebuild with a decision cutoff after all required observations. |
 | `USAGE_INVALID` | usage | The command line could not be parsed. | Run `sqy commands` or `sqy <command> --help`. |
 | `VCS_DIRTY` | evidence | The project had uncommitted changes when frozen. | Commit before freezing so the frozen code is recoverable. |
 | `VOLUME_CAPPED` | execution | An order was reduced to the fill model's share of that session's volume. | The rest is retried next session; lower weights or accept slower fills for illiquid symbols. |

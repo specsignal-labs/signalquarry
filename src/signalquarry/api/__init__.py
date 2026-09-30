@@ -198,6 +198,7 @@ from signalquarry.api.evidence import (  # noqa: E402
     trials_ls,
     trials_show,
 )
+from signalquarry.api.factor import check_registered_factor, factor_evaluate, factor_ls  # noqa: E402
 from signalquarry.api.paper import (  # noqa: E402
     paper_arm,
     paper_backup,
@@ -213,10 +214,16 @@ from signalquarry.api.paper import (  # noqa: E402
     paper_verify_continuity,
 )
 from signalquarry.api.perf import perf_capture, perf_publish  # noqa: E402
-from signalquarry.api.project import backtest, check, init, upgrade_agents_md  # noqa: E402
+from signalquarry.api.project import backtest, check, check_factor, init, upgrade_agents_md  # noqa: E402
 from signalquarry.api.publish import bundle_verify, evidence_export  # noqa: E402
 from signalquarry.api.report import report  # noqa: E402
 from signalquarry.api.sweep import sweep  # noqa: E402
+from signalquarry.api.universe import (  # noqa: E402
+    universe_as_of,
+    universe_build,
+    universe_snapshot,
+    universe_verify,
+)
 
 __all__ = [
     "Envelope",
@@ -224,6 +231,8 @@ __all__ = [
     "bundle_verify",
     "cache_dir",
     "check",
+    "check_factor",
+    "check_registered_factor",
     "commit_create",
     "commit_reveal",
     "commit_verify",
@@ -235,6 +244,8 @@ __all__ = [
     "docs",
     "doctor",
     "evaluate_command",
+    "factor_evaluate",
+    "factor_ls",
     "evidence_export",
     "evidence_verify",
     "holdout_seal",
@@ -265,4 +276,8 @@ __all__ = [
     "report",
     "schema",
     "version",
+    "universe_as_of",
+    "universe_build",
+    "universe_snapshot",
+    "universe_verify",
 ]

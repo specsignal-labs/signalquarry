@@ -3,19 +3,40 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
 from datetime import date
 from decimal import Decimal
 
 from signalquarry._internal.contracts.spec import StrategySpecV1
 from signalquarry._internal.data.dataset import Dataset
-from signalquarry._internal.engine.backtest import BacktestResult, EngineError, run_backtest
+from signalquarry._internal.engine.backtest import (
+    BacktestEnd,
+    BacktestResult,
+    BacktestTick,
+    EngineError,
+    iter_equity_backtest,
+    run_backtest,
+)
 from signalquarry._internal.engine.options_sim import run_options_backtest
 from signalquarry.sdk.strategy import Params, StrategyDef
 
 
 def is_options(spec: StrategySpecV1) -> bool:
     return spec.kind == "options_single_leg"
+
+
+def simulate_equity_ticks(
+    spec: StrategySpecV1,
+    definition: StrategyDef,
+    params: Params,
+    dataset: Dataset,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+) -> Generator[BacktestTick, None, BacktestEnd]:
+    if is_options(spec) or definition.kind != "equity":
+        raise EngineError("STRATEGY_KIND_MISMATCH")
+    return iter_equity_backtest(spec, definition, params, dataset, start=start, end=end)
 
 
 def simulate(

@@ -36,7 +36,7 @@ signalquarry = "signalquarry.cli.main:main"
 sqy = "signalquarry.cli.main:main"
 
 [dependency-groups]
-dev = ["pytest>=8.4,<9", "ruff>=0.16,<0.17", "import-linter>=2.1,<3", "hypothesis>=6.100,<7", "coverage[toml]>=7.6,<8", "jsonschema>=4.23,<5", "git-filter-repo>=2.38", "pyright>=1.1.400,<1.2"]
+dev = ["pytest>=8.4,<9", "ruff>=0.16,<0.17", "import-linter>=2.1,<3", "hypothesis>=6.100,<7", "coverage[toml]>=7.6,<8", "jsonschema>=4.23,<5", "git-filter-repo>=2.38", "pyright>=1.1.400,<1.2", "mutmut>=3.8,<4"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.6,<10", "mkdocstrings[python]>=0.29,<2"]
 
 [tool.hatch.build.targets.wheel]
@@ -73,6 +73,26 @@ pythonVersion = "3.12"
 typeCheckingMode = "standard"
 strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plugins"]
 
+[tool.mutmut]
+process_isolation = "forkserver"
+on_dependency_change = "rerun"
+# Hardening plan, track A5. Paper runner pass, following validation and both
+# engine passes. Keep its tests scoped so mutmut can finish a full pass.
+only_mutate = ["src/signalquarry/_internal/paper/runner.py"]
+pytest_add_cli_args_test_selection = [
+  # The broker-plugin CLI test aborts in mutmut's macOS fork process; it remains
+  # in the full pytest suite and is not needed for paper/runner.py coverage.
+  "tests/paper/test_kernel_faults.py",
+  "tests/paper/test_kernel_commands.py",
+  "tests/paper/test_backup_and_run.py",
+  "tests/paper/test_drift.py",
+  "tests/paper/test_snapshot.py",
+  "tests/paper/test_runner_reference.py",
+  "tests/paper/test_parity.py",
+  "tests/paper/test_parity_check.py",
+  "tests/paper/test_isolation.py",
+]
+
 [tool.importlinter]
 root_package = "signalquarry"
 include_external_packages = true
@@ -85,12 +105,12 @@ layers = [
   "signalquarry.cli",
   "signalquarry.api",
   "(signalquarry._internal.paper) | signalquarry._internal.evidence | (signalquarry._internal.publish)",
-  "(signalquarry._internal.validation)",
+  "(signalquarry._internal.validation) | (signalquarry._internal.factors)",
   "(signalquarry._internal.engine)",
   "(signalquarry._internal.data) | (signalquarry._internal.project) | (signalquarry._internal.options)",
   "(signalquarry.sdk) | (signalquarry.plugins)",
   "signalquarry._internal.contracts",
-  "signalquarry._internal.canonical",
+  "signalquarry._internal.canonical | signalquarry._internal.calendar",
 ]
 exhaustive = false
 

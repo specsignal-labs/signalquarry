@@ -28,7 +28,9 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy explain`: Explain a reason code and how to resolve it.
 - `sqy init`: Create a new strategy project.
 - `sqy check`: Run conformance, determinism and look-ahead checks.
+- `sqy factor`: List factors or calculate unverified descriptive diagnostics.
 - `sqy data`: Fetch, verify and list recorded market data.
+- `sqy universe`: Build and verify point-in-time common-stock universes.
 - `sqy spec`: Freeze a strategy configuration (spec freeze).
 - `sqy evaluate`: Walk-forward, stress and holdout gates; sets the claim level.
 - `sqy trials`: List trials or (humans only) extend a family's budget.
@@ -151,6 +153,56 @@ Every reason code you return must be declared in `strategy.yaml`; undeclared
 codes stop the run (`REASON_CODE_UNDECLARED`). State must be JSON-serializable
 and at most 16 KB.
 
+## Factor portfolios
+
+Import registered factor functions into a normal `@strategy` and return the
+composite through `factor_portfolio`. It reads only the completed bars in
+`Ctx`, standardizes each factor cross-sectionally, and creates an ordinary
+`Decision.target`:
+
+```python
+from signalquarry.sdk import Ctx, Decision, FactorInput, Params, factor_portfolio, strategy
+from mylab.factors.momentum import P as MomentumParams, momentum
+from mylab.factors.value import P as ValueParams, value
+
+
+class PortfolioParams(Params):
+    period: int = 60
+
+
+@strategy(params=PortfolioParams, lookback=lambda p: p.period)
+def decide(ctx: Ctx, p: PortfolioParams) -> Decision:
+    return factor_portfolio(
+        ctx,
+        (
+            FactorInput("momentum", momentum, MomentumParams(period=p.period)),
+            FactorInput("value", value, ValueParams(period=p.period)),
+        ),
+        top_quantile=0.2,
+        max_weight_per_symbol=0.05,
+        turnover_buffer=0.05,
+    )
+```
+
+This example assumes both factor parameter models have a `period` field.
+Set the strategy lookback to at least the longest factor lookback. The factor
+parameter models and their values are part of the strategy package's hashed
+code; keep them fixed for a run and express alternatives as distinct trials.
+
+The default gives each factor equal weight after cross-sectional z-scoring.
+`FactorWeightSnapshot` can supply dated weights computed from earlier
+walk-forward windows: `known_at` must precede `effective_from`, and the engine
+uses the latest row effective by the current decision. The helper checks these
+dates but does not prove the schedule's provenance. Missing scores are not
+imputed; symbols with no composite score are ineligible. Existing positions
+inside the wider exit rank band are retained to reduce turnover.
+
+The helper returns target weights only. The standard engine and paper planner
+apply the strategy's declared costs, minimum order notional, per-symbol limit,
+evidence gates, and human paper-arming controls. Factor diagnostics marked
+`unverified` remain descriptive and do not become accepted evidence through
+composition.
+
 ## Rules `sqy check` enforces
 
 - Imports: `signalquarry.sdk`, `numpy`, `pydantic`, pure standard-library modules
@@ -247,6 +299,12 @@ try raises the bar for all of them. Each family has a trial budget
 (`evaluation.trial_budget`); from 80% on, envelopes warn `TRIAL_BUDGET_NEARLY_USED`,
 and at the limit, runs stop with
 `TRIAL_BUDGET_EXHAUSTED` until a human records `sqy trials extend --reason ...`.
+
+Factor research has a separate internal `evidence/factor_trials.jsonl` log. It
+counts unique factor-configuration hashes project-wide and within each family,
+without changing strategy trial counts or budgets. Recording an entry does not
+verify its data provenance, assign an evidence grade, or authorize a holdout
+evaluation.
 
 `sqy evidence verify` checks every ledger and paper journal; with
 `--base <git ref>` it also fails if any of them changed other than by appending.
@@ -412,6 +470,86 @@ are older than 15 minutes when you decide, so free plans can use SIP too.
 Set `SIGNALQUARRY_OFFLINE=1` to forbid every network call (the project CI
 template does this).
 
+## Prospective asset snapshots
+
+```bash
+sqy universe snapshot
+sqy universe verify
+sqy universe as-of --known-at 2026-09-28T16:00:00+00:00
+```
+
+`snapshot` makes one read-only request to Alpaca's **paper** assets endpoint
+using the data credentials. It omits the status filter to capture active and
+inactive US-equity assets together. The raw response stays in the local cache;
+`data/universe/snapshots/` holds a hash-only manifest with the UTC capture time,
+counts, and no asset names or symbols. `verify` re-hashes and re-parses it.
+`as-of` finds the latest verified capture at or before the given cutoff, only
+if it is no more than 31 days old. Earlier dates are unavailable. Alpaca's
+current asset list is not a historical membership archive, and `us_equity`
+does not identify common stocks alone. These snapshots therefore do not yet
+make a factor backtest point-in-time.
+
+## Building a dated common-stock universe
+
+`sqy universe build` constructs membership for one decision session. It needs
+an asset snapshot, an Alpaca dataset with 20 prior sessions, and a complete
+classification snapshot that was observed by the cutoff. The classification
+file uses this shape:
+
+```json
+{
+  "schema": "signalquarry.instrument-classification-snapshot/v1",
+  "source": "your dated security-master source",
+  "observed_at": "2026-09-28T19:00:00Z",
+  "records": [
+    {"symbol": "AAA", "security_type": "common_stock", "listed_at": "2020-01-02"},
+    {"symbol": "ETF", "security_type": "other", "listed_at": null}
+  ]
+}
+```
+
+Include exactly one record for every asset in the captured asset snapshot,
+including inactive assets and non-common instruments. Records may use stable
+`asset_id` UUIDs instead of symbols. Symbol keys require unique symbols across
+the full asset snapshot. Common stocks need a listing date. The caller supplies
+the classification source; SignalQuarry hashes and keeps the snapshot in its
+private local cache so `universe verify` can replay the build.
+
+Choose explicit thresholds for each build. This example uses illustrative
+values; it does not prescribe a trading universe:
+
+```bash
+sqy universe build \
+  --session 2026-09-29 \
+  --known-at 2026-09-28T21:00:00+00:00 \
+  --dataset-id alpaca-sip-1day-example \
+  --classification-file ./security-master.json \
+  --minimum-price 5 \
+  --minimum-listing-age-days 90 \
+  --minimum-dollar-volume-percentile 20
+sqy universe verify
+```
+
+The cutoff must precede the decision session. Asset and classification
+snapshots must be no more than 31 days old, and the dataset must have been
+fetched by the cutoff and end no later than its UTC date. The build uses the
+last 20 complete sessions before the decision session. If fetched on the date
+of its latest session, the dataset must be fetched at least 16:15
+America/New_York so the regular session's daily bar has finished. It filters on the latest
+prior raw close, listing age, then the cross-sectional percentile rank of each
+eligible stock's 20-session median close-times-volume. A missing bar in the
+lookback excludes that name from the ranking. No provider metadata or bars are
+downloaded by `universe build`.
+
+The manifest records the filter policy, source hashes, counts, and member
+symbols. Command output exposes only the summary and hashes. Verification
+replays membership from the cached classification snapshot, asset pages, and
+dataset pages. Earlier periods require dated snapshots that actually existed by
+each cutoff; a current source file cannot reconstruct them. Raw close and
+volume filters do not establish corporate-action-adjusted factor returns.
+The command reports classification provenance as unverified because it cannot
+independently establish when or how the caller's classification was assembled.
+
 ## Options coverage
 
 Alpaca's options history starts in February 2024. Check whether expired contracts and
@@ -539,6 +677,15 @@ same OS user can read that user's files. Run paper deployments under a dedicated
 `sqy paper schedule` writes systemd (recommended, on a small VM), launchd,
 cron or GitHub Actions (demo only) templates that call `run-once` every 5
 minutes from 09:00 to 09:25 New York time. Review and install them yourself.
+For a local scheduler, add `--notify-command /absolute/path/to/executable` to
+`paper schedule` to include a failure hook in the generated `run-once` command.
+The same option works on a direct `paper run-once` invocation. The executable is
+called once for every non-zero exit, including retryable 69 and 75, with only
+`HOME`, `PATH`, `LANG`, `SIGNALQUARRY_ALIAS`, and `SIGNALQUARRY_EXIT_CODE` in its
+environment. It receives no broker credentials. It must get any notification
+credentials from its own configuration. The hook has a 10-second limit; its
+failure does not replace the original `run-once` exit code. Use the hook's own
+deduplication if repeated retryable exits should produce one alert.
 The systemd target also writes a post-close timer (16:30 New York, weekdays) that runs
 `sqy commit create --alias A` to commit to the journal head, stamped with OpenTimestamps
 when the `ots` client is installed, and a weekly timer that runs `ots upgrade` on pending
@@ -619,6 +766,19 @@ Each command prints one JSON object on stdout (`schema: signalquarry.cli/v1`):
 `warnings` and `next_actions` (command + why). `sqy commands` lists every
 command, reason code and exit code; `sqy docs --llms` prints this documentation
 for an agent's context.
+
+For factor research, an agent can add one `@factor` function in a project module,
+declare its hypothesis and parameters in a neighboring `factor.yaml`, and list
+that module under `[factors] modules` in `signalquarry.toml`. `sqy factor ls`
+returns stable configuration identities, and `sqy check --factor-id ID` runs
+synthetic conformance. To inspect a registered factor on cached data, run
+`sqy factor evaluate --factor ID --dataset-id DATASET --universe-manifest PATH`
+and repeat `--universe-manifest` for each dated membership decision. The
+command verifies and replays those manifests, then returns descriptive metrics
+with `data.scope: "unverified"`. It does not record a trial, assign an evidence
+grade, or access a holdout. Source completeness, full action history, ticker
+continuity and delisting outcomes remain unverified, so the output is not
+point-in-time evidence or a profitability claim.
 
 `data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
 written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
@@ -701,8 +861,34 @@ Run conformance, determinism and look-ahead checks.
 | Option | Meaning |
 |---|---|
 | `--strategy` | check only this strategy id |
+| `--factor` | check one project module defining a @factor function |
+| `--factor-id` | check a factor id registered in signalquarry.toml |
+| `--params-json` | JSON object of factor parameters |
 | `--parity` | also replay 60 sessions through the paper kernel and a fake venue; must match the backtest |
 | `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy factor`
+
+List factors or calculate unverified descriptive diagnostics.
+
+### `sqy factor ls`
+
+List explicitly registered project factors and hashes.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards) |
+
+### `sqy factor evaluate`
+
+Compute descriptive, unverified diagnostics from selected local manifests.
+
+| Option | Meaning |
+|---|---|
+| `--factor` | registered factor ID (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
+| `--project` | project directory (default: search upwards) |
 
 ## `sqy data`
 
@@ -758,6 +944,50 @@ List recorded datasets.
 
 | Option | Meaning |
 |---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy universe`
+
+Build and verify point-in-time common-stock universes.
+
+### `sqy universe snapshot`
+
+Capture the full current Alpaca US-equity asset list.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe verify`
+
+Verify hashed asset snapshots against cached raw pages.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe as-of`
+
+Find a verified snapshot known by a UTC cutoff.
+
+| Option | Meaning |
+|---|---|
+| `--known-at` | timezone-aware decision cutoff (ISO 8601); older than 31 days is unavailable (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy universe build`
+
+Build one dated common-stock universe from verified as-of inputs.
+
+| Option | Meaning |
+|---|---|
+| `--session` | decision session (YYYY-MM-DD) (required) |
+| `--known-at` | timezone-aware cutoff before the decision session (ISO 8601) (required) |
+| `--dataset-id` | verified Alpaca dataset manifest ID (required) |
+| `--classification-file` | dated JSON security-master snapshot keyed by stable asset UUID (required) |
+| `--minimum-price` | minimum prior-session close in USD (required) |
+| `--minimum-listing-age-days` | minimum listing age at the decision session (required) |
+| `--minimum-dollar-volume-percentile` | minimum 20-session median dollar-volume percentile (0-100) (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy spec`
@@ -1000,6 +1230,7 @@ Reconcile, decide and submit the current session's orders (idempotent).
 |---|---|
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |
 
 ### `sqy paper status`
 
@@ -1078,6 +1309,7 @@ Write scheduler templates (systemd, launchd, cron, github-actions) for review.
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
 | `--target` | scheduler to write templates for (github-actions is demo-only) (required; one of `systemd`, `launchd`, `cron`, `github-actions`) |
+| `--notify-command` | absolute executable path; called on a non-zero run-once exit with no credential environment |
 
 # Reason codes
 
@@ -1116,6 +1348,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `DATA_MANIFEST_INVALID` | data | A dataset manifest is malformed or its manifest_hash does not match. | Restore the manifest from version control or re-fetch. |
 | `DATA_PAGE_CORRUPT` | data | A cached raw page no longer matches its recorded hash. | Delete the cache entry and re-fetch. |
 | `DATA_PAGE_MISSING` | data | A raw page referenced by a manifest is not in the local cache. | Re-run `sqy data fetch` for that dataset. |
+| `DATA_PANEL_INVALID` | data | A derived research panel is missing, malformed, or has a file-hash mismatch. | Rebuild the panel from verified cached pages and its dataset manifest. |
+| `DATA_PANEL_LOOKBACK_INVALID` | usage | A research panel lookback must be a positive number of sessions. | Set lookback to a positive integer, or omit it for all prior sessions. |
+| `DATA_PANEL_SYMBOL_INVALID` | data | A research panel request has duplicate or unavailable symbols. | Select each symbol once from the panel's recorded symbol list. |
 | `DECISION_SYMBOL_NOT_DECLARED` | signal | A target used a symbol not declared in strategy.yaml data.symbols. | Declare the symbol or remove it from the target. |
 | `DECISION_WEIGHT_ABOVE_LIMIT` | risk | A target weight exceeds limits.max_weight_per_symbol. | Lower the weight or raise the declared limit. |
 | `DEPENDENCY_MISSING` | environment | A required runtime dependency cannot be imported. | Reinstall with `pip install signalquarry`. |
@@ -1124,6 +1359,26 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
 | `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
+| `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
+| `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
+| `FACTOR_IMPORT_FAILED` | signal | A registered factor module could not be imported. | Fix the module import and its dependencies in the project environment. |
+| `FACTOR_LABEL_ACTIONS_INVALID` | data | A modeled split or cash dividend is invalid or duplicated for the requested outcomes. | Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes. |
+| `FACTOR_LABEL_ALIGNMENT_INVALID` | data | Factor scores and outcome labels have incompatible identities or shapes. | Derive labels from the same dated panel and align sessions and symbols exactly. |
+| `FACTOR_LABEL_HORIZONS_INVALID` | data | A factor outcome horizon or forward-return array is invalid. | Use positive horizons and finite, shape-aligned returns no lower than -100%. |
+| `FACTOR_MODULE_INVALID` | signal | A factor module must be inside the project and define exactly one @factor function. | Keep one decorated score function in each registered project module. |
+| `FACTOR_NOT_FOUND` | usage | No registered factor has that id. | Run `sqy factor ls` or add the module to signalquarry.toml. |
+| `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
+| `FACTOR_PORTFOLIO_UNAVAILABLE` | data | No eligible factor scores or prior-only factor weights are available for this decision. | Provide completed factor history and a prior-cutoff weight row, or use equal weights. |
+| `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
+| `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
+| `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
+| `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
+| `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
+| `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |
+| `FACTOR_UNIVERSE_INVALID` | data | A factor universe has duplicate, empty, or unavailable symbols. | Supply distinct symbols that exist in the verified panel. |
+| `FACTOR_UNIVERSE_TIMING_INVALID` | data | A factor universe was not observed by its decision cutoff. | Use timezone-aware observation and cutoff times from verified manifests. |
 | `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |
 | `FREEZE_STALE` | evidence | The strategy changed after its last freeze. | Freeze again; the new configuration counts as a new trial. |
 | `GATE_FAILED` | evidence | A qualification gate did not pass. | Report the failed gate; do not relax gates. Try a new hypothesis. |
@@ -1223,6 +1478,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |
 | `TRIAL_BUDGET_NEARLY_USED` | evidence | The family has used at least 80% of its trial budget. | Spend the remaining trials on the best-reasoned ideas; extending the budget is a recorded human decision. |
 | `TRIAL_NOT_FOUND` | usage | No trial ledger entry matches that sequence number or configuration-hash prefix. | Run `sqy trials ls` to see the entries. |
+| `UNIVERSE_ASOF_UNAVAILABLE` | data | No verified asset snapshot was captured by the requested cutoff within the freshness window. | Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive. |
+| `UNIVERSE_CLASSIFICATION_INVALID` | data | A dated instrument classification snapshot is malformed, incomplete, or inconsistent with asset IDs. | Supply a complete, hashed classification snapshot keyed by the stable asset IDs in the asset snapshot. |
+| `UNIVERSE_INPUT_UNAVAILABLE` | data | A required asset, classification, or market-data observation is missing, stale, or later than the cutoff. | Capture the inputs prospectively and rebuild with a decision cutoff after all required observations. |
 | `USAGE_INVALID` | usage | The command line could not be parsed. | Run `sqy commands` or `sqy <command> --help`. |
 | `VCS_DIRTY` | evidence | The project had uncommitted changes when frozen. | Commit before freezing so the frozen code is recoverable. |
 | `VOLUME_CAPPED` | execution | An order was reduced to the fill model's share of that session's volume. | The rest is retried next session; lower weights or accept slower fills for illiquid symbols. |
