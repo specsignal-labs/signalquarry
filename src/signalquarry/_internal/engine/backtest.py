@@ -20,6 +20,8 @@ next unchanged target.
 
 from __future__ import annotations
 
+import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal
@@ -27,7 +29,7 @@ from typing import Any
 
 import numpy as np
 
-from signalquarry._internal.canonical import canonical_hash, canonical_json, to_canonical
+from signalquarry._internal.canonical import HASH_PREFIX, canonical_bytes, canonical_json, to_canonical
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
 from signalquarry._internal.contracts.spec import StrategySpecV1
 from signalquarry._internal.data.dataset import FIELDS, MICRO, Dataset
@@ -40,6 +42,31 @@ MICRO_QTY = Decimal("0.000001")
 CASH_QUANTUM = Decimal("0.000001")
 MAX_STATE_BYTES = 16 * 1024
 ZERO = Decimal(0)
+
+
+def _hash_rows(digest: Any, rows: Iterable[Any], chunk_size: int) -> None:
+    """Feed a JSON array without collecting every ledger row in memory."""
+    digest.update(b"[")
+    batch: list[Any] = []
+    first = True
+
+    def flush() -> None:
+        nonlocal first
+        if not batch:
+            return
+        if not first:
+            digest.update(b",")
+        encoded = canonical_bytes(batch)
+        digest.update(encoded[1:-1])
+        batch.clear()
+        first = False
+
+    for row in rows:
+        batch.append(row)
+        if len(batch) == chunk_size:
+            flush()
+    flush()
+    digest.update(b"]")
 
 
 class EngineError(RuntimeError):
@@ -90,6 +117,42 @@ class BacktestResult:
             ],
             "positions": dict(sorted(self.positions.items())),
         }
+
+    def compute_ledger_hash(self) -> str:
+        """Hash the same canonical ledger document with bounded temporary memory."""
+        # Canonical v2 sorts object keys; the literal keys below follow that order.
+        digest = hashlib.sha256()
+        digest.update(b'{"dataset_identity":')
+        digest.update(canonical_bytes(self.dataset_identity))
+        digest.update(b',"decisions":')
+        _hash_rows(digest, self.decisions, 32)
+        digest.update(b',"equity":')
+        _hash_rows(
+            digest,
+            ([s.isoformat(), e, c] for s, e, c in zip(self.sessions, self.equity, self.cash, strict=True)),
+            4096,
+        )
+        digest.update(b',"fills":')
+        _hash_rows(
+            digest,
+            (
+                [
+                    f.session.isoformat(),
+                    f.symbol,
+                    f.side,
+                    f.quantity,
+                    f.price,
+                    f.fee,
+                    f.settle_session.isoformat() if f.settle_session else None,
+                ]
+                for f in self.fills
+            ),
+            4096,
+        )
+        digest.update(b',"positions":')
+        digest.update(canonical_bytes(dict(sorted(self.positions.items()))))
+        digest.update(b"}")
+        return HASH_PREFIX + digest.hexdigest()
 
 
 @dataclass
@@ -326,7 +389,7 @@ def run_backtest(
         result.cash.append(_quantize_cash(account.settled))
 
     result.positions = {symbol: quantity for symbol, quantity in sorted(account.quantity.items()) if quantity}
-    result.ledger_hash = canonical_hash(result.ledger_document())
+    result.ledger_hash = result.compute_ledger_hash()
     return result
 
 

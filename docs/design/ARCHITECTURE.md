@@ -196,7 +196,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - Sim and paper share one resolver: nearest expiry in the DTE window, then nearest OTM strike.
   - The `delta` strike rule is paper-only.
 - **Determinism:** prices stored as int64 micro-units; a Decimal ledger (precision 28, HALF_EVEN); float64 signals; PCG64 randomness seeded from `configuration_hash`.
-- Dataset identities stream canonical JSON array chunks into SHA-256, preserving the existing hash while bounding temporary memory.
+- Dataset identities and backtest ledgers stream canonical JSON chunks into SHA-256, preserving existing hashes while bounding temporary memory.
 - **Performance targets** (CI benchmark warns at 1.5×, fails at 2×):
 
 | Workload | Target |
