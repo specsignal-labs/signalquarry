@@ -15,6 +15,7 @@ change provisional surfaces after deprecation).
   action-refusal reference cases.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
+- A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
 - Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
   with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
 - Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure

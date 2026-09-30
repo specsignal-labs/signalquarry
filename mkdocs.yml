@@ -57,3 +57,4 @@ nav:
       - "0008 Docs toolchain": adr/0008-docs-toolchain.md
       - "0009 Plugins": adr/0009-plugins.md
       - "0010 Factors and universes": adr/0010-factors-and-universes.md
+      - "0011 Formulaic factor expressions": adr/0011-formulaic-factor-expressions.md
