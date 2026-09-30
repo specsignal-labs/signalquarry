@@ -950,6 +950,54 @@ _CODES += (
         "Factor scores cannot be compared across different datasets, dates, or universes.",
         "Compare factors scored on identical panel and membership identities.",
     ),
+    ReasonCode(
+        "FACTOR_IMPORT_FAILED",
+        Category.SIGNAL,
+        "A registered factor module could not be imported.",
+        "Fix the module import and its dependencies in the project environment.",
+    ),
+    ReasonCode(
+        "FACTOR_MODULE_INVALID",
+        Category.SIGNAL,
+        "A factor module must be inside the project and define exactly one @factor function.",
+        "Keep one decorated score function in each registered project module.",
+    ),
+    ReasonCode(
+        "FACTOR_SPEC_MISSING",
+        Category.USAGE,
+        "factor.yaml is missing next to a registered factor module.",
+        "Add a factor.yaml with an id, family, version, hypothesis and parameters.",
+    ),
+    ReasonCode(
+        "FACTOR_SPEC_NOT_A_MAPPING",
+        Category.USAGE,
+        "factor.yaml must contain a YAML mapping.",
+        "Use key-value fields matching signalquarry.factor/v1.",
+    ),
+    ReasonCode(
+        "FACTOR_SPEC_INVALID",
+        Category.USAGE,
+        "A registered factor's metadata is invalid.",
+        "Fix the reported factor.yaml field and schema version.",
+    ),
+    ReasonCode(
+        "FACTOR_PARAMS_INVALID",
+        Category.USAGE,
+        "Declared factor parameters do not validate against its Params model.",
+        "Fix factor.yaml params or the factor's Params declaration.",
+    ),
+    ReasonCode(
+        "FACTOR_ID_DUPLICATE",
+        Category.USAGE,
+        "Two registered factor modules declare the same id.",
+        "Give each project factor a unique id.",
+    ),
+    ReasonCode(
+        "FACTOR_NOT_FOUND",
+        Category.USAGE,
+        "No registered factor has that id.",
+        "Run `sqy factor ls` or add the module to signalquarry.toml.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

@@ -54,9 +54,22 @@ Run conformance, determinism and look-ahead checks.
 |---|---|
 | `--strategy` | check only this strategy id |
 | `--factor` | check one project module defining a @factor function |
+| `--factor-id` | check a factor id registered in signalquarry.toml |
 | `--params-json` | JSON object of factor parameters |
 | `--parity` | also replay 60 sessions through the paper kernel and a fake venue; must match the backtest |
 | `--project` | project directory (default: search upwards from cwd) |
+
+## `sqy factor`
+
+Inspect project-registered research factors.
+
+### `sqy factor ls`
+
+List explicitly registered project factors and hashes.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards) |
 
 ## `sqy data`
 

@@ -100,7 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. `sqy check --factor` probes contract, repeatability and future-bar isolation on synthetic panels. The internal factor evaluator computes descriptive rank IC and cross-sectional diagnostics from dated scores and explicitly synthetic labels; it cannot issue real-data evidence. Historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. The internal factor evaluator computes descriptive rank IC and cross-sectional diagnostics from dated scores and explicitly synthetic labels; it cannot issue real-data evidence. Historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -441,7 +441,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Modules |
 |---|---|
 | `cli` | `(package)`, `main` |
-| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep`, `universe` |
+| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep`, `universe` |
 | `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
@@ -449,11 +449,11 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `factors` | `(package)`, `evaluate` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
-| `project` | `(package)`, `agents_md`, `project` |
+| `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
-| `contracts` | `(package)`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
+| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |
 | `calendar` | `(package)`, `nyse` |
 | `testing` | `(package)` |
@@ -470,6 +470,8 @@ flowchart LR
   sqy --> c_explain["explain"]
   sqy --> c_init["init"]
   sqy --> c_check["check"]
+  sqy --> c_factor["factor"]
+  c_factor --> c_factor_ls["ls"]
   sqy --> c_data["data"]
   c_data --> c_data_fetch["fetch"]
   c_data --> c_data_probe["probe"]

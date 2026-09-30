@@ -34,6 +34,21 @@ score, and future-bar perturbation checks on a fixed synthetic four-symbol
 panel. `--params-json` supplies parameter values. These empirical checks do
 not certify the formula's economics or the provenance of real market data.
 
+Projects may register research factors explicitly in `[factors] modules` in
+`signalquarry.toml`. Each module defines one local `@factor` function and has
+a neighboring strict `factor.yaml` with an ID, family, version, hypothesis,
+and parameters. `sqy factor ls` reports their code-tree and configuration
+hashes; `sqy check --factor-id ID` runs synthetic conformance using declared
+parameters. The configuration hash includes the complete factor specification,
+validated parameters, package code, function identity, and framework
+major/minor version. Even a hypothesis edit therefore changes its identity.
+The code hash covers the full top-level project package, including sibling
+helpers; unrelated edits within that package also conservatively change it.
+The import policy checks that same tree.
+Evaluation settings, universe, and labels will form a separate trial
+configuration when real-data evaluation and ledger integration exist. Listing
+and checking registered factors do not consume trials or produce grades.
+
 The internal factor evaluation core binds each decision to a timezone-aware
 membership observation and cutoff, then calls the same truncated factor runner.
 It produces immutable scores and descriptive Spearman rank IC, unannualized
