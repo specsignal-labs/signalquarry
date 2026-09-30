@@ -42,6 +42,7 @@ class Decision:
     ) -> Decision:
         """Hold these portfolio weights (fractions of equity). Symbols not listed are sold."""
         normalized: dict[str, Decimal] = {}
+        shared_weights: dict[Decimal, Decimal] = {}
         for symbol, value in weights.items():
             key = str(symbol).upper()
             if not _SYMBOL.fullmatch(key):
@@ -52,7 +53,9 @@ class Decision:
             if weight < 0:
                 raise ValueError(f"DECISION_WEIGHT_NEGATIVE:{key}")
             if weight > 0:
-                normalized[key] = weight
+                # Decimal is immutable. Share equal quantized weights within this
+                # decision instead of retaining one object per symbol in the ledger.
+                normalized[key] = shared_weights.setdefault(weight, weight)
         if sum(normalized.values(), Decimal(0)) > 1:
             raise ValueError("DECISION_WEIGHTS_EXCEED_ONE")
         return cls("target", dict(sorted(normalized.items())), checked_codes(reason_codes), state)
