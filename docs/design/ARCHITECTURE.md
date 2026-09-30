@@ -100,7 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. `sqy check --factor` probes contract, repeatability and future-bar isolation on synthetic panels; historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. `sqy check --factor` probes contract, repeatability and future-bar isolation on synthetic panels. The internal factor evaluator computes descriptive rank IC and cross-sectional diagnostics from dated scores and explicitly synthetic labels; it cannot issue real-data evidence. Historical universe membership and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -394,7 +394,7 @@ flowchart TB
   L0 --> L1
   L2["<b>paper · evidence · publish</b>"]
   L1 --> L2
-  L3["<b>validation</b>"]
+  L3["<b>validation · factors</b>"]
   L2 --> L3
   L4["<b>engine</b>"]
   L3 --> L4
@@ -424,6 +424,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
 | `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
+| `factors` | `engine`, `data`, `sdk`, `canonical` |
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
 | `data` | `contracts`, `canonical` |
 | `project` | `sdk`, `contracts`, `canonical` |
@@ -445,6 +446,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `ledger`, `metrics`, `stats` |
+| `factors` | `(package)`, `evaluate` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
 | `project` | `(package)`, `agents_md`, `project` |

@@ -105,7 +105,7 @@ layers = [
   "signalquarry.cli",
   "signalquarry.api",
   "(signalquarry._internal.paper) | signalquarry._internal.evidence | (signalquarry._internal.publish)",
-  "(signalquarry._internal.validation)",
+  "(signalquarry._internal.validation) | (signalquarry._internal.factors)",
   "(signalquarry._internal.engine)",
   "(signalquarry._internal.data) | (signalquarry._internal.project) | (signalquarry._internal.options)",
   "(signalquarry.sdk) | (signalquarry.plugins)",

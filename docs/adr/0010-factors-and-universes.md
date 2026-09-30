@@ -34,6 +34,19 @@ score, and future-bar perturbation checks on a fixed synthetic four-symbol
 panel. `--params-json` supplies parameter values. These empirical checks do
 not certify the formula's economics or the provenance of real market data.
 
+The internal factor evaluation core binds each decision to a timezone-aware
+membership observation and cutoff, then calls the same truncated factor runner.
+It produces immutable scores and descriptive Spearman rank IC, unannualized
+ICIR, chronological-block IC, quintile return, score monotonicity, top-quintile
+return after an assumed round-trip cost, long-short spread as a statistic,
+one-way turnover, share of supplied predecision ADV, and correlation with
+accepted factors. Quintile returns are mean horizon outcomes, not a compounded
+portfolio backtest. The report carries its declared panel, universe, and label
+identities and is marked synthetic. These calculations currently accept only
+explicitly synthetic outcome labels. Matching hashes and timestamps are consistency
+checks; a future real-data entry point must verify the underlying universe,
+label-adjustment, and code identities and record trials before giving a grade.
+
 Before a panel can support historical factor claims, a separate universe manifest
 must record dated membership and observation cutoffs, including inactive assets.
 The initial capture path requests Alpaca's full `us_equity` asset list from the
@@ -57,9 +70,9 @@ paper orders.
 
 Panel materialization and reading can be benchmarked independently of backtests.
 The next stage must add dated membership construction and instrument
-classification, corporate-action knowledge timing, trial accounting, and
-evaluation before factor results can be treated
-as point-in-time evidence.
+classification, corporate-action knowledge timing, verified outcome labels,
+trial accounting, and a real-data evaluation entry point before factor results
+can be treated as point-in-time evidence.
 
 ## Provider references
 

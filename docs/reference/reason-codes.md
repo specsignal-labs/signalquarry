@@ -48,6 +48,13 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
 | `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
+| `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
+| `FACTOR_LABEL_ALIGNMENT_INVALID` | data | Factor scores and outcome labels have incompatible identities or shapes. | Derive labels from the same dated panel and align sessions and symbols exactly. |
+| `FACTOR_LABEL_HORIZONS_INVALID` | data | A factor outcome horizon or forward-return array is invalid. | Use positive horizons and finite, shape-aligned returns no lower than -100%. |
+| `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_UNIVERSE_INVALID` | data | A factor universe has duplicate, empty, or unavailable symbols. | Supply distinct symbols that exist in the verified panel. |
+| `FACTOR_UNIVERSE_TIMING_INVALID` | data | A factor universe was not observed by its decision cutoff. | Use timezone-aware observation and cutoff times from verified manifests. |
 | `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |
 | `FREEZE_STALE` | evidence | The strategy changed after its last freeze. | Freeze again; the new configuration counts as a new trial. |
 | `GATE_FAILED` | evidence | A qualification gate did not pass. | Report the failed gate; do not relax gates. Try a new hypothesis. |
