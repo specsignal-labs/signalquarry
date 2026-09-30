@@ -92,7 +92,7 @@ the deflated Sharpe bar higher. Try fewer, better-reasoned ideas.
 `sqy explain <CODE>` explains any reason code. `sqy doctor` checks the environment.
 <!-- signalquarry:end project/never -->
 
-<!-- signalquarry:begin project/files v1 -->
+<!-- signalquarry:begin project/files v2 -->
 ## Files
 
 - `signalquarry.toml` — project settings (data provider, strategy modules)
@@ -100,6 +100,7 @@ the deflated Sharpe bar higher. Try fewer, better-reasoned ideas.
 - `tests/test_conformance.py` — runs `sqy check` in your test suite
 - `evidence/` — trial ledger and commitments (engine-written; never edit)
 - `data/manifests/` — dataset hashes (no prices)
+- `data/universe/snapshots/` — hash-only prospective asset-list observations; raw pages stay in the local cache
 - `paper/<alias>.paper.yaml` — a paper deployment; `paper/<alias>/journal.jsonl` is its
   hash-chained record (engine-written; never edit)
 <!-- signalquarry:end project/files -->

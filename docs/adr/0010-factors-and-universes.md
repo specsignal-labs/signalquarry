@@ -31,6 +31,17 @@ boundary, not a historical universe attestation or a factor evidence grade.
 
 Before a panel can support historical factor claims, a separate universe manifest
 must record dated membership and observation cutoffs, including inactive assets.
+The initial capture path requests Alpaca's full `us_equity` asset list from the
+fixed paper origin with no status filter, so active and inactive records are
+both observed. It stores the raw response only in the local content-addressed
+cache and commits a hash-only snapshot manifest with the local UTC completion
+time. An as-of lookup accepts only a verified snapshot captured by its cutoff
+and at most 31 days old; dates before the first capture are unavailable.
+Alpaca documents no historical as-of query, and its `us_equity` class does not
+prove common-stock subtype or listing age. A separate point-in-time archive
+and instrument classification are needed for earlier dates and the planned
+common-stock universe. A local capture timestamp is not independent proof of
+when Alpaca first knew a particular asset state.
 Factor evaluation must use frozen panel, universe, formula and trial identities.
 An agent may propose a formula, but the engine owns truncation, trial accounting,
 holdout access and evidence grades. The current panel cache is an internal
@@ -40,6 +51,14 @@ paper orders.
 ## Consequences
 
 Panel materialization and reading can be benchmarked independently of backtests.
-The next stage must add historical universe observations, corporate-action
-knowledge timing, factor-level look-ahead checks, trial accounting, and
-evaluation before factor results can be treated as point-in-time evidence.
+The next stage must add dated membership construction and instrument
+classification, corporate-action knowledge timing, factor-level look-ahead
+checks, trial accounting, and evaluation before factor results can be treated
+as point-in-time evidence.
+
+## Provider references
+
+- Alpaca "Get Assets" API reference: paper origin, array response,
+  `us_equity` class and all-status default.
+- Alpaca Python SDK "Asset" model reference: stable asset ID, symbol,
+  exchange, status and tradability fields.

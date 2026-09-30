@@ -12,6 +12,12 @@ Providers implement `MarketDataProvider`; registering third-party providers thro
 
 The initial per-symbol Parquet layout was not implemented. For cross-sectional research, derived Parquet is instead stored per field as session-by-symbol columns, keyed by the canonical dataset identity (ADR 0010). The raw pages and dataset manifest remain the source of truth; the panel can be deleted and rebuilt. Raw prices are stored in int64 micro-units with a separate presence mask. The panel does not itself establish a point-in-time security universe or corporate-action knowledge cutoff.
 
+Prospective Alpaca asset-list captures use the same local content-addressed
+raw-page cache and a separate `asset-snapshot/v1` hash-only manifest in the
+project. The manifest records observation time and aggregate counts, not names,
+symbols, CUSIPs, or prices. Verification re-parses the raw array and checks
+its normalized asset-record hash. These captures do not revise dataset v1.
+
 ## Consequences
 
 pyarrow becomes a core dependency. Users bring their own data keys; no market data is ever committed or shared.

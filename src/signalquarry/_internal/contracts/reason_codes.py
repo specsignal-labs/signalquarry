@@ -902,6 +902,12 @@ _CODES += (
         "A research panel lookback must be a positive number of sessions.",
         "Set lookback to a positive integer, or omit it for all prior sessions.",
     ),
+    ReasonCode(
+        "UNIVERSE_ASOF_UNAVAILABLE",
+        Category.DATA,
+        "No verified asset snapshot was captured by the requested cutoff within the freshness window.",
+        "Capture snapshots prospectively; historical dates need an independently sourced point-in-time archive.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
