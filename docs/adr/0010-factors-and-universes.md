@@ -54,7 +54,9 @@ both before claiming evidence. Listing
 and checking registered factors do not consume trials or produce grades.
 
 The internal factor evaluation core binds each decision to a timezone-aware
-membership observation and cutoff, then calls the same truncated factor runner.
+membership observation and cutoff whose UTC calendar date precedes the decision
+session, then calls the same truncated factor runner. The cutoff may be on the
+prior UTC date; it is not required to share the decision session's date.
 It produces immutable scores and descriptive Spearman rank IC, unannualized
 ICIR, chronological-block IC, quintile return, score monotonicity, top-quintile
 return after an assumed round-trip cost, long-short spread as a statistic,
@@ -65,6 +67,20 @@ identities and is marked synthetic. These calculations currently accept only
 explicitly synthetic outcome labels. Matching hashes and timestamps are consistency
 checks; a future real-data entry point must verify the underlying universe,
 label-adjustment, and code identities and record trials before giving a grade.
+
+The first pure forward-label calculation uses the close before a decision
+session as its entry mark and the close of the horizon-th session, counting the
+decision session as the first outcome session. It applies split ratios to
+shares and accrues cash dividends on their ex-dates, including receivables whose
+pay dates follow the label window. When a split and dividend share an ex-date,
+the dividend is applied to pre-ex-date shares before the split ratio, matching
+the `Dividend` and `Split` value definitions. A missing bar in the holding
+window makes that symbol/horizon outcome unavailable; no stale mark or terminal
+payoff is inferred. This calculation is source-neutral: it does not prove that
+the provider returned every action, resolve ticker succession or delistings,
+verify point-in-time universe manifests, restrict access to a sealed holdout, or
+grant trial/evidence authority. Those controls remain mandatory at the real-data
+API boundary.
 
 Before a panel can support historical factor claims, a separate universe manifest
 must record dated membership and observation cutoffs, including inactive assets.

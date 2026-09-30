@@ -1215,6 +1215,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
 | `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
 | `FACTOR_IMPORT_FAILED` | signal | A registered factor module could not be imported. | Fix the module import and its dependencies in the project environment. |
+| `FACTOR_LABEL_ACTIONS_INVALID` | data | A modeled split or cash dividend is invalid or duplicated for the requested outcomes. | Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes. |
 | `FACTOR_LABEL_ALIGNMENT_INVALID` | data | Factor scores and outcome labels have incompatible identities or shapes. | Derive labels from the same dated panel and align sessions and symbols exactly. |
 | `FACTOR_LABEL_HORIZONS_INVALID` | data | A factor outcome horizon or forward-return array is invalid. | Use positive horizons and finite, shape-aligned returns no lower than -100%. |
 | `FACTOR_MODULE_INVALID` | signal | A factor module must be inside the project and define exactly one @factor function. | Keep one decorated score function in each registered project module. |

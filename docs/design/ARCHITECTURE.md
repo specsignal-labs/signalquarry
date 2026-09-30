@@ -446,7 +446,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
-| `factors` | `(package)`, `evaluate`, `expr`, `search` |
+| `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
