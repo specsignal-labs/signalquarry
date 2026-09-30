@@ -445,7 +445,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `ledger`, `metrics`, `stats` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate` |
 | `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic`, `universe` |
