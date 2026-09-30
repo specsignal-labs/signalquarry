@@ -119,6 +119,8 @@ replays membership from the cached classification snapshot, asset pages, and
 dataset pages. Earlier periods require dated snapshots that actually existed by
 each cutoff; a current source file cannot reconstruct them. Raw close and
 volume filters do not establish corporate-action-adjusted factor returns.
+The command reports classification provenance as unverified because it cannot
+independently establish when or how the caller's classification was assembled.
 
 ## Options coverage
 

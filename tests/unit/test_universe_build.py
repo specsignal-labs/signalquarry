@@ -269,6 +269,8 @@ def test_universe_api_persists_hash_only_build(monkeypatch, tmp_path: Path) -> N
     )
     assert result.status == "ok"
     assert result.data["counts"]["members"] == 1
+    assert result.data["classification_provenance_verified"] is False
+    assert "classification provenance unverified" in result.summary
     path = project / result.data["manifest"]
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert stored["member_symbols"] == ["AAA"]

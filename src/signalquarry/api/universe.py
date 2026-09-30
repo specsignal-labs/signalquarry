@@ -261,11 +261,15 @@ def universe_build(
         "dataset_id": manifest["dataset_id"],
         "asset_snapshot_id": manifest["asset_snapshot_id"],
         "classification_snapshot_hash": manifest["classification_snapshot_hash"],
+        "classification_provenance_verified": False,
         "counts": manifest["counts"],
         "manifest": str(path.relative_to(root)),
         "manifest_hash": manifest["manifest_hash"],
     }
-    envelope.summary = f"built {manifest['counts']['members']} point-in-time common-stock members"
+    envelope.summary = (
+        f"built {manifest['counts']['members']} members from dated inputs; "
+        "classification provenance unverified"
+    )
     envelope.artifacts = [
         {
             "path": str(path.relative_to(root)),
