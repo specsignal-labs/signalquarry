@@ -20,6 +20,7 @@ import numpy as np
 from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.data.panel import LoadedPanel
 from signalquarry._internal.engine.factors import run_factor
+from signalquarry._internal.factors.labels import ForwardReturnLabels
 from signalquarry.sdk.factors import FactorDef
 from signalquarry.sdk.strategy import Params
 from signalquarry.sdk.xs import rank
@@ -86,7 +87,7 @@ class HorizonIC:
 
 @dataclass(frozen=True)
 class DiagnosticReport:
-    scope: Literal["synthetic"]
+    scope: Literal["synthetic", "unverified"]
     dataset_identity: str
     universe_identity: str
     label_identity: str
@@ -156,13 +157,27 @@ def _correlation(left: np.ndarray, right: np.ndarray) -> float | None:
 
 def rank_ic(
     scores: ScorePanel,
-    labels: SyntheticLabels,
+    labels: SyntheticLabels | ForwardReturnLabels,
     *,
     blocks: int = 6,
     cost_bps: float = 10.0,
     capital: float = 1_000_000.0,
 ) -> DiagnosticReport:
-    """Describe score/forward-return association without significance or alpha claims."""
+    """Describe score/forward-return association without significance or alpha claims.
+
+    Synthetic outcomes remain tagged ``synthetic``. Calculated labels whose
+    source and action-history provenance have not been verified are tagged
+    ``unverified`` even if a caller supplies an inconsistent provenance flag.
+    Neither scope is real-data evidence or grants trial/holdout authority.
+    """
+    if isinstance(labels, SyntheticLabels):
+        scope: Literal["synthetic", "unverified"] = "synthetic"
+    elif isinstance(labels, ForwardReturnLabels):
+        # This calculation type is deliberately non-authoritative. Do not let a
+        # caller-supplied value promote it to verified real-data evidence.
+        scope = "unverified"
+    else:
+        raise ValueError("FACTOR_LABEL_ALIGNMENT_INVALID")
     if (
         scores.dataset_identity != labels.dataset_identity
         or scores.sessions != labels.sessions
@@ -262,7 +277,7 @@ def rank_ic(
             )
         )
     return DiagnosticReport(
-        "synthetic", scores.dataset_identity, scores.universe_identity, labels.label_identity, tuple(reports)
+        scope, scores.dataset_identity, scores.universe_identity, labels.label_identity, tuple(reports)
     )
 
 

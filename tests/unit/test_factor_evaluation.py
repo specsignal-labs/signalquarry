@@ -16,6 +16,7 @@ from signalquarry._internal.factors.evaluate import (
     redundancy,
     score_factor,
 )
+from signalquarry._internal.factors.labels import ForwardReturnLabels
 from signalquarry.sdk import FactorCtx, Params, factor, factor_definition_of
 
 
@@ -110,6 +111,30 @@ def test_rank_ic_finds_planted_signal_and_reports_null() -> None:
     assert first.max_share_of_adv == pytest.approx(0.5)
     assert second.horizon == 5
     assert abs(second.mean_ic or 0) < 0.2
+
+
+def test_forward_return_labels_are_descriptive_but_remain_unverified() -> None:
+    scores = _scores()
+    planted = np.tile(np.linspace(-0.05, 0.05, 10), (len(scores.sessions), 1))
+    labels = ForwardReturnLabels(
+        dataset_identity=scores.dataset_identity,
+        label_identity="sha256:" + "5" * 64,
+        sessions=scores.sessions,
+        symbols=scores.symbols,
+        forward_returns={1: planted},
+        outcome_end_sessions={1: scores.sessions},
+        predecision_adv=np.full(planted.shape, 1_000_000.0),
+    )
+
+    report = rank_ic(scores, labels)
+
+    assert report.scope == "unverified"
+    assert report.horizons[0].mean_ic == pytest.approx(1.0)
+    assert report.horizons[0].max_share_of_adv == pytest.approx(0.5)
+
+    # Even an inconsistent flag cannot promote the calculation-only label type.
+    claimed_verified = replace(labels, provenance_verified=True)
+    assert rank_ic(scores, claimed_verified).scope == "unverified"
 
 
 def test_factor_evaluation_rejects_bad_timing_membership_and_labels() -> None:
