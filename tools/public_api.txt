@@ -130,7 +130,7 @@ signalquarry.api.paper_preflight(alias: 'str', *, project: 'Path | None' = None)
 signalquarry.api.paper_reconcile(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_run(alias: 'str', *, project: 'Path | None' = None, interval: 'float' = 60.0, max_minutes: 'float' = 30.0, sleep: 'Callable[[float], None]' = <built-in function sleep>, clock: 'Callable[[], float]' = <built-in function monotonic>) -> 'Envelope'
 signalquarry.api.paper_run_once(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
-signalquarry.api.paper_schedule(alias: 'str', target: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.paper_schedule(alias: 'str', target: 'str', *, project: 'Path | None' = None, notify_command: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_status(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.paper_verify_continuity(alias: 'str', backup: 'Path', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.perf_capture(alias: 'str', *, project: 'Path | None' = None) -> 'Envelope'

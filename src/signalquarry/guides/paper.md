@@ -91,6 +91,15 @@ same OS user can read that user's files. Run paper deployments under a dedicated
 `sqy paper schedule` writes systemd (recommended, on a small VM), launchd,
 cron or GitHub Actions (demo only) templates that call `run-once` every 5
 minutes from 09:00 to 09:25 New York time. Review and install them yourself.
+For a local scheduler, add `--notify-command /absolute/path/to/executable` to
+`paper schedule` to include a failure hook in the generated `run-once` command.
+The same option works on a direct `paper run-once` invocation. The executable is
+called once for every non-zero exit, including retryable 69 and 75, with only
+`HOME`, `PATH`, `LANG`, `SIGNALQUARRY_ALIAS`, and `SIGNALQUARRY_EXIT_CODE` in its
+environment. It receives no broker credentials. It must get any notification
+credentials from its own configuration. The hook has a 10-second limit; its
+failure does not replace the original `run-once` exit code. Use the hook's own
+deduplication if repeated retryable exits should produce one alert.
 The systemd target also writes a post-close timer (16:30 New York, weekdays) that runs
 `sqy commit create --alias A` to commit to the journal head, stamped with OpenTimestamps
 when the `ots` client is installed, and a weekly timer that runs `ots upgrade` on pending
