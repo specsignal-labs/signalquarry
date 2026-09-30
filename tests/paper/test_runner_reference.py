@@ -8,9 +8,13 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.data.dataset import Split
 from signalquarry._internal.engine.backtest import PlannedOrder, PreOpenPlan
-from signalquarry._internal.paper.models import BrokerAccount
+from signalquarry._internal.paper.journal import Journal
+from signalquarry._internal.paper.models import BrokerAccount, PaperError
 from signalquarry._internal.paper.runner import client_order_id
 from signalquarry.sdk import Decision
 from tests.paper.harness import hold_syna, paper_spec, rig
@@ -249,3 +253,95 @@ def test_exact_minimum_notional_is_eligible(tmp_path: Path) -> None:
     orders, complete, warnings = paper.kernel._size(plan, _account("50"), Decimal("50"))
     assert [(o["symbol"], o["quantity"]) for o in orders] == [("SYNA", Decimal("5"))]
     assert complete is True and warnings == []
+
+
+def _baseline_journal(paper, session: date, positions: dict[str, str]) -> Journal:
+    journal = Journal.open(paper.deployment.journal_path)
+    journal.append(
+        "armed",
+        {"baseline_session": session, "baseline_positions": positions},
+        now=paper.broker.now,
+    )
+    return journal
+
+
+def test_reconcile_positions_reports_sorted_unmanaged_symbols_without_halting(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    session = paper.dataset.sessions[60]
+    journal = _baseline_journal(paper, paper.dataset.sessions[59], {})
+    with pytest.raises(PaperError) as caught:
+        paper.kernel.reconcile_positions(
+            journal,
+            paper.loader(session),
+            session,
+            {"ZZZ": Decimal("1"), "AAA": Decimal("2")},
+        )
+    assert (caught.value.code, caught.value.status, caught.value.detail) == (
+        "PAPER_UNMANAGED_POSITION",
+        "blocked",
+        "AAA,ZZZ",
+    )
+    assert journal.last("halted") is None
+
+
+def test_reconcile_positions_hashes_missing_and_extra_managed_positions(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    session = paper.dataset.sessions[60]
+    journal = _baseline_journal(paper, paper.dataset.sessions[59], {"SYNA": "47"})
+    with pytest.raises(PaperError) as caught:
+        paper.kernel.reconcile_positions(
+            journal,
+            paper.loader(session),
+            session,
+            {"SYNB": Decimal("2")},
+        )
+    drift = {"SYNA": ["47", "0"], "SYNB": ["0", "2"]}
+    detail = canonical_hash(drift) + " " + str(drift)
+    assert (caught.value.code, caught.value.status, caught.value.detail) == (
+        "PAPER_POSITION_DRIFT",
+        "blocked",
+        detail,
+    )
+    assert journal.last("halted")["detail"] == detail
+
+
+def test_reconcile_positions_excludes_unchanged_symbols_from_drift(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    session = paper.dataset.sessions[60]
+    journal = _baseline_journal(paper, paper.dataset.sessions[59], {"SYNA": "47", "SYNB": "5"})
+    with pytest.raises(PaperError) as caught:
+        paper.kernel.reconcile_positions(
+            journal,
+            paper.loader(session),
+            session,
+            {"SYNA": Decimal("47"), "SYNB": Decimal("2")},
+        )
+    drift = {"SYNB": ["5", "2"]}
+    assert caught.value.detail == canonical_hash(drift) + " " + str(drift)
+    assert journal.last("halted")["reason_codes"] == ["PAPER_POSITION_DRIFT"]
+
+
+def test_only_todays_split_may_be_pending(tmp_path: Path) -> None:
+    paper = rig(tmp_path)
+    previous, session = paper.dataset.sessions[59:61]
+    journal = _baseline_journal(paper, paper.dataset.sessions[58], {"SYNA": "3"})
+    data = replace(
+        paper.loader(session),
+        splits=(
+            Split("SYNA", previous, Decimal("2")),
+            Split("SYNA", session, Decimal("3")),
+        ),
+    )
+    assert paper.kernel.expected_positions(journal, data, session, through=session) == {"SYNA": Decimal("18")}
+    with pytest.raises(PaperError) as pending:
+        paper.kernel.reconcile_positions(journal, data, session, {"SYNA": Decimal("6")})
+    assert (pending.value.code, pending.value.status, pending.value.detail) == (
+        "PAPER_CORPORATE_ACTION_PENDING",
+        "busy",
+        "broker has not applied today's split",
+    )
+    assert journal.last("halted") is None
+    with pytest.raises(PaperError) as stale:
+        paper.kernel.reconcile_positions(journal, data, session, {"SYNA": Decimal("3")})
+    assert (stale.value.code, stale.value.status) == ("PAPER_POSITION_DRIFT", "blocked")
+    assert journal.last("halted")["reason_codes"] == ["PAPER_POSITION_DRIFT"]
