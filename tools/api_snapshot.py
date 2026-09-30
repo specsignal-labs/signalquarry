@@ -26,7 +26,7 @@ MODULES = (
     "signalquarry.plugins",
     "signalquarry.testing",
 )
-ALL_PUBLIC = ("signalquarry.sdk.ta",)  # modules without __all__: every public function
+ALL_PUBLIC = ("signalquarry.sdk.ta", "signalquarry.sdk.xs")  # modules without __all__: public functions
 
 
 def _clean(text: str) -> str:

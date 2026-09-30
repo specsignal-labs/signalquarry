@@ -20,6 +20,15 @@ loaded panel must stay inside the engine because it contains future sessions.
 Raw prices remain int64 micro-units; corporate-action adjustment is a separate,
 future point-in-time operation. File hashes detect accidental cache damage.
 
+The first pure factor SDK defines `@factor(params=..., lookback=...)`, a context
+whose numeric panels have only completed sessions and universe columns, and
+cross-sectional rank, z-score, demeaning, winsorization, and numeric-exposure
+neutralization. Missing bars are NaN with a separate presence mask. A factor
+may omit symbols it cannot score, but emitted scores must be finite and belong
+to the supplied universe. The engine copies exactly the declared lookback into
+immutable arrays before calling factor code. This is an internal calculation
+boundary, not a historical universe attestation or a factor evidence grade.
+
 Before a panel can support historical factor claims, a separate universe manifest
 must record dated membership and observation cutoffs, including inactive assets.
 Factor evaluation must use frozen panel, universe, formula and trial identities.
@@ -32,5 +41,5 @@ paper orders.
 
 Panel materialization and reading can be benchmarked independently of backtests.
 The next stage must add historical universe observations, corporate-action
-knowledge timing, a pure factor SDK, and look-ahead checks before factor results
-can be treated as point-in-time evidence.
+knowledge timing, factor-level look-ahead checks, trial accounting, and
+evaluation before factor results can be treated as point-in-time evidence.

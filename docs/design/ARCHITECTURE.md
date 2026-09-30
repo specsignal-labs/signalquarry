@@ -100,7 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access; historical universe and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores; historical universe and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -445,11 +445,11 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
-| `engine` | `(package)`, `backtest`, `options_sim`, `run` |
+| `engine` | `(package)`, `backtest`, `factors`, `options_sim`, `run` |
 | `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic` |
 | `project` | `(package)`, `agents_md`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
-| `sdk` | `(package)`, `context`, `decision`, `options`, `strategy`, `ta` |
+| `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
 | `contracts` | `(package)`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |

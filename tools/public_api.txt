@@ -24,6 +24,17 @@ signalquarry.sdk.Decision.state: field dict[str, Any] | None
 signalquarry.sdk.Decision.hold(cls, *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
 signalquarry.sdk.Decision.target(cls, weights: 'dict[str, Decimal | float | int | str]', *reason_codes: 'str', state: 'dict[str, Any] | None' = None) -> 'Decision'
 signalquarry.sdk.Decision.unavailable(cls, *reason_codes: 'str') -> 'Decision'
+signalquarry.sdk.FactorCtx: class(object)
+signalquarry.sdk.FactorCtx.decision_session: field date
+signalquarry.sdk.FactorCtx.sessions: field tuple[date, ...]
+signalquarry.sdk.FactorCtx.universe: field tuple[str, ...]
+signalquarry.sdk.FactorCtx.panel(self, field: 'str') -> 'np.ndarray'
+signalquarry.sdk.FactorDef: class(object)
+signalquarry.sdk.FactorDef.score: field Callable[[FactorCtx, Params], Mapping[str, float]]
+signalquarry.sdk.FactorDef.params: field type[Params]
+signalquarry.sdk.FactorDef.lookback: field Callable[[Params], int]
+signalquarry.sdk.FactorDef.module: field str
+signalquarry.sdk.FactorDef.name: field str
 signalquarry.sdk.Field: re-export of pydantic.fields.Field
 signalquarry.sdk.Params: class(BaseModel)
 signalquarry.sdk.StrategyDef: class(object)
@@ -34,8 +45,11 @@ signalquarry.sdk.StrategyDef.module: field str
 signalquarry.sdk.StrategyDef.name: field str
 signalquarry.sdk.StrategyDef.kind: field str
 signalquarry.sdk.definition_of(obj: 'object') -> 'StrategyDef'
+signalquarry.sdk.factor(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[FactorCtx, P], Mapping[str, float]]], Callable[[FactorCtx, P], Mapping[str, float]]]'
+signalquarry.sdk.factor_definition_of(obj: 'object') -> 'FactorDef'
 signalquarry.sdk.strategy(*, params: 'type[P]', lookback: 'Callable[[P], int]') -> 'Callable[[Callable[[Ctx, P], Decision]], Callable[[Ctx, P], Decision]]'
 signalquarry.sdk.ta: module
+signalquarry.sdk.xs: module
 signalquarry.sdk.options.LegView: class(object)
 signalquarry.sdk.options.LegView.symbol: field str
 signalquarry.sdk.options.LegView.right: field Literal['PUT', 'CALL']
@@ -208,3 +222,8 @@ signalquarry.sdk.ta.rolling_std(values: 'np.ndarray', period: 'int') -> 'np.ndar
 signalquarry.sdk.ta.rsi(values: 'np.ndarray', period: 'int' = 14) -> 'np.ndarray'
 signalquarry.sdk.ta.sma(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
 signalquarry.sdk.ta.zscore(values: 'np.ndarray', period: 'int') -> 'np.ndarray'
+signalquarry.sdk.xs.demean(values: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.neutralize(values: 'np.ndarray', exposures: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.rank(values: 'np.ndarray') -> 'np.ndarray'
+signalquarry.sdk.xs.winsorize(values: 'np.ndarray', lower: 'float' = 0.01, upper: 'float' = 0.99) -> 'np.ndarray'
+signalquarry.sdk.xs.zscore(values: 'np.ndarray') -> 'np.ndarray'
