@@ -16,6 +16,9 @@ change provisional surfaces after deprecation).
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
+- A deterministic genetic formula-search core over synthetic training inputs, with family-budget
+  checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no
+  trial ledger, issues no evidence grade, and does not access a holdout.
 - Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
   with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
 - Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure

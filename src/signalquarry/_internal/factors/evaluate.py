@@ -63,6 +63,7 @@ class SyntheticLabels:
     symbols: tuple[str, ...]
     forward_returns: Mapping[int, np.ndarray]
     predecision_adv: np.ndarray | None = None
+    outcome_end_sessions: Mapping[int, tuple[date | None, ...]] | None = None
 
 
 @dataclass(frozen=True)

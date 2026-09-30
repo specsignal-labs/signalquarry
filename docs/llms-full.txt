@@ -1221,6 +1221,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_NOT_FOUND` | usage | No registered factor has that id. | Run `sqy factor ls` or add the module to signalquarry.toml. |
 | `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
 | `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
+| `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
+| `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
 | `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
 | `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
 | `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |

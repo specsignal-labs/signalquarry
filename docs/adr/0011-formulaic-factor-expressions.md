@@ -43,8 +43,24 @@ caller must still provide the correct training slice, verify data and universe
 provenance, record every search trial, and keep the holdout unavailable until
 the project gate opens it.
 
-This interpreter does not search, grade, register, or execute factors. It does
-not write to the trial ledger and has no paper or broker authority.
+The training-only search core evolves these trees with a seeded PCG64 stream,
+bounded mutation and subtree crossover. Its unique-expression budget is checked
+against the supplied remaining family budget. Candidate ordering applies an
+AST-node complexity penalty and a maximum absolute mean rank correlation
+penalty against the accepted-factor library. For the selected horizon, it
+estimates effective observations with a Bartlett-weighted autocorrelation
+adjustment, subtracts an expected-maximum normal statistic based on the
+project-wide trial count, and applies Benjamini-Hochberg across the current
+family batch and any prior family p-values supplied by the caller. Outcome
+rows whose forward label ends after the training cutoff are excluded.
+
+The current search core accepts only explicitly synthetic labels. Its report
+is diagnostic: it does not append trials, grant a grade, accept a factor, emit
+factor code, or access a holdout. A real-data API must verify the panel,
+universe, label and factor-code manifests, load the persistent family and
+project trial history, and append each distinct trial before reporting a
+real-data result. This interpreter and search core have no paper or broker
+authority.
 
 ## Consequences
 

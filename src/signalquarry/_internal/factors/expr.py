@@ -169,6 +169,17 @@ def parse_expression(source: str) -> FactorExpression:
     return FactorExpression(canonical, identity, root)
 
 
+def _node_complexity(node: _Node) -> int:
+    return 1 + sum(_node_complexity(arg) for arg in node.args if isinstance(arg, _Node))
+
+
+def expression_complexity(expression: FactorExpression) -> int:
+    """Return the number of immutable AST nodes in a parsed expression."""
+    if not isinstance(expression, FactorExpression):
+        raise TypeError("FACTOR_EXPRESSION_INVALID")
+    return _node_complexity(expression._root)
+
+
 def _matrix(value: float | np.ndarray, shape: tuple[int, int]) -> np.ndarray:
     if isinstance(value, np.ndarray):
         return value
@@ -396,4 +407,4 @@ def evaluate_expression(
     return _immutable(np.asarray(output, dtype=np.float64))
 
 
-__all__ = ["FactorExpression", "evaluate_expression", "parse_expression"]
+__all__ = ["FactorExpression", "evaluate_expression", "expression_complexity", "parse_expression"]
