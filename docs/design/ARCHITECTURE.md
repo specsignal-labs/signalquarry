@@ -100,6 +100,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access; historical universe and corporate-action observation cutoffs are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -442,7 +443,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
 | `engine` | `(package)`, `backtest`, `options_sim`, `run` |
-| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `synthetic` |
+| `data` | `(package)`, `alpaca`, `credentials`, `dataset`, `library`, `panel`, `synthetic` |
 | `project` | `(package)`, `agents_md`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `options`, `strategy`, `ta` |

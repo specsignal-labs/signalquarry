@@ -884,6 +884,24 @@ _CODES += (
         "A broker plugin's broker lacks part of the paper broker interface (listed in the detail).",
         "Implement account, clock, positions, open_orders, order_by_client_id, submit, cancel and calendar.",
     ),
+    ReasonCode(
+        "DATA_PANEL_INVALID",
+        Category.DATA,
+        "A derived research panel is missing, malformed, or has a file-hash mismatch.",
+        "Rebuild the panel from verified cached pages and its dataset manifest.",
+    ),
+    ReasonCode(
+        "DATA_PANEL_SYMBOL_INVALID",
+        Category.DATA,
+        "A research panel request has duplicate or unavailable symbols.",
+        "Select each symbol once from the panel's recorded symbol list.",
+    ),
+    ReasonCode(
+        "DATA_PANEL_LOOKBACK_INVALID",
+        Category.USAGE,
+        "A research panel lookback must be a positive number of sessions.",
+        "Set lookback to a positive integer, or omit it for all prior sessions.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

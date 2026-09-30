@@ -37,6 +37,9 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `DATA_MANIFEST_INVALID` | data | A dataset manifest is malformed or its manifest_hash does not match. | Restore the manifest from version control or re-fetch. |
 | `DATA_PAGE_CORRUPT` | data | A cached raw page no longer matches its recorded hash. | Delete the cache entry and re-fetch. |
 | `DATA_PAGE_MISSING` | data | A raw page referenced by a manifest is not in the local cache. | Re-run `sqy data fetch` for that dataset. |
+| `DATA_PANEL_INVALID` | data | A derived research panel is missing, malformed, or has a file-hash mismatch. | Rebuild the panel from verified cached pages and its dataset manifest. |
+| `DATA_PANEL_LOOKBACK_INVALID` | usage | A research panel lookback must be a positive number of sessions. | Set lookback to a positive integer, or omit it for all prior sessions. |
+| `DATA_PANEL_SYMBOL_INVALID` | data | A research panel request has duplicate or unavailable symbols. | Select each symbol once from the panel's recorded symbol list. |
 | `DECISION_SYMBOL_NOT_DECLARED` | signal | A target used a symbol not declared in strategy.yaml data.symbols. | Declare the symbol or remove it from the target. |
 | `DECISION_WEIGHT_ABOVE_LIMIT` | risk | A target weight exceeds limits.max_weight_per_symbol. | Lower the weight or raise the declared limit. |
 | `DEPENDENCY_MISSING` | environment | A required runtime dependency cannot be imported. | Reinstall with `pip install signalquarry`. |
