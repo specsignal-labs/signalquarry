@@ -59,3 +59,4 @@ nav:
       - "0010 Factors and universes": adr/0010-factors-and-universes.md
       - "0011 Formulaic factor expressions": adr/0011-formulaic-factor-expressions.md
       - "0012 Factor portfolio construction": adr/0012-factor-portfolio-construction.md
+      - "0013 Corporate-action identity (proposed)": adr/0013-corporate-action-identity.md

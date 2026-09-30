@@ -117,6 +117,49 @@ def test_invalid_corporate_action_amounts_are_rejected(actions: dict) -> None:
     assert info.value.code == "PROVIDER_RESPONSE_INVALID"
 
 
+@pytest.mark.parametrize(
+    ("kind", "first", "second"),
+    [
+        (
+            "forward_splits",
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "new_rate": 2, "old_rate": 1},
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "new_rate": 3, "old_rate": 1},
+        ),
+        (
+            "cash_dividends",
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "payable_date": "2019-01-10", "rate": "0.25"},
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "payable_date": "2019-01-10", "rate": "0.30"},
+        ),
+        (
+            "cash_dividends",
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "payable_date": "2019-01-10", "rate": "0.25"},
+            {"symbol": "SYNA", "ex_date": "2019-01-04", "payable_date": "2019-01-11", "rate": "0.25"},
+        ),
+    ],
+)
+def test_conflicting_action_rows_across_pages_are_rejected(kind: str, first: dict, second: dict) -> None:
+    pages = [
+        RawPage("/v1/corporate-actions", {}, b"", "", {"corporate_actions": {kind: [row]}})
+        for row in (first, second)
+    ]
+    with pytest.raises(ProviderError) as info:
+        actions_from_pages(pages)
+    assert info.value.code == "PROVIDER_RESPONSE_INVALID"
+
+
+@pytest.mark.parametrize("kind", ["forward_splits", "cash_dividends"])
+def test_exact_duplicate_action_rows_across_pages_are_idempotent(kind: str) -> None:
+    row = {"symbol": "SYNA", "ex_date": "2019-01-04"}
+    row.update(
+        {"new_rate": 2, "old_rate": 1}
+        if kind == "forward_splits"
+        else {"payable_date": "2019-01-10", "rate": "0.25"}
+    )
+    page = RawPage("/v1/corporate-actions", {}, b"", "", {"corporate_actions": {kind: [row]}})
+    splits, dividends = actions_from_pages([page, page])
+    assert len(splits if kind == "forward_splits" else dividends) == 1
+
+
 def test_fetch_surfaces_unsupported_action_without_writing_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
