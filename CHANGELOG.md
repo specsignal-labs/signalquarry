@@ -17,6 +17,9 @@ change provisional surfaces after deprecation).
   order-intent reference cases.
 - Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
   with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
+- Disk-backed equity backtest decisions and fills in the `backtest` API, driven by a pure
+  per-session engine iterator. Run artifacts are written incrementally; failed streams remove
+  partial run directories. Artifact formats and ledger hashes are unchanged.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.

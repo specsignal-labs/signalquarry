@@ -198,13 +198,15 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - The `delta` strike rule is paper-only.
 - **Determinism:** prices stored as int64 micro-units; a Decimal ledger (precision 28, HALF_EVEN); float64 signals; PCG64 randomness seeded from `configuration_hash`.
 - Dataset identities and backtest ledgers stream canonical JSON chunks into SHA-256, preserving existing hashes while bounding temporary memory.
-- **Performance targets** (CI benchmark warns at 1.5×, fails at 2×):
+- **Performance targets:** the default CI benchmark warns at 1.5× and fails at 2× for the existing workloads. `tools/bench.py --full` also checks both 3,000-symbol cases against strict 3-minute and 2-GB ceilings in isolated native processes. The spooled engine case is diagnostic only; it bypasses the public 500-symbol spec cap in memory.
 
 | Workload | Target |
 |---|---|
 | 10 years × 1 symbol | < 1 s |
 | 10 years × 100 symbols | < 10 s |
 | 10 years × 500 symbols | < 60 s, < 1 GB |
+| 10 years × 3,000 symbols, spooled equity diagnostic | < 180 s, < 2 GB |
+| 10 years × 3,000 symbols, research panel | < 180 s, < 2 GB |
 | 10-fold walk-forward | < 15 s |
 
 **Data**
@@ -253,6 +255,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Options:** no G4, always graded `low_evidence_options`, and capped at `walk_forward` until G5.
 - **Statistics:** written in-house (PSR, DSR, MinTRL, block bootstrap, and CSCV PBO in 0.2) using numpy + `statistics.NormalDist`, with no SciPy. Goldens reproduce the published numeric examples.
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
+- **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
 - `RunLease` (flock) on every state-changing command.
@@ -418,7 +421,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `cli` | `api`, `data`, `contracts` |
 | `api` | `paper`, `evidence`, `publish`, `validation`, `engine`, `data`, `project`, `plugins`, `contracts`, `canonical` |
 | `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
-| `evidence` | `canonical` |
+| `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
 | `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
@@ -439,7 +442,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `cli` | `(package)`, `main` |
 | `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep` |
 | `paper` | `(package)`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
-| `evidence` | `(package)`, `report`, `runs`, `verify` |
+| `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `ledger`, `metrics`, `stats` |
 | `engine` | `(package)`, `backtest`, `options_sim`, `run` |
