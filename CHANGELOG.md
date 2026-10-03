@@ -54,6 +54,8 @@ change provisional surfaces after deprecation).
 - `perf publish` chains each snapshot to the file it replaces (`previous_snapshot_hash`;
   `PERF_FEED_INVALID` when that file is not a snapshot).
 - Public API snapshot (`tools/public_api.txt`, checked in CI and tests).
+- Private paper-activity observations can be replayed and compared offline by
+  hash; command output exposes only aggregate counts, with no inferred event terms.
 - `sqy check --parity`: backtest vs paper kernel on a fake venue for equity and options
   strategies (the project CI template runs it).
 - Type checking with pyright in CI (standard everywhere, strict on `signalquarry.sdk` and

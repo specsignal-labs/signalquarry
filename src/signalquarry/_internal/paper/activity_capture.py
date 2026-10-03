@@ -233,3 +233,25 @@ def verify_activity_capture(root: Path, capture_hash: str, *, account_sha256: st
         raise PaperError("DATA_MANIFEST_INVALID", "blocked", "paper activity capture") from exc
     except (OSError, ValueError, TypeError, KeyError) as exc:
         raise PaperError("DATA_MANIFEST_INVALID", "blocked", "paper activity capture") from exc
+
+
+def verified_activity_pages(
+    root: Path, capture_hash: str, *, account_sha256: str
+) -> tuple[dict[str, Any], list[BrokerActivityPage]]:
+    """Read pages only after capture verification, checking hashes again on use."""
+    capture = verify_activity_capture(root, capture_hash, account_sha256=account_sha256)
+    pages: list[BrokerActivityPage] = []
+    try:
+        for ref in capture["pages"]:
+            body = _read_private(root / "pages" / f"{ref['sha256']}.json")
+            if hashlib.sha256(body).hexdigest() != ref["sha256"]:
+                raise ValueError("activity page changed after verification")
+            rows = json.loads(body)
+            if not isinstance(rows, list) or len(rows) != ref["count"]:
+                raise ValueError("activity page rows changed")
+            pages.append(BrokerActivityPage(ref["params"], body, ref["sha256"], tuple(rows)))
+    except PaperError:
+        raise
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise PaperError("DATA_MANIFEST_INVALID", "blocked", "paper activity pages") from exc
+    return capture, pages

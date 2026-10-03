@@ -446,7 +446,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 |---|---|
 | `cli` | `(package)`, `main` |
 | `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep`, `universe` |
-| `paper` | `(package)`, `activity_capture`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
+| `paper` | `(package)`, `activity_capture`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
@@ -521,6 +521,9 @@ flowchart LR
   c_paper --> c_paper_status["status"]
   c_paper --> c_paper_capture_activities["capture-activities"]
   c_paper --> c_paper_verify_activities["verify-activities"]
+  c_paper --> c_paper_observe_activities["observe-activities"]
+  c_paper --> c_paper_verify_observations["verify-observations"]
+  c_paper --> c_paper_compare_observations["compare-observations"]
   c_paper --> c_paper_reconcile["reconcile"]
   c_paper --> c_paper_halt["halt"]
   c_paper --> c_paper_drift["drift"]

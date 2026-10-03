@@ -144,11 +144,24 @@ journaled, broker-led integration remain required before enabling any event.
 The read-only paper activity capture path now records complete Trading API
 activity pages for an explicit creation-time window in an owner-only cache
 outside the project. It binds the capture to a configured account ID hash,
-records raw-page hashes, and verifies pagination and content offline. Alpaca's
+records raw-page hashes, stamps the local time after the last page is received,
+and verifies pagination and content offline. Alpaca's
 `after`/`until` filters use activity creation time, which may differ from
 effective and settlement dates. A capture is evidence for later schema work,
 not proof that every activity for an economic date is present. It does not
 decode provider terms, append to the paper journal, or enable an action.
+
+An offline observation step now normalizes those private activity pages into
+a second immutable, content-addressed record. It retains the provider's
+reported ID, type, symbol, date and transaction time when present, plus field
+names and row/page hashes. It preserves missing fields and verifies the record
+against the captured pages. This is a schema/revision study aid only: neither
+reported date establishes the economic effective date, and no event ID,
+asset mapping, cash consideration or position change is inferred. The API
+returns only counts and hashes; the paper runner does not consume the record.
+Two observations from the same account and creation-time window can be compared
+offline by activity ID and raw-row hash. The aggregate counts expose neither
+IDs nor row contents and do not establish why a row is absent or changed.
 
 ## Consequences
 
