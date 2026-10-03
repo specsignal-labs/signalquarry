@@ -1,0 +1,155 @@
+name: live-data-smoke
+
+on:
+  schedule:
+    - cron: "17 13 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-data-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check for the dedicated read-only data key
+        id: credentials
+        shell: bash
+        env:
+          APCA_API_KEY_ID: ${{ secrets.SQY_ALPACA_DATA_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.SQY_ALPACA_DATA_SECRET_KEY }}
+        run: |
+          if [[ -z "${APCA_API_KEY_ID}" || -z "${APCA_API_SECRET_KEY}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Live-data smoke"
+              echo
+              echo "Skipped: configure the dedicated data-only repository secrets to enable provider checks."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice::Skipped live-data smoke; configure SQY_ALPACA_DATA_KEY_ID and SQY_ALPACA_DATA_SECRET_KEY repository secrets."
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        if: steps.credentials.outputs.configured == 'true'
+        with:
+          version: "0.12.1"
+
+      - name: Install SignalQuarry
+        if: steps.credentials.outputs.configured == 'true'
+        run: uv sync --locked --python 3.12
+
+      - name: Fetch, verify, backtest, and probe options coverage
+        if: steps.credentials.outputs.configured == 'true'
+        shell: bash
+        env:
+          APCA_API_KEY_ID: ${{ secrets.SQY_ALPACA_DATA_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.SQY_ALPACA_DATA_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+
+          project="$RUNNER_TEMP/sqy-live-smoke-${GITHUB_RUN_ID}"
+          export SIGNALQUARRY_CACHE_DIR="$RUNNER_TEMP/sqy-live-smoke-cache-${GITHUB_RUN_ID}"
+          mkdir -p "$SIGNALQUARRY_CACHE_DIR"
+
+          start="$(python3 -c 'from datetime import date, timedelta; print((date.today() - timedelta(days=400)).isoformat())')"
+          end="$(python3 -c 'from datetime import date, timedelta; print((date.today() - timedelta(days=1)).isoformat())')"
+          options_month="$(python3 -c 'from datetime import date, timedelta; print((date.today().replace(day=1) - timedelta(days=1)).strftime("%Y-%m"))')"
+
+          check_envelope() {
+            local label="$1" path="$2"
+            python3 - "$label" "$path" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          label, path = sys.argv[1:]
+          try:
+              envelope = json.loads(Path(path).read_text(encoding="utf-8"))
+          except (OSError, json.JSONDecodeError):
+              print(f"{label}: missing or invalid JSON envelope", file=sys.stderr)
+              raise SystemExit(1)
+          if envelope.get("status") != "ok":
+              reasons = ",".join(envelope.get("reason_codes", [])) or "none"
+              print(f"{label}: {envelope.get('status', 'missing')} ({reasons})", file=sys.stderr)
+              raise SystemExit(1)
+          print(f"{label}: ok")
+          PY
+          }
+
+          run_sqy() {
+            local label="$1" path="$2" command_status=0
+            shift 2
+            uv run sqy --json "$@" > "$path" || command_status=$?
+            check_envelope "$label" "$path" || return 1
+            [[ "$command_status" -eq 0 ]]
+          }
+
+          require_symbol_bars() {
+            python3 - "$1" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          envelope = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          coverage = (envelope.get("data") or {}).get("coverage") or {}
+          missing = [symbol for symbol in ("SPY", "QQQ") if int(coverage.get(symbol, {}).get("count", 0)) < 1]
+          if missing:
+              print(f"fetch: no bars for requested symbols ({','.join(missing)})", file=sys.stderr)
+              raise SystemExit(1)
+          print("fetch: SPY and QQQ have bars")
+          PY
+          }
+
+          run_sqy init "$RUNNER_TEMP/init.json" init "$project"
+          # The fresh starter defaults to SIP; this smoke deliberately uses IEX.
+          python3 - "$project" <<'PYFEED'
+          import sys
+          from pathlib import Path
+
+          import yaml
+
+          specifications = list(Path(sys.argv[1]).glob("src/*/sma_trend/strategy.yaml"))
+          if len(specifications) != 1:
+              raise SystemExit("smoke: expected one starter strategy specification")
+          specification = specifications[0]
+          data = yaml.safe_load(specification.read_text(encoding="utf-8"))
+          if data["data"]["feed"] != "sip":
+              raise SystemExit("smoke: unexpected starter feed")
+          data["data"]["feed"] = "iex"
+          specification.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+          PYFEED
+          run_sqy fetch "$RUNNER_TEMP/fetch.json" data fetch \
+            --strategy sma-trend --symbols SPY,QQQ --start "$start" --end "$end" --feed iex --project "$project"
+          require_symbol_bars "$RUNNER_TEMP/fetch.json"
+          run_sqy verify "$RUNNER_TEMP/verify.json" data verify --project "$project"
+          run_sqy backtest "$RUNNER_TEMP/backtest.json" backtest \
+            --strategy sma-trend --start "$start" --end "$end" --project "$project"
+          run_sqy options-probe "$RUNNER_TEMP/options-probe.json" data probe \
+            options-coverage --underlying QQQ --month "$options_month"
+
+          python3 - "$RUNNER_TEMP/options-probe.json" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          envelope = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          data = envelope.get("data") or {}
+          if "historical_option_bars" not in data:
+              print("options-probe: missing coverage result", file=sys.stderr)
+              raise SystemExit(1)
+          result = f"QQQ {data.get('month', 'unknown')}: historical option bars available = {bool(data['historical_option_bars'])}"
+          print(f"options coverage: {result}")
+          with Path(sys.argv[2]).open("a", encoding="utf-8") as summary:
+              summary.write("## Live-data smoke\n\n")
+              summary.write("- Data fetch, verification, and backtest: passed\n")
+              summary.write(f"- Options coverage: {result}\n")
+          PY
