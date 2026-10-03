@@ -133,3 +133,49 @@ def apply_lifecycle_events(state: LifecycleState, events: Sequence[LifecycleEven
     for event in sorted(events, key=lambda item: (item.effective_date, item.sequence, item.event_id)):
         current = apply_lifecycle_event(current, event)
     return current
+
+
+def _check_valuation_input(state: LifecycleState, cash: Decimal, session: date) -> None:
+    if not isinstance(cash, Decimal) or not cash.is_finite() or cash < 0:
+        raise LifecycleError("invalid settled cash")
+    if state.last_event_key is not None and session < state.last_event_key[0]:
+        raise LifecycleError("valuation before applied event")
+
+
+def settle_lifecycle_receivables(
+    state: LifecycleState, cash: Decimal, session: date
+) -> tuple[LifecycleState, Decimal]:
+    """Credit due consideration once, preserving the event replay guard."""
+    _check_valuation_input(state, cash, session)
+    due = tuple(item for item in state.receivables if item.pay_date <= session)
+    if not due:
+        return state, cash
+    remaining = tuple(item for item in state.receivables if item.pay_date > session)
+    settled = LifecycleState(
+        state.positions,
+        state.symbols,
+        remaining,
+        state.applied_event_ids,
+        state.last_event_key,
+    )
+    return settled, cash + sum((item.amount for item in due), ZERO)
+
+
+def value_lifecycle_state(
+    state: LifecycleState, marks: Mapping[AssetKey, Decimal], cash: Decimal, session: date
+) -> Decimal:
+    """Value held assets and unpaid consideration; refuse missing or invalid marks.
+
+    The caller applies all events effective through ``session`` before valuation.
+    This pure model does not source prices or authorize a paper order.
+    """
+    _check_valuation_input(state, cash, session)
+    total = cash + sum((item.amount for item in state.receivables), ZERO)
+    for asset, quantity in state.positions.items():
+        if not quantity:
+            continue
+        mark = marks.get(asset)
+        if not isinstance(mark, Decimal) or not mark.is_finite() or mark <= 0:
+            raise LifecycleError(f"missing or invalid mark for {asset.provider}")
+        total += quantity * mark
+    return total

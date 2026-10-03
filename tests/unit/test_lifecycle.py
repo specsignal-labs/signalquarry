@@ -17,6 +17,8 @@ from signalquarry._internal.engine.lifecycle import (
     LifecycleState,
     apply_lifecycle_event,
     apply_lifecycle_events,
+    settle_lifecycle_receivables,
+    value_lifecycle_state,
 )
 
 OLD = AssetKey("synthetic", "asset-old")
@@ -113,12 +115,77 @@ def test_mixed_merger_combines_existing_successor_holding_and_cash() -> None:
     assert dict(before.positions) == {OLD: Decimal(5), NEW: Decimal(3)}
 
 
+def test_cash_merger_receivable_is_valued_then_credited_once() -> None:
+    action = event("cash_merger", cash_per_old_share=Decimal("12.34"), cash_pay_date=PAY)
+    before = apply_lifecycle_event(holding(), action)
+    assert value_lifecycle_state(before, {}, Decimal(100), DAY) == Decimal("161.70")
+    pending, cash = settle_lifecycle_receivables(before, Decimal(100), date(2024, 1, 14))
+    assert pending is before and cash == Decimal(100)
+    settled, cash = settle_lifecycle_receivables(pending, cash, PAY)
+    assert cash == Decimal("161.70") and settled.receivables == ()
+    assert value_lifecycle_state(settled, {}, cash, PAY) == Decimal("161.70")
+    again, cash_again = settle_lifecycle_receivables(settled, cash, PAY)
+    assert again is settled and cash_again == cash
+    with pytest.raises(LifecycleError, match="duplicate or out-of-order"):
+        apply_lifecycle_event(settled, action)
+
+
+def test_stock_merger_values_successor_by_asset_key_not_reused_ticker() -> None:
+    action = event(
+        "stock_merger",
+        target=NEW,
+        target_symbol="SYNA",
+        share_ratio=Decimal("0.4"),
+        fraction_policy="reject_noninteger",
+    )
+    after = apply_lifecycle_event(holding(), action)
+    assert value_lifecycle_state(after, {NEW: Decimal("24.68")}, Decimal(10), DAY) == Decimal("59.36")
+    with pytest.raises(LifecycleError, match="missing or invalid mark"):
+        value_lifecycle_state(after, {OLD: Decimal("24.68")}, Decimal(10), DAY)
+
+
+@pytest.mark.parametrize("bad_mark", [None, Decimal(0), Decimal(-1), Decimal("NaN")])
+def test_held_asset_requires_valid_mark(bad_mark: Decimal | None) -> None:
+    marks = {} if bad_mark is None else {OLD: bad_mark}
+    with pytest.raises(LifecycleError, match="missing or invalid mark"):
+        value_lifecycle_state(holding(), marks, Decimal(100), DAY)
+
+
+def test_valuation_rejects_invalid_cash_and_time_travel() -> None:
+    after = apply_lifecycle_event(holding(), event("rename", target_symbol="SYNB"))
+    with pytest.raises(LifecycleError, match="invalid settled cash"):
+        value_lifecycle_state(after, {OLD: Decimal(1)}, Decimal("NaN"), DAY)
+    with pytest.raises(LifecycleError, match="valuation before applied event"):
+        value_lifecycle_state(after, {OLD: Decimal(1)}, Decimal(0), date(2024, 1, 9))
+    with pytest.raises(LifecycleError, match="valuation before applied event"):
+        settle_lifecycle_receivables(after, Decimal(0), date(2024, 1, 9))
+
+
 def test_zero_holding_still_updates_identity_without_creating_consideration() -> None:
     before = LifecycleState({}, {OLD: "SYNA"})
     action = event("cash_merger", cash_per_old_share=Decimal("12.34"), cash_pay_date=PAY)
     after = apply_lifecycle_event(before, action)
     assert dict(after.positions) == {} and dict(after.symbols) == {}
     assert after.receivables == ()
+    assert value_lifecycle_state(after, {}, Decimal(100), DAY) == Decimal(100)
+
+
+def test_mixed_merger_valuation_counts_successor_and_pending_cash() -> None:
+    before = LifecycleState({OLD: Decimal(5), NEW: Decimal(3)}, {OLD: "SYNA", NEW: "SYNB"})
+    action = event(
+        "mixed_merger",
+        target=NEW,
+        target_symbol="SYNB",
+        share_ratio=Decimal("0.4"),
+        fraction_policy="reject_noninteger",
+        cash_per_old_share=Decimal("3.25"),
+        cash_pay_date=PAY,
+    )
+    after = apply_lifecycle_event(before, action)
+    # Five successor shares at 20.00 plus 16.25 pending cash consideration.
+    assert value_lifecycle_state(after, {NEW: Decimal(20)}, Decimal(100), DAY) == Decimal("216.25")
+    settled, cash = settle_lifecycle_receivables(after, Decimal(100), PAY)
+    assert value_lifecycle_state(settled, {NEW: Decimal(20)}, cash, PAY) == Decimal("216.25")
 
 
 def test_same_day_actions_require_explicit_sequence_and_replay_once() -> None:
@@ -148,6 +215,9 @@ def test_ambiguous_successor_and_source_aliases_are_rejected() -> None:
         apply_lifecycle_event(before, action)
     with pytest.raises(LifecycleError, match="source asset alias mismatch"):
         apply_lifecycle_event(holding(), replace(action, source_symbol="SYNZ"))
+    existing = LifecycleState({OLD: Decimal(5), NEW: Decimal(3)}, {OLD: "SYNA", NEW: "SYNB"})
+    with pytest.raises(LifecycleError, match="successor asset alias mismatch"):
+        apply_lifecycle_event(existing, replace(action, target_symbol="SYNZ"))
 
 
 @pytest.mark.parametrize(
@@ -180,6 +250,16 @@ def test_invalid_initial_state_is_rejected(positions: dict, symbols: dict) -> No
     with pytest.raises(LifecycleError) as info:
         LifecycleState(positions, symbols)
     assert info.value.code == "CORPORATE_ACTION_UNSUPPORTED"
+
+
+def test_invalid_cash_receivable_is_rejected() -> None:
+    with pytest.raises(LifecycleError, match="invalid cash receivable"):
+        LifecycleState({}, {}, (CashReceivable("event", PAY, Decimal("NaN")),))
+
+
+def test_zero_quantity_does_not_require_a_price_mark() -> None:
+    state = LifecycleState({OLD: Decimal(0)}, {OLD: "SYNA"})
+    assert value_lifecycle_state(state, {}, Decimal(100), DAY) == Decimal(100)
 
 
 def test_state_does_not_expose_mutable_position_or_alias_maps() -> None:

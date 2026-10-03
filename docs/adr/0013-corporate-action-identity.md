@@ -87,7 +87,11 @@ is allowed only when the event explicitly retains fractional shares; otherwise
 it stops. It rejects successor identities from a different provider namespace
 until a cross-provider mapping is verified. It records cash consideration as a
 dated receivable. Provider parsing,
-valuation, paper activity reconciliation and spin-offs remain separate work;
+paper activity reconciliation and spin-offs remain separate work. A pure
+asset-keyed valuation helper now requires a finite positive mark for every
+held asset and counts dated cash consideration as a receivable until it is
+credited once on the payment date; this does not wire lifecycle events into
+the symbol-keyed backtest ledger or provider feed. Consequently,
 no Alpaca action family is enabled by the internal model alone.
 
 ## Consequences
