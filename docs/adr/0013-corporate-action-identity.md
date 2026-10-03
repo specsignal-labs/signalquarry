@@ -86,8 +86,16 @@ removal, cash merger, stock merger and mixed merger. A noninteger share outcome
 is allowed only when the event explicitly retains fractional shares; otherwise
 it stops. It rejects successor identities from a different provider namespace
 until a cross-provider mapping is verified. It records cash consideration as a
-dated receivable. Provider parsing,
-paper activity reconciliation and spin-offs remain separate work. A pure
+dated receivable. An observation-only Alpaca row parser (normalization version
+1) now records the provider action ID, type, source symbol when present,
+process date, optional ex-date, UTC capture time, raw-page hashes, and a
+canonical row hash. It verifies source page integrity, keeps incomplete rows
+visible, and rejects conflicting revisions within one capture. It drops raw
+terms (including CUSIP) from its normalized record and has no path into the
+ledger. The capture timestamp is supplied by the caller; it does not
+reconstruct when a historical provider record first became available.
+Executable provider term parsing, sanitized real-provider cassettes, paper
+activity reconciliation and spin-offs remain separate work. A pure
 asset-keyed valuation helper now requires a finite positive mark for every
 held asset and counts dated cash consideration as a receivable until it is
 credited once on the payment date; this does not wire lifecycle events into
