@@ -10,6 +10,19 @@ prompt: |
 expect:
   reached: [check, backtest, "spec freeze", evaluate, report]
   strategies: [cash-secured-put]
+  command_targets:
+    backtest: {strategy: cash-secured-put}
+    "spec freeze": {strategy: cash-secured-put}
+    evaluate: {strategy: cash-secured-put}
+    report: {strategy: cash-secured-put}
+  behavior:
+    check: cash_secured_put
+    strategy_id: cash-secured-put
+    kind: options_single_leg
+    feed: synthetic
+    symbols: [QQQ]
+    params: {underlying: QQQ, min_dte: 21, max_dte: 45, otm: "0.05", take_profit: "0.5"}
+    options: {underlyings: [QQQ]}
 reference:
   package: evallab
   files:
