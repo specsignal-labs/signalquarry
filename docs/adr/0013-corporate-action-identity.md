@@ -103,10 +103,17 @@ later-observed revision, but consumers must not apply it at an earlier decision
 cutoff. The synthetic-only asset-keyed backtest now applies resolved events
 before planning, keeps holdings and target weights keyed by asset, records the
 dated display symbol on fills, and blocks late revisions, retired queued
-targets, and missing marks. It adapts asset keys through the existing shared
-order planner. Provider ingestion, paper planning and paper activation remain
-separate gates. Decision cutoffs are explicit caller-supplied timestamps; this
-model does not infer exchange calendars or open times.
+targets, and missing marks. A synthetic-only `plan_asset_pre_open` path owns
+each session's lifecycle transition, point-in-time decision and order sizing;
+the backtest executes the resulting orders. A direct pre-open intent uses prior
+marks and does not inspect the session's open; the historical simulator may
+supply an optional open-availability callback to retain its missing-open
+warnings and retries. Synthetic transition vectors compare the backtest and
+pre-open plan across renames, ticker reuse, splits, removals and mergers, while
+late first observations and revisions fail closed. Provider ingestion, paper
+planning and paper activation remain separate gates. Decision cutoffs are
+explicit caller-supplied timestamps; this model does not infer exchange
+calendars or open times.
 
 ## Consequences
 

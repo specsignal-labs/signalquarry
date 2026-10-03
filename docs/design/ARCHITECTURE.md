@@ -189,6 +189,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - `execution_delay_sessions` exists for stress runs.
 - **Costs:** bps + per-share + SEC/TAF fees. Fill models `fixed_bps` and `volume_cap`. Options: per-contract fee plus a required spread haircut.
 - **Corporate actions:** splits adjust lots and pending orders; dividends accrue at the ex-date and are credited at the payable date. The Alpaca adapter requests all action types and rejects nonempty unmodelled collections, including mergers, spin-offs, name changes and worthless removals, or a split with `new_symbol`, with `CORPORATE_ACTION_UNSUPPORTED` before building the dataset. Provider availability is not guaranteed at event time; this guard does not establish complete point-in-time coverage.
+- **Asset-keyed synthetic path:** `plan_asset_pre_open` applies point-in-time lifecycle events, makes the strategy decision and sizes orders for one session using prior marks. A direct pre-open intent does not inspect that session's open; the asset-keyed backtest can supply an optional simulator-only open-availability callback before executing its planned orders. Provider cassettes and broker activity reconciliation remain pending, and the legacy paper runner continues to use its existing planner.
 - **Settlement:** T+2 before 2024-05-28, T+1 after; options T+1.
 - **Options:**
   - The engine owns the wheel state machine.

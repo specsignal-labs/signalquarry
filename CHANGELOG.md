@@ -30,6 +30,10 @@ change provisional surfaces after deprecation).
   partial run directories. Artifact formats and ledger hashes are unchanged.
 - Developer tooling for private, read-only Alpaca HTTP cassette capture and strict offline replay;
   response fixtures are source-labeled, credential-redacted, hash-verified, and stored outside Git worktrees.
+- Synthetic-only asset-keyed pre-open planning, shared by the asset-keyed
+  backtest, with lifecycle parity vectors for renames, ticker reuse, splits,
+  removals, mergers and late-event failures. Provider ingestion and paper
+  planning remain separate gates.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
