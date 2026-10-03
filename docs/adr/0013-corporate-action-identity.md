@@ -80,6 +80,16 @@ unchanged; a new version must carry any lifecycle and observation manifests.
 The factor universe may use only a historical asset/alias snapshot with a
 recorded observation cutoff, or report retrospective coverage explicitly.
 
+The initial internal transition model accepts only fully specified synthetic
+terms with fees explicitly confirmed zero. It models rename, split, worthless
+removal, cash merger, stock merger and mixed merger. A noninteger share outcome
+is allowed only when the event explicitly retains fractional shares; otherwise
+it stops. It rejects successor identities from a different provider namespace
+until a cross-provider mapping is verified. It records cash consideration as a
+dated receivable. Provider parsing,
+valuation, paper activity reconciliation and spin-offs remain separate work;
+no Alpaca action family is enabled by the internal model alone.
+
 ## Consequences
 
 This proposal adds an identity and event layer before factor discovery. It
