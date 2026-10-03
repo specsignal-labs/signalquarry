@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.data.asset_dataset import AssetDatasetError, AssetDatasetV1, AssetSeries
 from signalquarry._internal.data.dataset import FIELDS, MICRO
 from signalquarry._internal.data.identity import AliasBook, AliasObservation, AssetKey, IdentityError
@@ -336,6 +337,102 @@ def test_cash_merger_receivable_is_in_equity_then_paid_once() -> None:
     assert result.cash[1] == Decimal("5000.000000")
     assert result.cash[3] == Decimal("10000.000000")
     assert result.equity[-1] == Decimal("10000.000000")
+
+
+def test_asset_backtest_ledger_commits_to_event_version_and_result_rows() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    event = action("rename", sessions, target_symbol="SYNB")
+    data = make_dataset(
+        {OLD: ([100] * 6, [True] * 6)},
+        make_aliases(sessions, change_symbol="SYNB"),
+        (event,),
+    )
+
+    result = _run(data, ("SYNA", "SYNB"))
+    repeated = _run(data, ("SYNA", "SYNB"))
+    document = result.ledger_document()
+    event_version = canonical_hash(data.manifest_document()["events"][0])
+
+    assert document["dataset_identity"] == data.identity()
+    assert document["decisions"] == result.decisions
+    assert document["applied_events"] == [{"event_id": event.event_id, "version_identity": event_version}]
+    assert document["equity"] == [
+        [session.isoformat(), equity, cash]
+        for session, equity, cash in zip(result.sessions, result.equity, result.cash, strict=True)
+    ]
+    assert document["fills"] == [
+        [
+            sessions[1].isoformat(),
+            {"provider": "synthetic", "asset_id": OLD.asset_id},
+            "SYNA",
+            "buy",
+            Decimal(50),
+            Decimal(100),
+            Decimal("0.00"),
+            None,
+        ]
+    ]
+    assert document["positions"] == [
+        {"asset": {"provider": "synthetic", "asset_id": OLD.asset_id}, "quantity": Decimal(50)}
+    ]
+    assert result.ledger_hash == canonical_hash(document)
+    assert repeated.ledger_document() == document
+    assert repeated.ledger_hash == result.ledger_hash
+
+
+def test_asset_backtest_ledger_distinguishes_event_page_revisions() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    event = action("rename", sessions, target_symbol="SYNB")
+    aliases = make_aliases(sessions, change_symbol="SYNB")
+    prices = {OLD: ([100] * 6, [True] * 6)}
+    original = make_dataset(prices, aliases, (event,))
+    revised = make_dataset(prices, aliases, (dataclasses.replace(event, page_hashes=("c" * 64,)),))
+
+    original_result = _run(original, ("SYNA", "SYNB"))
+    revised_result = _run(revised, ("SYNA", "SYNB"))
+
+    assert (
+        original_result.applied_events[0]["version_identity"]
+        != revised_result.applied_events[0]["version_identity"]
+    )
+    assert original_result.ledger_hash != revised_result.ledger_hash
+
+
+def test_asset_backtest_ledger_includes_sale_settlement_session() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    data = make_dataset(
+        {OLD: ([100] * 6, [True] * 6)},
+        make_aliases(sessions),
+    )
+
+    def buy_then_sell(ctx: Ctx, params: Weight) -> Decision:
+        target = params.value if ctx.decision_session < sessions[3] else Decimal(0)
+        return Decision.target({ctx.symbols[0]: target}, "GO")
+
+    result = run_asset_backtest(
+        spec(("SYNA",), execution={"costs": {"bps": "0", "per_share": "0"}}),
+        _definition(buy_then_sell),
+        Weight(),
+        data,
+    )
+    sell = next(fill for fill in result.fills if fill.side == "sell")
+    sell_row = next(row for row in result.ledger_document()["fills"] if row[3] == "sell")
+
+    assert sell.settle_session == sessions[5]
+    assert sell_row[7] == sell.settle_session.isoformat()
+
+
+def test_asset_backtest_ledger_rejects_misaligned_session_rows() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    data = make_dataset(
+        {OLD: ([100] * 6, [True] * 6)},
+        make_aliases(sessions),
+    )
+    result = _run(data, ("SYNA",))
+    result.cash.pop()
+
+    with pytest.raises(ValueError, match="shorter than argument"):
+        result.ledger_document()
 
 
 def test_mixed_merger_moves_stock_and_pays_cash_consideration() -> None:
