@@ -809,8 +809,8 @@ _CODES += (
     ReasonCode(
         "CORPORATE_ACTION_UNSUPPORTED",
         Category.DATA,
-        "A corporate action the simulator cannot model happened while a position was open.",
-        "Exclude the period or the underlying; the run stops rather than guess.",
+        "Fetched data contains an unmodelled corporate action, or one affected an open options position.",
+        "Exclude the period or underlying; data preparation or the run stops rather than guess.",
     ),
     ReasonCode(
         "PAPER_KIND_UNSUPPORTED",

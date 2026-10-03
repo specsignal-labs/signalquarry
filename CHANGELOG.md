@@ -90,6 +90,7 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Fixed
+- Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
 - Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
   instead of an internal error.
 - A paper snapshot requested with zero recent fills now returns an empty list instead

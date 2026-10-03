@@ -188,7 +188,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - `cash` accounts spend settled cash only; `margin` accounts use buying power.
   - `execution_delay_sessions` exists for stress runs.
 - **Costs:** bps + per-share + SEC/TAF fees. Fill models `fixed_bps` and `volume_cap`. Options: per-contract fee plus a required spread haircut.
-- **Corporate actions:** splits adjust lots and pending orders; dividends accrue at the ex-date and are credited at the payable date; spin-offs and mergers stop the run with `CORPORATE_ACTION_UNSUPPORTED`.
+- **Corporate actions:** splits adjust lots and pending orders; dividends accrue at the ex-date and are credited at the payable date. The Alpaca adapter requests all action types and rejects nonempty unmodelled collections, including mergers, spin-offs, name changes and worthless removals, or a split with `new_symbol`, with `CORPORATE_ACTION_UNSUPPORTED` before building the dataset. Provider availability is not guaranteed at event time; this guard does not establish complete point-in-time coverage.
 - **Settlement:** T+2 before 2024-05-28, T+1 after; options T+1.
 - **Options:**
   - The engine owns the wheel state machine.

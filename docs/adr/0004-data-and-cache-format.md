@@ -18,6 +18,16 @@ project. The manifest records observation time and aggregate counts, not names,
 symbols, CUSIPs, or prices. Verification re-parses the raw array and checks
 its normalized asset-record hash. These captures do not revise dataset v1.
 
+The Alpaca corporate-action request includes all action types and incomplete
+records. The dataset builder accepts only ordinary splits without a symbol
+change and cash dividends; any other nonempty action collection, or a split
+that changes symbol, fails with `CORPORATE_ACTION_UNSUPPORTED`. It must not
+silently turn a merger, delisting or symbol change into a normal price gap.
+This is a conservative data-ingestion guard until asset identity, payoff and
+paper-reconciliation semantics are specified. Alpaca filters this endpoint by
+process date and does not guarantee when an action becomes available, so a
+successful fetch cannot prove complete point-in-time coverage.
+
 ## Consequences
 
 pyarrow becomes a core dependency. Users bring their own data keys; no market data is ever committed or shared.
