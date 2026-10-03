@@ -181,6 +181,7 @@ def reason_code_catalog() -> dict[str, dict[str, str]]:
 
 from signalquarry.api.commit import commit_create, commit_reveal, commit_verify  # noqa: E402
 from signalquarry.api.data import (  # noqa: E402
+    data_capture_actions,
     data_fetch,
     data_ls,
     data_probe_options,
@@ -236,6 +237,7 @@ __all__ = [
     "commit_create",
     "commit_reveal",
     "commit_verify",
+    "data_capture_actions",
     "data_fetch",
     "data_ls",
     "data_probe_options",

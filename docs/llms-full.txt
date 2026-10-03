@@ -550,6 +550,24 @@ volume filters do not establish corporate-action-adjusted factor returns.
 The command reports classification provenance as unverified because it cannot
 independently establish when or how the caller's classification was assembled.
 
+## Corporate-action audit captures
+
+```bash
+sqy data capture-actions --symbols SPY,QQQ --start 2026-09-01 --end 2026-09-30
+sqy data verify
+sqy data ls
+```
+
+The capture requests every corporate-action category and keeps the raw pages
+and an immutable metadata-and-hashes observation record in the private cache under
+`corporate-actions/`. The record contains provider IDs, category, dates, row
+hashes, and page hashes, but no merger consideration, CUSIP, or other raw terms.
+It is marked nonredistributable and is not written into the public project.
+`sqy data verify` replays the cached pages and checks every observation; `data ls`
+lists capture hashes without asserting that they verified. Capture
+does not make an unsupported action executable or establish when a provider
+first knew it; the current backtest and paper guards remain in force.
+
 ## Options coverage
 
 Alpaca's options history starts in February 2024. Check whether expired contracts and
@@ -905,6 +923,17 @@ Download daily bars and corporate actions and record a manifest.
 | `--start` | first date (default 2016-01-01) |
 | `--end` | last date (default yesterday) |
 | `--feed` | default: the strategy's feed, else sip (one of `sip`, `iex`) |
+| `--project` | project directory (default: search upwards from cwd) |
+
+### `sqy data capture-actions`
+
+Record all corporate-action categories in the private cache.
+
+| Option | Meaning |
+|---|---|
+| `--symbols` | comma-separated uppercase symbols (required) |
+| `--start` | first process date (required) |
+| `--end` | last process date (required) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ### `sqy data probe`
