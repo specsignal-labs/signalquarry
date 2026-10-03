@@ -410,6 +410,8 @@ flowchart TB
   L6 --> L7
   L8["<b>canonical · calendar</b>"]
   L7 --> L8
+  mcp(["mcp<br/>outside the layers"])
+  mcp -.-> L1
   testing(["testing<br/>outside the layers"])
   testing -.-> L1
   testing -.-> L2
@@ -438,6 +440,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `contracts` | — |
 | `canonical` | — |
 | `calendar` | — |
+| `mcp` | `api` |
 | `testing` | `api`, `paper`, `data` |
 
 ### Component inventory
@@ -460,6 +463,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
 | `canonical` | `(package)` |
 | `calendar` | `(package)`, `nyse` |
+| `mcp` | `(package)`, `server` |
 | `testing` | `(package)` |
 
 ### Command tree

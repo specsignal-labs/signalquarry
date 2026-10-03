@@ -42,6 +42,7 @@ nav:
       - Working with agents: agents.md
   - Reference:
       - CLI: reference/cli.md
+      - MCP: reference/mcp.md
       - Reason codes: reference/reason-codes.md
       - SDK: reference/sdk.md
   - Design:

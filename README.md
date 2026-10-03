@@ -20,6 +20,11 @@ sqy report --strategy sma-trend
 `sqy init my-wheel --demo --kind options` starts from the reference options wheel.
 Open the project in your coding agent: it reads `AGENTS.md`.
 
+Agents that support local MCP tools can install `signalquarry[mcp]` and launch
+`sqy-mcp` over stdio. The adapter exposes project setup, data, checks,
+backtests, evaluation, factor discovery, and paper operations through the same
+structured envelopes as the CLI. See [MCP reference](docs/reference/mcp.md).
+
 ## What it guarantees
 
 - **One decision function, two clocks.** The backtest and the Alpaca paper runner call
