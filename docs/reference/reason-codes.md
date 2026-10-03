@@ -99,7 +99,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `PAPER_CONFIG_INVALID` | usage | The paper deployment config failed validation. | Fix the field named in the summary; run `sqy schema paper`. |
 | `PAPER_CONFIG_NOT_FOUND` | usage | No paper deployment config with that alias exists. | Create paper/<alias>.paper.yaml (see `sqy init`). |
 | `PAPER_CONTINUITY_BROKEN` | risk | The live journal does not extend the backup: history was rolled back or rewritten. | Investigate the host; restore the journal from the backup and re-arm. |
-| `PAPER_CORPORATE_ACTION_PENDING` | execution | The broker has not applied today's split to the position yet. | Rerun later in the window. |
+| `PAPER_CORPORATE_ACTION_PENDING` | execution | A corporate action or its cash credit has not appeared at the broker yet. | Wait for the broker to apply the action or credit, then rerun. |
+| `PAPER_CORPORATE_ACTION_UNRECONCILED` | risk | Broker positions or activities do not prove the expected corporate-action effects. | Keep paper submission halted; review the event terms, broker activity, asset mapping and journal. |
 | `PAPER_CREDENTIALS_MISSING` | environment | No credentials were found for the deployment's paper profile. | Add [paper.<alias>] to credentials.toml (0600) or set SIGNALQUARRY_PAPER_KEY_ID/SECRET_KEY. |
 | `PAPER_DATA_STALE` | execution | The previous session's bars are not available yet. | Rerun later in the window. |
 | `PAPER_DATA_UNAVAILABLE` | execution | Market data for the session could not be loaded. | Check data credentials and connectivity; rerun. |
