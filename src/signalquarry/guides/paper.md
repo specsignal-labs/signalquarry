@@ -126,16 +126,36 @@ capture a bounded creation-time window without placing orders:
 ```
 sqy paper capture-activities --alias A --created-after 2026-09-20T00:00:00+00:00 --created-until 2026-09-27T00:00:00+00:00
 sqy paper verify-activities --alias A --capture sha256:CAPTURE_HASH
+sqy paper observe-activities --alias A --capture sha256:CAPTURE_HASH
+sqy paper verify-observations --alias A --observation sha256:OBSERVATION_HASH
+sqy paper compare-observations --alias A --left sha256:EARLIER_OBSERVATION --right sha256:LATER_OBSERVATION
 ```
 
 The capture reads all activity types with ID-based pagination and writes raw
 responses and a hash-only manifest to an owner-only directory under the private
 cache, outside the project. The command output contains only counts, timestamps,
 and a capture hash. Verification replays the cached pages without credentials or
-network access. The API's `after` and `until` filters use activity **creation
+network access. The observation timestamp is taken after the last page is
+received; it does not claim when the provider first made a row available.
+The API's `after` and `until` filters use activity **creation
 time**, which can differ from the economic effective or settlement date; a
 window alone cannot prove that all activities for a historical session were
 observed. See Alpaca Trading API, “Retrieve Account Activities.”
+
+The offline observation command writes a second immutable record in the same
+private cache. It records each row's activity ID, reported type, symbol, date
+and transaction time when supplied, field names, and raw-row/page hashes. The
+CLI and API expose only aggregate counts and hashes. A missing field remains
+missing; neither reported date is treated as the economic effective date.
+Verification replays the original capture and every normalized row. These
+observations do not establish a corporate-action event link, asset identity,
+consideration, or settlement. They cannot be used to resume a halted paper
+runner.
+
+Comparing two verified observations requires the same account and creation-time
+window. It reports aggregate row-ID additions, absences, changes, and unchanged
+rows without exposing IDs or row data. An absent row is not proof that the
+provider deleted an activity; a changed row is not a verified economic revision.
 
 These raw captures are nonredistributable, do not decode corporate-action terms,
 and do not enable a blocked action or authorize paper submission. Keep the cache

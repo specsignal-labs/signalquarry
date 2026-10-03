@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -30,6 +30,11 @@ from signalquarry._internal.paper.activity_capture import (
     capture_root,
     store_activity_capture,
     verify_activity_capture,
+)
+from signalquarry._internal.paper.activity_observations import (
+    compare_activity_observations,
+    observe_activity_capture,
+    verify_activity_observations,
 )
 from signalquarry._internal.paper.arm import sha256_hex
 from signalquarry._internal.paper.brokers.alpaca_options import AlpacaOptionsVenue
@@ -387,14 +392,14 @@ def paper_capture_activities(
 ) -> Envelope:
     """Capture complete paper account pages privately; never submit orders."""
     command = "paper capture-activities"
-    capture_time = observed_at or datetime.now(UTC)
+    window_check_time = observed_at or datetime.now(UTC)
     if (
         any(
             value.tzinfo is None or value.utcoffset() is None
-            for value in (created_after, created_until, capture_time)
+            for value in (created_after, created_until, window_check_time)
         )
         or created_after >= created_until
-        or created_until > capture_time
+        or created_until > window_check_time
     ):
         return Envelope(
             command=command,
@@ -423,6 +428,7 @@ def paper_capture_activities(
         if sha256_hex(broker.account().account_id) != expected_account_hash:
             raise PaperError("PAPER_ACCOUNT_MISMATCH", "blocked")
         pages = broker.activity_pages(created_after, created_until)
+        capture_time = observed_at or datetime.now(UTC)
         capture = store_activity_capture(
             private,
             pages,
@@ -488,6 +494,91 @@ def paper_verify_activities(alias: str, capture_hash: str, *, project: Path | No
             "pages": len(capture["pages"]),
             "redistributable": False,
         },
+    )
+
+
+def _activity_observation_envelope(command: str, record: dict[str, Any]) -> Envelope:
+    return Envelope(
+        command=command,
+        summary=f"observed {len(record['observations'])} private paper activities",
+        data={
+            "observation_hash": record["observation_hash"],
+            "capture_hash": record["capture_hash"],
+            "activities": len(record["observations"]),
+            "observed_at": record["observed_at"],
+            "redistributable": False,
+            "event_links_verified": False,
+            "economic_terms_verified": False,
+        },
+    )
+
+
+def paper_observe_activities(alias: str, capture_hash: str, *, project: Path | None = None) -> Envelope:
+    """Normalize captured rows privately without interpreting economic terms."""
+    command = "paper observe-activities"
+    context = _activity_capture_config(command, alias, project)
+    if isinstance(context, Envelope):
+        return context
+    root, config = context
+    assert config.expected_account_id_sha256 is not None
+    try:
+        private = capture_root(library_for(root).cache_dir, root)
+        record = observe_activity_capture(
+            private, capture_hash, account_sha256=config.expected_account_id_sha256
+        )
+    except PaperError as exc:
+        return failure_envelope(command, alias, exc)
+    except OSError:
+        return Envelope(command=command, status="unavailable", reason_codes=["CACHE_DIR_NOT_WRITABLE"])
+    return _activity_observation_envelope(command, record)
+
+
+def paper_verify_observations(alias: str, observation_hash: str, *, project: Path | None = None) -> Envelope:
+    """Replay an observation from private pages without credentials or network."""
+    command = "paper verify-observations"
+    context = _activity_capture_config(command, alias, project)
+    if isinstance(context, Envelope):
+        return context
+    root, config = context
+    assert config.expected_account_id_sha256 is not None
+    try:
+        private = capture_root(library_for(root).cache_dir, root)
+        record = verify_activity_observations(
+            private, observation_hash, account_sha256=config.expected_account_id_sha256
+        )
+    except PaperError as exc:
+        return failure_envelope(command, alias, exc)
+    except OSError:
+        return Envelope(command=command, status="unavailable", reason_codes=["CACHE_DIR_NOT_WRITABLE"])
+    return _activity_observation_envelope(command, record)
+
+
+def paper_compare_observations(
+    alias: str, left_hash: str, right_hash: str, *, project: Path | None = None
+) -> Envelope:
+    """Compare two private captures of one creation-time window offline."""
+    command = "paper compare-observations"
+    context = _activity_capture_config(command, alias, project)
+    if isinstance(context, Envelope):
+        return context
+    root, config = context
+    assert config.expected_account_id_sha256 is not None
+    try:
+        private = capture_root(library_for(root).cache_dir, root)
+        comparison = compare_activity_observations(
+            private,
+            left_hash,
+            right_hash,
+            account_sha256=config.expected_account_id_sha256,
+        )
+    except PaperError as exc:
+        return failure_envelope(command, alias, exc)
+    except OSError:
+        return Envelope(command=command, status="unavailable", reason_codes=["CACHE_DIR_NOT_WRITABLE"])
+    return Envelope(
+        command=command,
+        summary="compared private paper activity observations",
+        data=comparison,
     )
 
 

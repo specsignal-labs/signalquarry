@@ -365,6 +365,9 @@ _PAPER_ACTIONS = {
     "status": "Show the journal state: armed/halted, sessions, pending orders.",
     "capture-activities": "Read-only private capture of paper account activities by creation time.",
     "verify-activities": "Re-hash a private paper activity capture without contacting Alpaca.",
+    "observe-activities": "Normalize a private activity capture without interpreting economic terms.",
+    "verify-observations": "Rebuild private activity observations from captured pages offline.",
+    "compare-observations": "Compare private observations from the same account and creation window.",
     "reconcile": "Finalize journaled orders and check positions against the broker.",
     "halt": "Stop a deployment and cancel its open orders; a human re-arms.",
     "drift": "Replay sessions against the engine, measure fill slippage, apply model costs; gate G5.",
@@ -419,8 +422,13 @@ def _configure_paper(parser: argparse.ArgumentParser) -> None:
                 type=datetime.fromisoformat,
                 help="later creation time with UTC offset",
             )
-        if name == "verify-activities":
+        if name in ("verify-activities", "observe-activities"):
             child.add_argument("--capture", required=True, help="private capture hash")
+        if name == "verify-observations":
+            child.add_argument("--observation", required=True, help="private observation hash")
+        if name == "compare-observations":
+            child.add_argument("--left", required=True, help="earlier private observation hash")
+            child.add_argument("--right", required=True, help="later private observation hash")
 
 
 def _paper(args: argparse.Namespace) -> Envelope:
@@ -441,6 +449,12 @@ def _paper(args: argparse.Namespace) -> Envelope:
         return api.paper_capture_activities(alias, args.created_after, args.created_until, project=project)
     if args.action == "verify-activities":
         return api.paper_verify_activities(alias, args.capture, project=project)
+    if args.action == "observe-activities":
+        return api.paper_observe_activities(alias, args.capture, project=project)
+    if args.action == "verify-observations":
+        return api.paper_verify_observations(alias, args.observation, project=project)
+    if args.action == "compare-observations":
+        return api.paper_compare_observations(alias, args.left, args.right, project=project)
     handlers = {
         "preflight": api.paper_preflight,
         "dry-run": api.paper_dry_run,

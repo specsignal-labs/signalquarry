@@ -465,6 +465,37 @@ Re-hash a private paper activity capture without contacting Alpaca.
 | `--project` | project directory (default: search upwards from the current directory) |
 | `--capture` | private capture hash (required) |
 
+### `sqy paper observe-activities`
+
+Normalize a private activity capture without interpreting economic terms.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--capture` | private capture hash (required) |
+
+### `sqy paper verify-observations`
+
+Rebuild private activity observations from captured pages offline.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--observation` | private observation hash (required) |
+
+### `sqy paper compare-observations`
+
+Compare private observations from the same account and creation window.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--left` | earlier private observation hash (required) |
+| `--right` | later private observation hash (required) |
+
 ### `sqy paper reconcile`
 
 Finalize journaled orders and check positions against the broker.
