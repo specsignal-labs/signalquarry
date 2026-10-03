@@ -94,6 +94,14 @@ credited once on the payment date; this does not wire lifecycle events into
 the symbol-keyed backtest ledger or provider feed. Consequently,
 no Alpaca action family is enabled by the internal model alone.
 
+The new `AssetDatasetV1` manifest stores raw bars by `AssetKey`, dated alias
+observations, normalized event terms and their page-hash provenance. It records
+an observation cutoff and a decision cutoff for every session. Its schema and
+content identity are separate from the legacy symbol-keyed `Dataset` identity;
+the old hash and result format remain unchanged. A manifest may contain a
+later-observed revision, but consumers must not apply it at an earlier decision
+cutoff. The asset-keyed backtest integration remains a separate acceptance gate.
+
 ## Consequences
 
 This proposal adds an identity and event layer before factor discovery. It

@@ -1041,6 +1041,14 @@ _CODES += (
         "Provide completed factor history and a prior-cutoff weight row, or use equal weights.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "ASSET_DATASET_INVALID",
+        Category.DATA,
+        "An asset-keyed dataset has inconsistent identity, provenance, cutoff or raw-mark data.",
+        "Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 

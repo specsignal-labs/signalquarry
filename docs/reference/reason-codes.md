@@ -7,6 +7,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | Code | Category | Meaning | What to do |
 |---|---|---|---|
 | `AGENTS_MD_UNMANAGED` | usage | AGENTS.md has no signalquarry:begin/end blocks, so there is nothing safe to refresh. | Compare it by hand with a fresh `sqy init` template, then keep the markers. |
+| `ASSET_DATASET_INVALID` | data | An asset-keyed dataset has inconsistent identity, provenance, cutoff or raw-mark data. | Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks. |
 | `BACKTEST_RANGE_EMPTY` | data | No sessions in the requested backtest range. | Widen --start/--end or fetch more data. |
 | `BROKER_CREDENTIALS_REJECTED` | environment | The broker rejected the paper credentials. | Check the keys of the paper profile; use keys of a paper account. |
 | `BROKER_NOT_PAPER_ONLY` | risk | A broker plugin returned a broker that does not declare paper_only = True. | Only paper brokers can be used; there is no live path. Fix or remove the plugin. |
