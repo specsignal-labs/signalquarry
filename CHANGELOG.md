@@ -92,6 +92,9 @@ change provisional surfaces after deprecation).
 - `sqy doctor` reports whether the OpenTimestamps client is installed (`OTS_CLIENT_MISSING`).
 - `sqy data record options`: record today's option chain (raw pages cached, hash-only record
   in `data/options/`), verified by `data verify` and listed by `data ls`.
+- Weekly maintainer-only `live-data-smoke` workflow for read-only Alpaca bars, manifest
+  verification, a sample backtest, and an options-history coverage report; without the
+  dedicated data-only repository secrets, the run is explicitly skipped.
 - Options backtests, evaluations and sweeps on real data use recorded chains where they exist
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 

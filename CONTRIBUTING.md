@@ -98,6 +98,17 @@ CI runs the same check over every pull request. When a change needs no design up
 the trailer `Architecture: unchanged` to a commit message (or `SIGNALQUARRY_ARCH_OK=1` for
 the local hook).
 
+## Live-data smoke (maintainers)
+
+The weekly `live-data-smoke` workflow runs a read-only check against Alpaca after it is
+enabled on the default branch. Configure repository secrets
+`SQY_ALPACA_DATA_KEY_ID` and `SQY_ALPACA_DATA_SECRET_KEY` with a dedicated data-only key.
+Without both secrets, scheduled or manually dispatched runs report a skip. The workflow
+fetches about 400 calendar days of SPY/QQQ bars, verifies the temporary manifest, runs the
+sample SMA backtest, and records whether sampled QQQ option contracts have historical bars.
+Project files and cached provider pages stay under the ephemeral runner temp directory and
+are not uploaded or committed. The workflow has no order-submission step.
+
 ## Sign-off (DCO)
 
 Contributions are accepted under the [Developer Certificate of Origin](https://developercertificate.org/).
@@ -107,3 +118,6 @@ Sign every commit: `git commit -s`. There is no CLA.
 
 AI-assisted contributions are welcome. Say so in the pull request and review
 the result as if you wrote it: you are responsible for every line.
+
+The smoke sets the disposable starter strategy to the same IEX feed it fetches;
+the default SIP configuration of ordinary projects is unchanged.
