@@ -15,15 +15,20 @@ from signalquarry._internal.paper.activity_capture import (
     _write_immutable,
     verified_activity_pages,
 )
+from signalquarry._internal.paper.activity_decoder import classify_activity_row
 from signalquarry._internal.paper.brokers.alpaca_paper import BrokerActivityPage
 from signalquarry._internal.paper.models import PaperError
 
-OBSERVATION_SCHEMA = "signalquarry.paper-activity-observations/v1"
+OBSERVATION_SCHEMA_V1 = "signalquarry.paper-activity-observations/v1"
+OBSERVATION_SCHEMA = "signalquarry.paper-activity-observations/v2"
+NORMALIZATION_VERSION = 2
 _HASH = re.compile(r"sha256:[0-9a-f]{64}")
 
 
-def make_activity_observations(capture: dict[str, Any], pages: list[BrokerActivityPage]) -> dict[str, Any]:
-    """Retain provider fields as observations without inferring event semantics."""
+def _make_v1_activity_observations(
+    capture: dict[str, Any], pages: list[BrokerActivityPage]
+) -> dict[str, Any]:
+    """Rebuild the original schema so existing private records remain verifiable."""
     observations = []
     for page in pages:
         for row in page.rows:
@@ -45,13 +50,57 @@ def make_activity_observations(capture: dict[str, Any], pages: list[BrokerActivi
             )
     record = to_canonical(
         {
-            "schema": OBSERVATION_SCHEMA,
+            "schema": OBSERVATION_SCHEMA_V1,
             "capture_hash": capture["capture_hash"],
             "account_sha256": capture["account_sha256"],
             "created_after": capture["created_after"],
             "created_until": capture["created_until"],
             "observed_at": capture["observed_at"],
             "normalization_version": 1,
+            "observations": observations,
+            "redistributable": False,
+            "event_links_verified": False,
+            "economic_terms_verified": False,
+        }
+    )
+    record["observation_hash"] = canonical_hash(record)
+    return record
+
+
+def make_activity_observations(capture: dict[str, Any], pages: list[BrokerActivityPage]) -> dict[str, Any]:
+    """Retain provider fields and documented category labels without terms."""
+    observations = []
+    for page in pages:
+        for row in page.rows:
+            classification = classify_activity_row(row)
+            observations.append(
+                {
+                    "activity_id": row["id"],
+                    "activity_type": classification.activity_type,
+                    "activity_sub_type": classification.activity_sub_type,
+                    "documented_family": classification.documented_family,
+                    "documented_pair": classification.documented_pair,
+                    "correction_present": classification.correction_present,
+                    "paper_eligible": classification.paper_eligible,
+                    "symbol": row.get("symbol") if isinstance(row.get("symbol"), str) else None,
+                    "reported_date": row.get("date") if isinstance(row.get("date"), str) else None,
+                    "reported_transaction_time": row.get("transaction_time")
+                    if isinstance(row.get("transaction_time"), str)
+                    else None,
+                    "fields": sorted(row),
+                    "raw_page_sha256": page.sha256,
+                    "raw_row_hash": canonical_hash(row),
+                }
+            )
+    record = to_canonical(
+        {
+            "schema": OBSERVATION_SCHEMA,
+            "capture_hash": capture["capture_hash"],
+            "account_sha256": capture["account_sha256"],
+            "created_after": capture["created_after"],
+            "created_until": capture["created_until"],
+            "observed_at": capture["observed_at"],
+            "normalization_version": NORMALIZATION_VERSION,
             "observations": observations,
             "redistributable": False,
             "event_links_verified": False,
@@ -85,9 +134,10 @@ def verify_activity_observations(root: Path, observation_hash: str, *, account_s
     try:
         digest = observation_hash.removeprefix("sha256:")
         record = json.loads(_read_private(root / "observations" / f"{digest}.json"))
+        schema = record.get("schema") if isinstance(record, dict) else None
         if (
             not isinstance(record, dict)
-            or record.get("schema") != OBSERVATION_SCHEMA
+            or schema not in (OBSERVATION_SCHEMA_V1, OBSERVATION_SCHEMA)
             or record.get("observation_hash") != observation_hash
             or record.get("account_sha256") != account_sha256
             or hash_without(record, "observation_hash") != observation_hash
@@ -95,7 +145,10 @@ def verify_activity_observations(root: Path, observation_hash: str, *, account_s
         ):
             raise ValueError("activity observation identity")
         capture, pages = verified_activity_pages(root, record["capture_hash"], account_sha256=account_sha256)
-        if make_activity_observations(capture, pages) != record:
+        rebuild = (
+            _make_v1_activity_observations if schema == OBSERVATION_SCHEMA_V1 else make_activity_observations
+        )
+        if rebuild(capture, pages) != record:
             raise ValueError("activity observation contents")
         return record
     except PaperError as exc:

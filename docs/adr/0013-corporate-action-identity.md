@@ -163,6 +163,20 @@ Two observations from the same account and creation-time window can be compared
 offline by activity ID and raw-row hash. The aggregate counts expose neither
 IDs nor row contents and do not establish why a row is absent or changed.
 
+Observation schema v2 also records an allowlisted provider category label for
+documented REST `activity_type` / `activity_sub_type` pairs covering splits,
+mergers, name changes and worthless removals. Alpaca documents the mapping from
+the legacy REST subtype field to Activity SSE and the corresponding activity
+categories in its official Activities guide.
+This decoder preserves only the category label, whether a correction reference
+was present, and the existing row hash; it does not retain correction IDs or
+parse quantity, price, cash, event dates or successor identity. Unknown pairs
+remain unclassified. Every row remains ineligible for paper use, and the
+record-level event-link and economic-term flags remain false. Version 1 private
+observation records remain verifiable. The documentation-based labels have
+not been checked against rights-cleared private provider cassettes, so the
+existing cassette and broker-reconciliation gate is unchanged.
+
 ## Consequences
 
 This proposal adds an identity and event layer before factor discovery. It
