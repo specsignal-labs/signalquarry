@@ -29,7 +29,10 @@ was known at a decision cutoff.
    If a source lacks a stable ID or a unique, nonoverlapping alias mapping for
    the relevant interval, identity resolution is unavailable; do not join two
    price histories merely because their ticker strings match. Reused tickers
-   are different assets.
+   are different assets. Alias record IDs are scoped to their provider; a
+   revision of one record cannot silently change its asset key. Overlapping
+   observations that assign one ticker to different assets, or one asset to
+   different tickers, fail identity resolution.
 2. **Record three clocks.** Every normalized event records its economic effective
    date, provider process date, and first observed UTC timestamp, with raw-page
    hashes and the normalization version. A later revision is a new observation,
