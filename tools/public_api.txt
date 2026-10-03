@@ -132,6 +132,7 @@ signalquarry.api.check_registered_factor(factor_id: 'str', *, project: 'Path | N
 signalquarry.api.commit_create(strategy_id: 'str', *, alias: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_reveal(commit_id: 'str', *, out: 'Path', project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.commit_verify(record_path: 'Path', reveal_path: 'Path') -> 'Envelope'
+signalquarry.api.data_capture_actions(symbols: 'tuple[str, ...]', start: 'date', end: 'date', *, project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, observed_at: 'datetime | None' = None) -> 'Envelope'
 signalquarry.api.data_fetch(*, strategy_id: 'str | None' = None, symbols: 'tuple[str, ...]' = (), start: 'date | None' = None, end: 'date | None' = None, feed: 'str | None' = None, project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, today: 'date | None' = None) -> 'Envelope'
 signalquarry.api.data_ls(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.data_probe_options(underlying: 'str', month: 'str', *, broker: 'OptionContractSource | None' = None, client: 'AlpacaDataClient | None' = None) -> 'Envelope'

@@ -187,6 +187,12 @@ def _configure_data(parser: argparse.ArgumentParser) -> None:
     fetch.add_argument("--start", type=date.fromisoformat, help="first date (default 2016-01-01)")
     fetch.add_argument("--end", type=date.fromisoformat, help="last date (default yesterday)")
     fetch.add_argument("--feed", choices=("sip", "iex"), help="default: the strategy's feed, else sip")
+    capture = actions.add_parser(
+        "capture-actions", help="Record all corporate-action categories in the private cache."
+    )
+    capture.add_argument("--symbols", required=True, help="comma-separated uppercase symbols")
+    capture.add_argument("--start", required=True, type=date.fromisoformat, help="first process date")
+    capture.add_argument("--end", required=True, type=date.fromisoformat, help="last process date")
     probe = actions.add_parser(
         "probe", help="Check provider coverage: expired option contracts and their bars."
     )
@@ -229,6 +235,9 @@ def _data(args: argparse.Namespace) -> Envelope:
         return api.data_record_options(
             args.underlying, max_dte=args.max_dte, width=args.width, project=args.project
         )
+    if args.action == "capture-actions":
+        symbols = tuple(item.strip().upper() for item in args.symbols.split(",") if item.strip())
+        return api.data_capture_actions(symbols, args.start, args.end, project=args.project)
     if args.action == "probe":
         return api.data_probe_options(args.underlying, args.month)
     if args.action == "verify":

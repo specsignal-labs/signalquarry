@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
+from signalquarry._internal.data.action_observations import store_action_capture, verify_action_capture
 from signalquarry._internal.data.alpaca import AlpacaDataClient, ProviderError, RawPage
 from signalquarry._internal.data.credentials import load_data_credentials
 from signalquarry._internal.data.library import (
@@ -22,6 +24,7 @@ from signalquarry._internal.project.project import ProjectError, find_root, load
 from signalquarry.api.envelope import Envelope
 
 HISTORY_START = date(2016, 1, 1)  # Alpaca stock history begins in 2016
+_SYMBOL = re.compile(r"[A-Z][A-Z0-9.]{0,9}\Z")
 
 
 def library_for(root: Path) -> Library:
@@ -137,6 +140,73 @@ def data_fetch(
     return envelope
 
 
+def data_capture_actions(
+    symbols: tuple[str, ...],
+    start: date,
+    end: date,
+    *,
+    project: Path | None = None,
+    client: AlpacaDataClient | None = None,
+    observed_at: datetime | None = None,
+) -> Envelope:
+    """Capture all action categories for audit without enabling their economics."""
+    envelope = Envelope(command="data capture-actions")
+    wanted = tuple(sorted(set(symbols)))
+    if (
+        not wanted
+        or len(wanted) > 500
+        or any(not _SYMBOL.fullmatch(symbol) for symbol in wanted)
+        or start > end
+    ):
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "usage",
+            ["USAGE_INVALID"],
+            "give 1–500 uppercase symbols and a valid --start/--end range",
+        )
+        return envelope
+    try:
+        root = find_root(project)
+    except ProjectError as exc:
+        envelope.status, envelope.reason_codes, envelope.summary = "invalid", [exc.code], exc.detail
+        return envelope
+    if client is None:
+        credentials = load_data_credentials()
+        if credentials is None:
+            envelope.status, envelope.reason_codes = "unavailable", ["DATA_CREDENTIALS_MISSING"]
+            envelope.summary = "no Alpaca market-data credentials"
+            return envelope
+        client = AlpacaDataClient(credentials.key_id, credentials.secret_key)
+    try:
+        pages = client.corporate_actions(wanted, start, end)
+        captured_at = observed_at or datetime.now(UTC)
+        library = library_for(root)
+        path, capture = store_action_capture(library, pages, observed_at=captured_at)
+        observations = verify_action_capture(library, path)
+    except (ProviderError, LibraryError) as exc:
+        envelope.status = (
+            "unavailable" if exc.code in ("PROVIDER_UNAVAILABLE", "DATA_CREDENTIALS_REJECTED") else "invalid"
+        )
+        envelope.reason_codes, envelope.summary = [exc.code], str(exc)
+        return envelope
+    except OSError:
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "unavailable",
+            ["CACHE_DIR_NOT_WRITABLE"],
+            "corporate-action cache could not be written",
+        )
+        return envelope
+    envelope.summary = f"captured {len(observations)} corporate-action observations"
+    envelope.data = {
+        "capture_hash": capture["capture_hash"],
+        "observed_at": capture["observed_at"],
+        "pages": len(pages),
+        "observations": len(observations),
+        "cache_record": str(path.relative_to(library.cache_dir)),
+        "redistributable": False,
+    }
+    return envelope
+
+
 def data_verify(*, project: Path | None = None) -> Envelope:
     envelope = Envelope(command="data verify")
     try:
@@ -159,6 +229,13 @@ def data_verify(*, project: Path | None = None) -> Envelope:
             results.append({"options_record": str(path.relative_to(root)), "ok": True})
         except (LibraryError, KeyError, TypeError) as exc:
             results.append({"options_record": str(path.relative_to(root)), "ok": False, "error": str(exc)})
+    for path in sorted((library.cache_dir / "corporate-actions").glob("*.json")):
+        name = str(path.relative_to(library.cache_dir))
+        try:
+            observations = verify_action_capture(library, path)
+            results.append({"action_capture": name, "observations": len(observations), "ok": True})
+        except LibraryError as exc:
+            results.append({"action_capture": name, "ok": False, "error": str(exc)})
     failed = [item for item in results if not item["ok"]]
     envelope.data = {"datasets": results}
     if failed:
@@ -166,7 +243,7 @@ def data_verify(*, project: Path | None = None) -> Envelope:
             "blocked",
             sorted({item["error"].split(":", 1)[0] for item in failed}),
         )
-    envelope.summary = f"{len(results) - len(failed)} of {len(results)} datasets verified"
+    envelope.summary = f"{len(results) - len(failed)} of {len(results)} data records verified"
     return envelope
 
 
@@ -175,12 +252,13 @@ def data_ls(*, project: Path | None = None) -> Envelope:
         root = find_root(project)
     except ProjectError as exc:
         return Envelope(command="data ls", status="invalid", reason_codes=[exc.code], summary=exc.detail)
+    library = library_for(root)
     rows = [
         {
             key: manifest.get(key)
             for key in ("dataset_id", "provider", "feed", "symbols", "start", "end", "sessions", "fetched_at")
         }
-        for manifest in library_for(root).manifests()
+        for manifest in library.manifests()
     ]
     chains: dict[str, dict[str, Any]] = {}
     for _, record in options_records(root):
@@ -188,10 +266,20 @@ def data_ls(*, project: Path | None = None) -> Envelope:
         entry = chains.setdefault(str(record["underlying"]), {"records": 0, "first": at, "last": at})
         entry["records"] += 1
         entry["first"], entry["last"] = min(entry["first"], at), max(entry["last"], at)
+    captures = [
+        {"capture_hash": f"sha256:{path.stem}", "cache_record": str(path.relative_to(library.cache_dir))}
+        for path in sorted((library.cache_dir / "corporate-actions").glob("*.json"))
+    ]
     summary = f"{len(rows)} datasets" + (
         f"; option chains recorded for {', '.join(sorted(chains))}" if chains else ""
     )
-    return Envelope(command="data ls", summary=summary, data={"datasets": rows, "option_chains": chains})
+    if captures:
+        summary += f"; {len(captures)} corporate-action captures"
+    return Envelope(
+        command="data ls",
+        summary=summary,
+        data={"datasets": rows, "option_chains": chains, "action_captures": captures},
+    )
 
 
 class OptionContractSource(Protocol):

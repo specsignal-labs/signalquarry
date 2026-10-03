@@ -10,13 +10,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from pathlib import Path
+from typing import Any
 
+from signalquarry._internal.canonical import canonical_hash, hash_without, to_canonical
 from signalquarry._internal.data.alpaca import CORPORATE_ACTIONS_PATH, ProviderError, RawPage
+from signalquarry._internal.data.library import Library, LibraryError
 
 NORMALIZATION_VERSION = 1
+CAPTURE_SCHEMA = "signalquarry.corporate-action-observations/v1"
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -116,3 +123,127 @@ def observations_from_pages(
                         row_sha256=previous.row_sha256,
                     )
     return tuple(seen[key] for key in sorted(seen))
+
+
+def make_action_capture(pages: list[RawPage], *, observed_at: datetime) -> dict[str, Any]:
+    """A metadata-and-hashes record of one complete, non-executable capture."""
+    if not pages:
+        raise ProviderError("PROVIDER_RESPONSE_INVALID", "empty corporate action capture")
+    if not isinstance(pages[0].params, dict):
+        raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action page parameters")
+    request = {key: value for key, value in pages[0].params.items() if key != "page_token"}
+    token: str | None = None
+    for index, page in enumerate(pages):
+        params = page.params
+        if (
+            not isinstance(params, dict)
+            or any(not isinstance(key, str) or not isinstance(value, str) for key, value in params.items())
+            or {key: value for key, value in params.items() if key != "page_token"} != request
+            or params.get("page_token") != token
+        ):
+            raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action pagination")
+        next_token = page.payload.get("next_page_token")
+        if next_token is not None and not isinstance(next_token, str):
+            raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action pagination token")
+        token = next_token or None
+        if index < len(pages) - 1 and token is None:
+            raise ProviderError("PROVIDER_RESPONSE_INVALID", "incomplete corporate action pagination")
+    if token is not None:
+        raise ProviderError("PROVIDER_RESPONSE_INVALID", "unfinished corporate action pagination")
+    observations = observations_from_pages(pages, observed_at=observed_at)
+    body = to_canonical(
+        {
+            "schema": CAPTURE_SCHEMA,
+            "observed_at": observed_at,
+            "normalization_version": NORMALIZATION_VERSION,
+            "pages": [
+                {"endpoint": page.endpoint, "params": page.params, "sha256": page.sha256} for page in pages
+            ],
+            "observations": [
+                {
+                    "provider_id": item.provider_id,
+                    "kind": item.kind,
+                    "symbol": item.symbol,
+                    "effective_date": item.effective_date,
+                    "process_date": item.process_date,
+                    "observed_at": item.observed_at,
+                    "page_hashes": item.page_hashes,
+                    "row_sha256": item.row_sha256,
+                    "normalization_version": item.normalization_version,
+                }
+                for item in observations
+            ],
+            "redistributable": False,
+        }
+    )
+    body["capture_hash"] = canonical_hash(body)
+    return body
+
+
+def action_capture_path(library: Library, capture_hash: str) -> Path:
+    if not isinstance(capture_hash, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", capture_hash):
+        raise LibraryError("DATA_MANIFEST_INVALID", "corporate action capture hash")
+    return library.cache_dir / "corporate-actions" / f"{capture_hash.removeprefix('sha256:')}.json"
+
+
+def store_action_capture(
+    library: Library, pages: list[RawPage], *, observed_at: datetime
+) -> tuple[Path, dict[str, Any]]:
+    """Keep pages and manifest private in the cache; never replace a prior capture."""
+    capture = make_action_capture(pages, observed_at=observed_at)
+    for page in pages:
+        library.store_page(page)
+        library.load_page({"endpoint": page.endpoint, "params": page.params, "sha256": page.sha256})
+    path = action_capture_path(library, capture["capture_hash"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = (json.dumps(capture, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode()
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".capture-", delete=False) as handle:
+        temporary = Path(handle.name)
+        handle.write(encoded)
+    try:
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            if path.read_bytes() != encoded:
+                raise LibraryError("DATA_MANIFEST_INVALID", "corporate action capture changed") from None
+    finally:
+        temporary.unlink(missing_ok=True)
+    return path, capture
+
+
+def verify_action_capture(library: Library, path: Path) -> tuple[CorporateActionObservation, ...]:
+    """Replay cached raw pages and compare every normalized observation."""
+    try:
+        capture = json.loads(path.read_text(encoding="utf-8"))
+        capture_hash = capture.get("capture_hash") if isinstance(capture, dict) else None
+        if (
+            not isinstance(capture, dict)
+            or capture.get("schema") != CAPTURE_SCHEMA
+            or capture.get("normalization_version") != NORMALIZATION_VERSION
+            or not isinstance(capture_hash, str)
+            or path != action_capture_path(library, capture_hash)
+            or hash_without(capture, "capture_hash") != capture_hash
+        ):
+            raise LibraryError("DATA_MANIFEST_INVALID", "corporate action capture identity")
+        observed_at = datetime.fromisoformat(capture["observed_at"].replace("Z", "+00:00"))
+        references = capture["pages"]
+        if not isinstance(references, list) or not references:
+            raise LibraryError("DATA_MANIFEST_INVALID", "corporate action pages")
+        for ref in references:
+            if (
+                not isinstance(ref, dict)
+                or set(ref) != {"endpoint", "params", "sha256"}
+                or ref["endpoint"] != CORPORATE_ACTIONS_PATH
+                or not isinstance(ref["sha256"], str)
+                or not _HASH.fullmatch(ref["sha256"])
+                or not isinstance(ref["params"], dict)
+                or any(not isinstance(k, str) or not isinstance(v, str) for k, v in ref["params"].items())
+            ):
+                raise LibraryError("DATA_MANIFEST_INVALID", "corporate action page reference")
+        pages = [library.load_page(ref) for ref in references]
+        rebuilt = make_action_capture(pages, observed_at=observed_at)
+        if rebuilt != capture:
+            raise LibraryError("DATA_MANIFEST_INVALID", "corporate action observations differ")
+        return observations_from_pages(pages, observed_at=observed_at)
+    except (OSError, ValueError, TypeError, KeyError, ProviderError) as exc:
+        raise LibraryError("DATA_MANIFEST_INVALID", "corporate action capture unreadable") from exc

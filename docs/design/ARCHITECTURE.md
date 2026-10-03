@@ -479,6 +479,7 @@ flowchart LR
   c_factor --> c_factor_evaluate["evaluate"]
   sqy --> c_data["data"]
   c_data --> c_data_fetch["fetch"]
+  c_data --> c_data_capture_actions["capture-actions"]
   c_data --> c_data_probe["probe"]
   c_data --> c_data_record["record"]
   c_data --> c_data_verify["verify"]

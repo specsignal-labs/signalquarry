@@ -99,6 +99,17 @@ Download daily bars and corporate actions and record a manifest.
 | `--feed` | default: the strategy's feed, else sip (one of `sip`, `iex`) |
 | `--project` | project directory (default: search upwards from cwd) |
 
+### `sqy data capture-actions`
+
+Record all corporate-action categories in the private cache.
+
+| Option | Meaning |
+|---|---|
+| `--symbols` | comma-separated uppercase symbols (required) |
+| `--start` | first process date (required) |
+| `--end` | last process date (required) |
+| `--project` | project directory (default: search upwards from cwd) |
+
 ### `sqy data probe`
 
 Check provider coverage: expired option contracts and their bars.
