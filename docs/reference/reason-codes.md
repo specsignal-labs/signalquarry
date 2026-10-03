@@ -87,6 +87,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `OTS_CLIENT_MISSING` | environment | The OpenTimestamps client is not installed, so new commitments stay unstamped (pending). | Install it with `pip install 'signalquarry[ots]'` where commitments are made (the paper host). |
 | `PAPER_ACCOUNT_BLOCKED` | risk | The paper account is not active or trading is blocked. | Check the account in the Alpaca dashboard. |
 | `PAPER_ACCOUNT_MISMATCH` | risk | The broker account differs from the deployment's expected or armed account. | Use the deployment's own paper account; re-arm after an intentional switch. |
+| `PAPER_ACTIVITY_CACHE_UNSAFE` | risk | The private paper activity cache is inside the project or has unsafe permissions. | Choose a private cache outside the project with owner-only directory and file permissions. |
+| `PAPER_ACTIVITY_CAPTURE_INCOMPLETE` | execution | The account activity capture reached its page limit before the final page. | Capture a shorter creation-time window; do not treat the partial response as evidence. |
 | `PAPER_ARM_EXPIRED` | execution | The arm token expired. | A human re-arms with `sqy paper arm`. |
 | `PAPER_ARM_NOT_CONFIRMED` | execution | The arm confirmation did not match the alias. | Type the alias exactly to confirm. |
 | `PAPER_ARM_REQUIRES_HUMAN` | execution | Arming needs a human at an interactive terminal. | Agents must not arm paper trading; ask the owner. |

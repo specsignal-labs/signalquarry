@@ -722,6 +722,29 @@ final, no halt), no parity mismatch and mean adverse slippage within
 configuration and a prior claim of `walk_forward` or better, exports report
 `paper_forward`.
 
+## Private account activity evidence
+
+For an Alpaca paper deployment with `expected_account_id_sha256` configured,
+capture a bounded creation-time window without placing orders:
+
+```
+sqy paper capture-activities --alias A --created-after 2026-09-20T00:00:00+00:00 --created-until 2026-09-27T00:00:00+00:00
+sqy paper verify-activities --alias A --capture sha256:CAPTURE_HASH
+```
+
+The capture reads all activity types with ID-based pagination and writes raw
+responses and a hash-only manifest to an owner-only directory under the private
+cache, outside the project. The command output contains only counts, timestamps,
+and a capture hash. Verification replays the cached pages without credentials or
+network access. The API's `after` and `until` filters use activity **creation
+time**, which can differ from the economic effective or settlement date; a
+window alone cannot prove that all activities for a historical session were
+observed. See Alpaca Trading API, “Retrieve Account Activities.”
+
+These raw captures are nonredistributable, do not decode corporate-action terms,
+and do not enable a blocked action or authorize paper submission. Keep the cache
+private and never add it to the project or an evidence export.
+
 ## A live feed for published strategies
 
 Non-commercial families whose publication policy sets `live_feed: allow` can publish
@@ -1270,6 +1293,27 @@ Show the journal state: armed/halted, sessions, pending orders.
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+### `sqy paper capture-activities`
+
+Read-only private capture of paper account activities by creation time.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--created-after` | activity creation time with UTC offset (required) |
+| `--created-until` | later creation time with UTC offset (required) |
+
+### `sqy paper verify-activities`
+
+Re-hash a private paper activity capture without contacting Alpaca.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--capture` | private capture hash (required) |
+
 ### `sqy paper reconcile`
 
 Finalize journaled orders and check positions against the broker.
@@ -1427,6 +1471,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `OTS_CLIENT_MISSING` | environment | The OpenTimestamps client is not installed, so new commitments stay unstamped (pending). | Install it with `pip install 'signalquarry[ots]'` where commitments are made (the paper host). |
 | `PAPER_ACCOUNT_BLOCKED` | risk | The paper account is not active or trading is blocked. | Check the account in the Alpaca dashboard. |
 | `PAPER_ACCOUNT_MISMATCH` | risk | The broker account differs from the deployment's expected or armed account. | Use the deployment's own paper account; re-arm after an intentional switch. |
+| `PAPER_ACTIVITY_CACHE_UNSAFE` | risk | The private paper activity cache is inside the project or has unsafe permissions. | Choose a private cache outside the project with owner-only directory and file permissions. |
+| `PAPER_ACTIVITY_CAPTURE_INCOMPLETE` | execution | The account activity capture reached its page limit before the final page. | Capture a shorter creation-time window; do not treat the partial response as evidence. |
 | `PAPER_ARM_EXPIRED` | execution | The arm token expired. | A human re-arms with `sqy paper arm`. |
 | `PAPER_ARM_NOT_CONFIRMED` | execution | The arm confirmation did not match the alias. | Type the alias exactly to confirm. |
 | `PAPER_ARM_REQUIRES_HUMAN` | execution | Arming needs a human at an interactive terminal. | Agents must not arm paper trading; ask the owner. |

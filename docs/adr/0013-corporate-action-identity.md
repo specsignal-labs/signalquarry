@@ -141,6 +141,15 @@ adapter does not yet decode these normalized activities or stable asset keys,
 and the paper runner does not call this helper. Provider cassettes and a
 journaled, broker-led integration remain required before enabling any event.
 
+The read-only paper activity capture path now records complete Trading API
+activity pages for an explicit creation-time window in an owner-only cache
+outside the project. It binds the capture to a configured account ID hash,
+records raw-page hashes, and verifies pagination and content offline. Alpaca's
+`after`/`until` filters use activity creation time, which may differ from
+effective and settlement dates. A capture is evidence for later schema work,
+not proof that every activity for an economic date is present. It does not
+decode provider terms, append to the paper journal, or enable an action.
+
 ## Consequences
 
 This proposal adds an identity and event layer before factor discovery. It

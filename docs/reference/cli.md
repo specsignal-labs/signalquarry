@@ -444,6 +444,27 @@ Show the journal state: armed/halted, sessions, pending orders.
 | `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+### `sqy paper capture-activities`
+
+Read-only private capture of paper account activities by creation time.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--created-after` | activity creation time with UTC offset (required) |
+| `--created-until` | later creation time with UTC offset (required) |
+
+### `sqy paper verify-activities`
+
+Re-hash a private paper activity capture without contacting Alpaca.
+
+| Option | Meaning |
+|---|---|
+| `--alias` | deployment alias (the ALIAS in paper/ALIAS.paper.yaml) (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+| `--capture` | private capture hash (required) |
+
 ### `sqy paper reconcile`
 
 Finalize journaled orders and check positions against the broker.

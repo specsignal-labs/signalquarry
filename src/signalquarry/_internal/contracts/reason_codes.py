@@ -579,6 +579,18 @@ _CODES += (
         "Keep paper submission halted; review the event terms, broker activity, asset mapping and journal.",
     ),
     ReasonCode(
+        "PAPER_ACTIVITY_CAPTURE_INCOMPLETE",
+        Category.EXECUTION,
+        "The account activity capture reached its page limit before the final page.",
+        "Capture a shorter creation-time window; do not treat the partial response as evidence.",
+    ),
+    ReasonCode(
+        "PAPER_ACTIVITY_CACHE_UNSAFE",
+        Category.RISK,
+        "The private paper activity cache is inside the project or has unsafe permissions.",
+        "Choose a private cache outside the project with owner-only directory and file permissions.",
+    ),
+    ReasonCode(
         "PAPER_POSITION_DRIFT",
         Category.RISK,
         "Broker positions differ from the journal in a way fills and splits cannot explain.",
