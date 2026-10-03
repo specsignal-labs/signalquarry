@@ -152,6 +152,16 @@ observations do not establish a corporate-action event link, asset identity,
 consideration, or settlement. They cannot be used to resume a halted paper
 runner.
 
+Observation schema v2 also labels documented REST type/subtype pairs for
+splits, mergers, name changes and worthless removals. It does not parse
+quantities, prices, cash, effective dates, successor identities or correction
+IDs. Unknown pairs remain unclassified; every row remains ineligible for paper
+use, and the record-level event-link and economic-term flags remain false.
+Version 1 observations remain verifiable. The category allowlist follows
+Alpaca's official Activities guide, but has not been validated against
+rights-cleared account cassettes. The provider-evidence and broker-position/
+cash reconciliation gates still apply.
+
 Comparing two verified observations requires the same account and creation-time
 window. It reports aggregate row-ID additions, absences, changes, and unchanged
 rows without exposing IDs or row data. An absent row is not proof that the

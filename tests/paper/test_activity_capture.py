@@ -281,7 +281,9 @@ def test_api_capture_and_offline_verify_never_expose_account_rows(
 ) -> None:
     root = project(tmp_path)
     monkeypatch.setenv("SIGNALQUARRY_CACHE_DIR", str(tmp_path / "private"))
-    source, script = broker([{"id": "private-activity-id", "activity_type": "SPLIT"}])
+    source, script = broker(
+        [{"id": "private-activity-id", "activity_type": "MA", "activity_sub_type": "SCMA"}]
+    )
     script.responses.insert(
         0, {"id": "synthetic-account", "status": "ACTIVE", "cash": "0", "equity": "0", "buying_power": "0"}
     )
@@ -307,6 +309,8 @@ def test_api_capture_and_offline_verify_never_expose_account_rows(
     for envelope in (observed, verified_observation, compared):
         assert "private-activity-id" not in json.dumps(envelope.as_dict())
         assert "synthetic-account" not in json.dumps(envelope.as_dict())
+        assert "SCMA" not in json.dumps(envelope.as_dict())
+        assert "stock_cash_merger_activity" not in json.dumps(envelope.as_dict())
 
 
 def test_api_rejects_wrong_account_and_project_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
