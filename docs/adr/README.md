@@ -14,3 +14,4 @@
 | [0010](0010-factors-and-universes.md) | Factors and point-in-time universes (proposed) |
 | [0011](0011-formulaic-factor-expressions.md) | Safe formulaic factor expressions (proposed) |
 | [0012](0012-factor-portfolio-construction.md) | Factor composition and long-only portfolio construction (proposed) |
+| [0013](0013-corporate-action-identity.md) | Corporate-action identity and effective time (proposed) |

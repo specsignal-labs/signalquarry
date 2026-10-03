@@ -345,14 +345,20 @@ def actions_from_pages(pages: list[RawPage]) -> tuple[tuple[Split, ...], tuple[D
                     if not ratio.is_finite() or ratio <= 0:
                         raise ValueError("split ratio must be positive and finite")
                     key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
-                    splits[key] = Split(key[0], key[1], ratio)
+                    split = Split(key[0], key[1], ratio)
+                    if key in splits and splits[key] != split:
+                        raise ProviderError("PROVIDER_RESPONSE_INVALID", f"conflicting split {key}")
+                    splits[key] = split
             for item in actions.get("cash_dividends", []):
                 key = (str(item["symbol"]).upper(), date.fromisoformat(item["ex_date"]))
                 pay = date.fromisoformat(item.get("payable_date") or item["ex_date"])
                 amount = Decimal(str(item["rate"]))
                 if not amount.is_finite():
                     raise ValueError("dividend amount must be finite")
-                dividends[key] = Dividend(key[0], key[1], pay, amount)
+                dividend = Dividend(key[0], key[1], pay, amount)
+                if key in dividends and dividends[key] != dividend:
+                    raise ProviderError("PROVIDER_RESPONSE_INVALID", f"conflicting dividend {key}")
+                dividends[key] = dividend
         except (KeyError, ValueError, ArithmeticError, TypeError, AttributeError) as exc:
             raise ProviderError("PROVIDER_RESPONSE_INVALID", "corporate action") from exc
     return tuple(splits[k] for k in sorted(splits)), tuple(dividends[k] for k in sorted(dividends))

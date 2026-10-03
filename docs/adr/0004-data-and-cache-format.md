@@ -27,6 +27,8 @@ This is a conservative data-ingestion guard until asset identity, payoff and
 paper-reconciliation semantics are specified. Alpaca filters this endpoint by
 process date and does not guarantee when an action becomes available, so a
 successful fetch cannot prove complete point-in-time coverage.
+ADR 0013 proposes the identity, time and lifecycle model needed before any
+additional action family can be enabled; this guard remains in force meanwhile.
 
 ## Consequences
 
