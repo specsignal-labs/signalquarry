@@ -100,7 +100,13 @@ an observation cutoff and a decision cutoff for every session. Its schema and
 content identity are separate from the legacy symbol-keyed `Dataset` identity;
 the old hash and result format remain unchanged. A manifest may contain a
 later-observed revision, but consumers must not apply it at an earlier decision
-cutoff. The asset-keyed backtest integration remains a separate acceptance gate.
+cutoff. The synthetic-only asset-keyed backtest now applies resolved events
+before planning, keeps holdings and target weights keyed by asset, records the
+dated display symbol on fills, and blocks late revisions, retired queued
+targets, and missing marks. It adapts asset keys through the existing shared
+order planner. Provider ingestion, paper planning and paper activation remain
+separate gates. Decision cutoffs are explicit caller-supplied timestamps; this
+model does not infer exchange calendars or open times.
 
 ## Consequences
 
