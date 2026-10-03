@@ -6,6 +6,9 @@ prompt: |
 expect:
   reached: ["paper dry-run", "paper preflight"]
   strategies: []
+  command_targets:
+    "paper dry-run": {alias: demo}
+    "paper preflight": {alias: demo}
 reference:
   package: evallab
   files: {}
