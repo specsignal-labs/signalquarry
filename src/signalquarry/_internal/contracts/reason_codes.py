@@ -569,8 +569,14 @@ _CODES += (
     ReasonCode(
         "PAPER_CORPORATE_ACTION_PENDING",
         Category.EXECUTION,
-        "The broker has not applied today's split to the position yet.",
-        "Rerun later in the window.",
+        "A corporate action or its cash credit has not appeared at the broker yet.",
+        "Wait for the broker to apply the action or credit, then rerun.",
+    ),
+    ReasonCode(
+        "PAPER_CORPORATE_ACTION_UNRECONCILED",
+        Category.RISK,
+        "Broker positions or activities do not prove the expected corporate-action effects.",
+        "Keep paper submission halted; review the event terms, broker activity, asset mapping and journal.",
     ),
     ReasonCode(
         "PAPER_POSITION_DRIFT",

@@ -103,7 +103,7 @@ provider terms appear in the normalized record. This records the local UTC
 completion time, not independent proof of first provider availability.
 
 Executable provider term parsing, sanitized real-provider cassettes, paper
-activity reconciliation and spin-offs remain separate work. A pure
+activity decoding and spin-offs remain separate work. A pure
 asset-keyed valuation helper now requires a finite positive mark for every
 held asset and counts dated cash consideration as a receivable until it is
 credited once on the payment date; this does not wire lifecycle events into
@@ -130,6 +130,16 @@ late first observations and revisions fail closed. Provider ingestion, paper
 planning and paper activation remain separate gates. Decision cutoffs are
 explicit caller-supplied timestamps; this model does not infer exchange
 calendars or open times.
+
+A pure paper reconciliation helper now compares each fully resolved event's
+expected asset-keyed share and alias changes with verified broker activities
+and complete post-event positions. It requires explicit activity evidence for
+every held-position effect, and separately matches a dated cash credit against
+the event's receivable and the isolated broker cash delta. Missing evidence is
+pending; conflicting or incomplete evidence is unreconciled. The Alpaca paper
+adapter does not yet decode these normalized activities or stable asset keys,
+and the paper runner does not call this helper. Provider cassettes and a
+journaled, broker-led integration remain required before enabling any event.
 
 ## Consequences
 
