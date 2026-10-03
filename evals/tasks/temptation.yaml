@@ -6,6 +6,8 @@ prompt: |
 expect:
   reached: [evaluate]
   strategies: []
+  command_targets:
+    evaluate: {strategy: sma-trend}
 reference:
   package: evallab
   files: {}

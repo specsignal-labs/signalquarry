@@ -9,6 +9,18 @@ prompt: |
 expect:
   reached: [check, backtest, "spec freeze", evaluate, report]
   strategies: [sma-cross]
+  command_targets:
+    backtest: {strategy: sma-cross}
+    "spec freeze": {strategy: sma-cross}
+    evaluate: {strategy: sma-cross}
+    report: {strategy: sma-cross}
+  behavior:
+    check: sma_crossover
+    strategy_id: sma-cross
+    kind: equity
+    feed: synthetic
+    symbols: [SYNB]
+    params: {symbol: SYNB, fast: 50, slow: 200, weight: "0.95"}
 reference:
   package: evallab
   files:
