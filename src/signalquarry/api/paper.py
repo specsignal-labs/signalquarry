@@ -8,6 +8,7 @@ at an interactive terminal; agents may run everything else.
 
 from __future__ import annotations
 
+import re
 import sys
 import time as _time
 from collections.abc import Callable
@@ -19,12 +20,17 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from signalquarry._internal.canonical import file_sha256, to_canonical
-from signalquarry._internal.contracts.paper import load_paper_config
+from signalquarry._internal.contracts.paper import ALIAS_PATTERN, PaperDeploymentV1, load_paper_config
 from signalquarry._internal.data.alpaca import AlpacaDataClient, ProviderError
 from signalquarry._internal.data.credentials import load_data_credentials, load_paper_credentials
 from signalquarry._internal.data.dataset import Dataset, truncated, with_pending_session
 from signalquarry._internal.data.library import LibraryError, build_dataset
 from signalquarry._internal.evidence.runs import result_document, unique_run_id, write_run
+from signalquarry._internal.paper.activity_capture import (
+    capture_root,
+    store_activity_capture,
+    verify_activity_capture,
+)
 from signalquarry._internal.paper.arm import sha256_hex
 from signalquarry._internal.paper.brokers.alpaca_options import AlpacaOptionsVenue
 from signalquarry._internal.paper.brokers.alpaca_paper import AlpacaPaperBroker
@@ -341,6 +347,150 @@ def paper_status(alias: str, *, project: Path | None = None) -> Envelope:
     return _run("paper status", alias, project, lambda kernel, _: kernel.status())
 
 
+def _activity_capture_config(
+    command: str, alias: str, project: Path | None
+) -> tuple[Path, PaperDeploymentV1] | Envelope:
+    if not re.fullmatch(ALIAS_PATTERN, alias):
+        return Envelope(
+            command=command, status="usage", reason_codes=["USAGE_INVALID"], summary="invalid paper alias"
+        )
+    try:
+        root = find_root(project)
+        path = root / "paper" / f"{alias}.paper.yaml"
+        if not path.is_file():
+            return Envelope(command=command, status="invalid", reason_codes=["PAPER_CONFIG_NOT_FOUND"])
+        config = load_paper_config(path)
+    except ProjectError as exc:
+        return Envelope(command=command, status="invalid", reason_codes=[exc.code], summary=exc.detail)
+    except (ValidationError, ValueError, OSError) as exc:
+        return Envelope(
+            command=command, status="invalid", reason_codes=["PAPER_CONFIG_INVALID"], summary=str(exc)[:200]
+        )
+    if config.broker != "alpaca-paper" or config.expected_account_id_sha256 is None:
+        return Envelope(
+            command=command,
+            status="invalid",
+            reason_codes=["PAPER_CONFIG_INVALID"],
+            summary="activity capture needs alpaca-paper and expected_account_id_sha256",
+        )
+    return root, config
+
+
+def paper_capture_activities(
+    alias: str,
+    created_after: datetime,
+    created_until: datetime,
+    *,
+    project: Path | None = None,
+    broker: AlpacaPaperBroker | None = None,
+    observed_at: datetime | None = None,
+) -> Envelope:
+    """Capture complete paper account pages privately; never submit orders."""
+    command = "paper capture-activities"
+    capture_time = observed_at or datetime.now(UTC)
+    if (
+        any(
+            value.tzinfo is None or value.utcoffset() is None
+            for value in (created_after, created_until, capture_time)
+        )
+        or created_after >= created_until
+        or created_until > capture_time
+    ):
+        return Envelope(
+            command=command,
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="give a past creation-time window with UTC offsets",
+        )
+    context = _activity_capture_config(command, alias, project)
+    if isinstance(context, Envelope):
+        return context
+    root, config = context
+    expected_account_hash = config.expected_account_id_sha256
+    assert expected_account_hash is not None
+    try:
+        private = capture_root(library_for(root).cache_dir, root)
+        if broker is None:
+            try:
+                keys = load_paper_credentials(config.profile)
+            except PermissionError as exc:
+                raise PaperError("CREDENTIALS_FILE_PERMISSIONS_TOO_OPEN", "blocked") from exc
+            if keys is None:
+                raise PaperError("PAPER_CREDENTIALS_MISSING", "unavailable")
+            if sha256_hex(keys.key_id) in config.denied_key_id_sha256:
+                raise PaperError("PAPER_KEY_DENIED", "blocked")
+            broker = AlpacaPaperBroker(keys.key_id, keys.secret_key)
+        if sha256_hex(broker.account().account_id) != expected_account_hash:
+            raise PaperError("PAPER_ACCOUNT_MISMATCH", "blocked")
+        pages = broker.activity_pages(created_after, created_until)
+        capture = store_activity_capture(
+            private,
+            pages,
+            account_sha256=expected_account_hash,
+            created_after=created_after,
+            created_until=created_until,
+            observed_at=capture_time,
+        )
+    except PaperError as exc:
+        return failure_envelope(command, alias, exc)
+    except OSError:
+        return Envelope(
+            command=command,
+            status="unavailable",
+            reason_codes=["CACHE_DIR_NOT_WRITABLE"],
+            summary="private activity cache could not be written",
+        )
+    return Envelope(
+        command=command,
+        summary=f"captured {capture['activities']} private paper activities",
+        data={
+            key: capture[key]
+            for key in (
+                "capture_hash",
+                "created_after",
+                "created_until",
+                "observed_at",
+                "activities",
+                "redistributable",
+            )
+        }
+        | {"pages": len(pages)},
+    )
+
+
+def paper_verify_activities(alias: str, capture_hash: str, *, project: Path | None = None) -> Envelope:
+    """Replay a private capture without loading credentials or contacting Alpaca."""
+    command = "paper verify-activities"
+    context = _activity_capture_config(command, alias, project)
+    if isinstance(context, Envelope):
+        return context
+    root, config = context
+    expected_account_hash = config.expected_account_id_sha256
+    assert expected_account_hash is not None
+    try:
+        private = capture_root(library_for(root).cache_dir, root)
+        capture = verify_activity_capture(private, capture_hash, account_sha256=expected_account_hash)
+    except PaperError as exc:
+        return failure_envelope(command, alias, exc)
+    except OSError:
+        return Envelope(
+            command=command,
+            status="unavailable",
+            reason_codes=["CACHE_DIR_NOT_WRITABLE"],
+            summary="private activity cache could not be read",
+        )
+    return Envelope(
+        command=command,
+        summary=f"verified {capture['activities']} private paper activities",
+        data={
+            "capture_hash": capture_hash,
+            "activities": capture["activities"],
+            "pages": len(capture["pages"]),
+            "redistributable": False,
+        },
+    )
+
+
 def paper_run_once(alias: str, *, project: Path | None = None) -> Envelope:
     return _run("paper run-once", alias, project, lambda kernel, _: kernel.run_once(), live_only=True)
 
@@ -505,6 +655,7 @@ def paper_schedule(
 __all__: list[str] = [
     "paper_arm",
     "paper_backup",
+    "paper_capture_activities",
     "paper_drift",
     "paper_dry_run",
     "paper_halt",
@@ -514,5 +665,6 @@ __all__: list[str] = [
     "paper_run_once",
     "paper_schedule",
     "paper_status",
+    "paper_verify_activities",
     "paper_verify_continuity",
 ]

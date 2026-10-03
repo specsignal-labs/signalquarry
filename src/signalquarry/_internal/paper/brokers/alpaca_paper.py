@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Protocol
 
@@ -39,6 +39,16 @@ class BrokerTransport(Protocol):
     def request(
         self, method: str, url: str, headers: Mapping[str, str], body: bytes | None
     ) -> HttpResponse: ...
+
+
+@dataclass(frozen=True)
+class BrokerActivityPage:
+    """One unmodified, read-only Trading API activity page."""
+
+    params: dict[str, str]
+    body: bytes
+    sha256: str
+    rows: tuple[dict[str, Any], ...]
 
 
 @dataclass(frozen=True)
@@ -309,6 +319,61 @@ class AlpacaPaperBroker:
             except (KeyError, ValueError) as exc:
                 raise PaperError("BROKER_RESPONSE_INVALID", "error", "activity") from exc
         return out
+
+    def activity_pages(
+        self, created_after: datetime, created_until: datetime, *, max_pages: int = 100
+    ) -> list[BrokerActivityPage]:
+        """Capture every activity type by creation time, with complete ID pagination.
+
+        The date filters do not describe economic effective or settlement time.
+        Pages are returned only after the terminating short page is observed.
+        """
+        if (
+            created_after.tzinfo is None
+            or created_after.utcoffset() is None
+            or created_until.tzinfo is None
+            or created_until.utcoffset() is None
+            or created_after >= created_until
+            or max_pages < 1
+        ):
+            raise PaperError("USAGE_INVALID", "invalid", "activity creation-time window")
+        params = {
+            "after": created_after.astimezone(UTC).isoformat(),
+            "until": created_until.astimezone(UTC).isoformat(),
+            "direction": "asc",
+            "page_size": "100",
+        }
+        pages: list[BrokerActivityPage] = []
+        ids: set[str] = set()
+        tokens: set[str] = set()
+        while True:
+            response = self._call("GET", "/v2/account/activities", params=params)
+            rows = self._json(response, "/v2/account/activities")
+            if (
+                not isinstance(rows, list)
+                or len(rows) > 100
+                or any(not isinstance(row, dict) for row in rows)
+            ):
+                raise PaperError("BROKER_RESPONSE_INVALID", "error", "activity page")
+            for row in rows:
+                activity_id = row.get("id")
+                if not isinstance(activity_id, str) or not activity_id or activity_id in ids:
+                    raise PaperError("BROKER_RESPONSE_INVALID", "error", "duplicate or missing activity id")
+                ids.add(activity_id)
+            pages.append(
+                BrokerActivityPage(
+                    dict(params), response.body, hashlib.sha256(response.body).hexdigest(), tuple(rows)
+                )
+            )
+            if len(rows) < 100:
+                return pages
+            token = rows[-1]["id"]
+            if token in tokens:
+                raise PaperError("BROKER_RESPONSE_INVALID", "error", "repeated activity page token")
+            if len(pages) >= max_pages:
+                raise PaperError("PAPER_ACTIVITY_CAPTURE_INCOMPLETE", "blocked", "page limit reached")
+            tokens.add(token)
+            params = {**params, "page_token": token}
 
     def cancel(self, order_id: str) -> None:
         path = f"/v2/orders/{urllib.parse.quote(order_id, safe='')}"

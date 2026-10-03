@@ -203,6 +203,7 @@ from signalquarry.api.factor import check_registered_factor, factor_evaluate, fa
 from signalquarry.api.paper import (  # noqa: E402
     paper_arm,
     paper_backup,
+    paper_capture_activities,
     paper_drift,
     paper_dry_run,
     paper_halt,
@@ -212,6 +213,7 @@ from signalquarry.api.paper import (  # noqa: E402
     paper_run_once,
     paper_schedule,
     paper_status,
+    paper_verify_activities,
     paper_verify_continuity,
 )
 from signalquarry.api.perf import perf_capture, perf_publish  # noqa: E402
@@ -264,6 +266,7 @@ __all__ = [
     "perf_capture",
     "perf_publish",
     "paper_backup",
+    "paper_capture_activities",
     "paper_drift",
     "paper_dry_run",
     "paper_halt",
@@ -273,6 +276,7 @@ __all__ = [
     "paper_run_once",
     "paper_schedule",
     "paper_status",
+    "paper_verify_activities",
     "paper_verify_continuity",
     "reason_code_catalog",
     "report",

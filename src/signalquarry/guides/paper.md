@@ -118,6 +118,29 @@ final, no halt), no parity mismatch and mean adverse slippage within
 configuration and a prior claim of `walk_forward` or better, exports report
 `paper_forward`.
 
+## Private account activity evidence
+
+For an Alpaca paper deployment with `expected_account_id_sha256` configured,
+capture a bounded creation-time window without placing orders:
+
+```
+sqy paper capture-activities --alias A --created-after 2026-09-20T00:00:00+00:00 --created-until 2026-09-27T00:00:00+00:00
+sqy paper verify-activities --alias A --capture sha256:CAPTURE_HASH
+```
+
+The capture reads all activity types with ID-based pagination and writes raw
+responses and a hash-only manifest to an owner-only directory under the private
+cache, outside the project. The command output contains only counts, timestamps,
+and a capture hash. Verification replays the cached pages without credentials or
+network access. The API's `after` and `until` filters use activity **creation
+time**, which can differ from the economic effective or settlement date; a
+window alone cannot prove that all activities for a historical session were
+observed. See Alpaca Trading API, “Retrieve Account Activities.”
+
+These raw captures are nonredistributable, do not decode corporate-action terms,
+and do not enable a blocked action or authorize paper submission. Keep the cache
+private and never add it to the project or an evidence export.
+
 ## A live feed for published strategies
 
 Non-commercial families whose publication policy sets `live_feed: allow` can publish
