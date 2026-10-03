@@ -28,6 +28,12 @@ grade, or access a holdout. Source completeness, full action history, ticker
 continuity and delisting outcomes remain unverified, so the output is not
 point-in-time evidence or a profitability claim.
 
+Agents with local MCP support can run the optional `sqy-mcp` stdio adapter.
+Its tools return the same envelopes as the CLI. Use an explicit project path
+when the host launches outside the project. The adapter has no tool for paper
+arming or trial-budget extension; `sqy_paper_run_once` still requires a human
+arm and must be used only when the user asks for a paper session.
+
 `data` is capped at 64 KB so an envelope fits in a context window. Anything larger is
 written to `$SIGNALQUARRY_CACHE_DIR/envelopes/<run_id>.data.json` (listed in `artifacts`
 with kind `data`, warning `DATA_MOVED_TO_ARTIFACT`); `--detail full` keeps it inline
