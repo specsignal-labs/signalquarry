@@ -379,6 +379,43 @@ def test_mixed_merger_moves_stock_and_pays_cash_consideration() -> None:
     assert result.cash[3] == Decimal("5500.000000")
 
 
+def test_asset_preopen_plan_does_not_require_the_simulated_open() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    data = make_dataset(
+        {OLD: ([100, 0, 100, 100, 100, 100], [True, False, True, True, True, True])},
+        make_aliases(sessions),
+    )
+    strategy_spec = spec(
+        ("SYNA",),
+        data={"max_staleness_sessions": 1},
+        execution={"costs": {"bps": "0", "per_share": "0"}, "execution_delay_sessions": 0},
+    )
+    plan = asset_backtest.plan_asset_pre_open(
+        strategy_spec,
+        definition_of(target_current_symbol),
+        Weight(),
+        data,
+        index=1,
+        first_index=1,
+        lookback=1,
+        state=LifecycleState({}, {OLD: "SYNA"}),
+        settled_cash=Decimal(10_000),
+        pending_cash=[],
+        applied_events={},
+        strategy_state={},
+        last_target=None,
+        target_complete=True,
+        queued_targets={},
+        allowed_codes=set(strategy_spec.reason_codes),
+    )
+
+    result = run_asset_backtest(strategy_spec, definition_of(target_current_symbol), Weight(), data)
+
+    assert [(order.asset, order.delta) for order in plan.orders] == [(OLD, Decimal(50))]
+    assert result.fills[0].session == sessions[3]
+    assert f"PRICE_MISSING:{sessions[1].isoformat()}:SYNA" in result.warnings
+
+
 def test_stock_merger_without_successor_preopen_mark_blocks_valuation() -> None:
     sessions = weekdays(date(2024, 1, 2), 6)
     event = action("stock_merger", sessions, target=NEW, target_symbol="SYNA", ratio=Decimal(1))
@@ -404,8 +441,30 @@ def test_late_observed_event_and_late_revision_fail_closed() -> None:
     )
     stable_aliases = make_aliases(sessions)
     data = make_dataset({OLD: ([100] * 6, [True] * 6)}, stable_aliases, (late,))
-    with pytest.raises(EngineError, match="first observed after its effective session"):
+    with pytest.raises(EngineError, match="first observed after its effective session") as backtest_error:
         _run(data, ("SYNA", "SYNB"))
+
+    strategy_spec = spec(("SYNA", "SYNB"))
+    with pytest.raises(EngineError, match="first observed after its effective session") as preopen_error:
+        asset_backtest.plan_asset_pre_open(
+            strategy_spec,
+            definition_of(target_current_symbol),
+            Weight(),
+            data,
+            index=3,
+            first_index=1,
+            lookback=1,
+            state=LifecycleState({OLD: Decimal(50)}, {OLD: "SYNA"}),
+            settled_cash=Decimal(5000),
+            pending_cash=[],
+            applied_events={},
+            strategy_state={},
+            last_target={OLD: Decimal("0.5")},
+            target_complete=True,
+            queued_targets={},
+            allowed_codes=set(strategy_spec.reason_codes),
+        )
+    assert str(preopen_error.value) == str(backtest_error.value)
 
     first = action(
         "rename",
@@ -430,6 +489,223 @@ def test_late_observed_event_and_late_revision_fail_closed() -> None:
     corrected = make_dataset({OLD: ([100] * 6, [True] * 6)}, revised_aliases, (first, revised))
     with pytest.raises(EngineError, match="applied event was revised"):
         _run(corrected, ("SYNA", "SYNB", "SYNX"))
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "rename",
+        "ticker_reuse_stock_merger",
+        "split_with_new_symbol",
+        "worthless_removal",
+        "cash_merger",
+        "mixed_merger",
+    ],
+)
+def test_asset_preopen_plan_matches_backtest_lifecycle_vectors(monkeypatch, kind: str) -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    if kind == "rename":
+        event = action("rename", sessions, target_symbol="SYNB")
+        data = make_dataset(
+            {OLD: ([100] * 6, [True] * 6)}, make_aliases(sessions, change_symbol="SYNB"), (event,)
+        )
+        symbols = ("SYNA", "SYNB")
+        expected_positions = {OLD: Decimal(50)}
+        expected_symbols = {OLD: "SYNB"}
+    elif kind == "ticker_reuse_stock_merger":
+        event = action("stock_merger", sessions, target=NEW, target_symbol="SYNA", ratio=Decimal(1))
+        data = make_dataset(
+            {
+                OLD: ([100, 100, 0, 0, 0, 0], [True, True, False, False, False, False]),
+                NEW: ([100] * 6, [True] * 6),
+            },
+            make_aliases(sessions, successor=NEW),
+            (event,),
+        )
+        symbols = ("SYNA",)
+        expected_positions = {NEW: Decimal(50)}
+        expected_symbols = {NEW: "SYNA"}
+    elif kind == "split_with_new_symbol":
+        event = action("split", sessions, target_symbol="SYNB", ratio=Decimal(2))
+        data = make_dataset(
+            {OLD: ([100, 100, 50, 50, 50, 50], [True] * 6)},
+            make_aliases(sessions, change_symbol="SYNB"),
+            (event,),
+        )
+        symbols = ("SYNA", "SYNB")
+        expected_positions = {OLD: Decimal(100)}
+        expected_symbols = {OLD: "SYNB"}
+    elif kind == "worthless_removal":
+        event = action("worthless_removal", sessions, cash=Decimal(0))
+        data = make_dataset(
+            {OLD: ([100, 100, 0, 0, 0, 0], [True, True, False, False, False, False])},
+            (
+                alias(
+                    "old", OLD, "SYNA", sessions[0], sessions[2], datetime.combine(sessions[0], time(10), UTC)
+                ),
+            ),
+            (event,),
+        )
+        symbols = ("SYNA",)
+        expected_positions = {}
+        expected_symbols = {}
+    elif kind == "cash_merger":
+        event = action("cash_merger", sessions, cash=Decimal(100), pay_date=sessions[4])
+        data = make_dataset(
+            {OLD: ([100, 100, 0, 0, 0, 0], [True, True, False, False, False, False])},
+            (
+                alias(
+                    "old", OLD, "SYNA", sessions[0], sessions[2], datetime.combine(sessions[0], time(18), UTC)
+                ),
+            ),
+            (event,),
+        )
+        symbols = ("SYNA",)
+        expected_positions = {}
+        expected_symbols = {}
+    else:
+        event = action(
+            "mixed_merger",
+            sessions,
+            target=NEW,
+            target_symbol="SYNB",
+            ratio=Decimal("0.5"),
+            cash=Decimal(10),
+            pay_date=sessions[4],
+        )
+        aliases = (
+            alias("old", OLD, "SYNA", sessions[0], sessions[2], datetime.combine(sessions[0], time(10), UTC)),
+            alias("successor", NEW, "SYNB", sessions[2], None, datetime.combine(sessions[0], time(10), UTC)),
+        )
+        data = make_dataset(
+            {
+                OLD: ([100, 100, 0, 0, 0, 0], [True, True, False, False, False, False]),
+                NEW: ([100] * 6, [True] * 6),
+            },
+            aliases,
+            (event,),
+        )
+        symbols = ("SYNA", "SYNB")
+        expected_positions = {NEW: Decimal(25)}
+        expected_symbols = {NEW: "SYNB"}
+
+    original = asset_backtest.plan_asset_pre_open
+    calls: list[tuple[tuple[Any, ...], dict[str, Any], Any]] = []
+
+    def capture_plan(*args: Any, **kwargs: Any) -> Any:
+        saved_kwargs = dict(kwargs)
+        plan = original(*args, **kwargs)
+        calls.append((args, saved_kwargs, plan))
+        return plan
+
+    monkeypatch.setattr(asset_backtest, "plan_asset_pre_open", capture_plan)
+    result = _run(data, symbols)
+
+    assert len(calls) == len(result.sessions)
+    for (args, kwargs, expected_plan), session, decision_record in zip(
+        calls, result.sessions, result.decisions, strict=True
+    ):
+        assert original(*args, **kwargs) == expected_plan
+        assert expected_plan.session == session
+        assert expected_plan.decision_record == decision_record
+    assert [record for call in calls for record in call[2].applied_event_records] == result.applied_events
+
+    event_plan = next(call[2] for call in calls if call[2].session == sessions[2])
+    strategy_spec = spec(symbols, execution={"costs": {"bps": "0", "per_share": "0"}})
+    direct_event_plan = asset_backtest.plan_asset_pre_open(
+        strategy_spec,
+        definition_of(target_current_symbol),
+        Weight(),
+        data,
+        index=2,
+        first_index=1,
+        lookback=1,
+        state=LifecycleState({OLD: Decimal(50)}, {OLD: "SYNA"}),
+        settled_cash=Decimal(5000),
+        pending_cash=[],
+        applied_events={},
+        strategy_state={},
+        last_target={OLD: Decimal("0.5")},
+        target_complete=True,
+        queued_targets={},
+        allowed_codes=set(strategy_spec.reason_codes),
+    )
+    assert direct_event_plan == event_plan
+    assert dict(event_plan.state.positions) == expected_positions
+    assert dict(event_plan.state.symbols) == expected_symbols
+    assert event.event_id in event_plan.state.applied_event_ids
+    assert [record["event_id"] for record in event_plan.applied_event_records] == [event.event_id]
+    expected_receivable = (
+        Decimal(5000) if kind == "cash_merger" else Decimal(500) if kind == "mixed_merger" else Decimal(0)
+    )
+    assert sum((item.amount for item in event_plan.state.receivables), Decimal(0)) == expected_receivable
+
+    for call in calls:
+        plan = call[2]
+        index = data.sessions.index(plan.session)
+        fills = [fill for fill in result.fills if fill.session == plan.session]
+        executable = [order for order in plan.orders if data.price(order.asset, "open", index) is not None]
+        assert len(fills) == len(executable)
+        for order, fill in zip(executable, fills, strict=True):
+            assert fill.asset == order.asset
+            assert fill.symbol == plan.state.symbols[order.asset]
+            assert fill.side == ("buy" if order.delta > 0 else "sell")
+            assert fill.quantity == abs(order.delta)
+
+
+def test_asset_preopen_plan_and_backtest_reject_an_applied_event_revision() -> None:
+    sessions = weekdays(date(2024, 1, 2), 6)
+    first = action(
+        "rename",
+        sessions,
+        target_symbol="SYNB",
+        observed_at=datetime.combine(sessions[2], time(12), UTC),
+    )
+    revised = dataclasses.replace(
+        first,
+        source_symbol="SYNB",
+        effective_date=sessions[4],
+        process_date=sessions[3],
+        observed_at=datetime.combine(sessions[3], time(14), UTC),
+        page_hashes=("c" * 64,),
+        target_symbol="SYNX",
+    )
+    aliases = (
+        alias("old", OLD, "SYNA", sessions[0], sessions[2], datetime.combine(sessions[0], time(10), UTC)),
+        alias("new", OLD, "SYNB", sessions[2], sessions[4], datetime.combine(sessions[0], time(10), UTC)),
+        alias("revision", OLD, "SYNX", sessions[4], None, datetime.combine(sessions[3], time(14), UTC)),
+    )
+    data = make_dataset({OLD: ([100] * 6, [True] * 6)}, aliases, (first, revised))
+    strategy_spec = spec(("SYNA", "SYNB", "SYNX"))
+    state = LifecycleState(
+        {},
+        {OLD: "SYNB"},
+        applied_event_ids=frozenset({first.event_id}),
+        last_event_key=(sessions[2], first.sequence),
+    )
+
+    with pytest.raises(EngineError, match="applied event was revised") as preopen_error:
+        asset_backtest.plan_asset_pre_open(
+            strategy_spec,
+            definition_of(target_current_symbol),
+            Weight(),
+            data,
+            index=4,
+            first_index=1,
+            lookback=1,
+            state=state,
+            settled_cash=Decimal(10_000),
+            pending_cash=[],
+            applied_events={first.event_id: first},
+            strategy_state={},
+            last_target=None,
+            target_complete=True,
+            queued_targets={},
+            allowed_codes=set(strategy_spec.reason_codes),
+        )
+    with pytest.raises(EngineError, match="applied event was revised") as backtest_error:
+        _run(data, ("SYNA", "SYNB", "SYNX"))
+    assert str(preopen_error.value) == str(backtest_error.value)
 
 
 def test_queued_order_for_retired_asset_is_blocked_and_provider_data_is_rejected() -> None:
