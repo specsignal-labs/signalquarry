@@ -30,9 +30,11 @@ point-in-time membership for each cross-section. Cross-sectional rank uses
 average ties and the SDK percentile convention;
 cross-sectional z-score uses population standard deviation. Time-series
 windows include the current row and earlier rows only. Rolling operators
-require a complete finite window; unavailable results remain NaN. ts_std
-uses population standard deviation. ts_corr is Pearson correlation and is
-unavailable when either series has no dispersion. log is natural log and
+require a complete finite window; unavailable results remain NaN. Window
+statistics are computed from each window itself (centred on its last value,
+then on its mean), never from running sums, so a constant window has exactly
+zero dispersion. ts_std uses population standard deviation. ts_corr is Pearson
+correlation and is unavailable when either series has no dispersion. log is natural log and
 returns NaN for nonpositive inputs. Division by zero and other non-finite
 intermediate results become NaN.
 
@@ -68,3 +70,7 @@ Formulaic search can reuse one deterministic interpreter and expression
 identity. Its later API must bind the training window and trial accounting
 before comparing candidates; this ADR alone does not authorize a real-data
 claim or imply that a factor is economically useful.
+
+Grammar version 2 (2026-10-04) replaced running-sum window statistics, which left
+rounding noise instead of zero on constant windows of non-representable prices,
+with the centred form above. Version 1 expression hashes are not comparable.
