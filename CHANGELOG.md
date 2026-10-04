@@ -13,6 +13,8 @@ change provisional surfaces after deprecation).
   pre-open paper-parity cases.
 - Options-simulator mutation coverage with short wheel, quote, expiry-boundary, and
   action-refusal reference cases.
+- Formula-search mutation coverage with independent references for the significance arithmetic,
+  configuration and input contracts, report assembly, and genetic operators.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
