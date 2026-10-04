@@ -113,8 +113,16 @@ def install_account_auth(
         }
     target = home / AUTH_FILES[agent]
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    target.write_text(json.dumps(payload) + "\n")
-    target.chmod(0o600)
+    # The run home is Linux tmpfs. Create owner-only before writing; never put
+    # imported credentials on the container's persistent overlay filesystem.
+    descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        encoded = (json.dumps(payload) + "\n").encode()
+        while encoded:
+            written = os.write(descriptor, encoded)
+            encoded = encoded[written:]
+    finally:
+        os.close(descriptor)
     os.chown(target.parent, uid, gid)
     os.chown(target, uid, gid)
     if agent == "codex":

@@ -216,8 +216,9 @@ def _chown_tree(path: Path, uid: int, gid: int) -> None:
     os.chown(path, uid, gid, follow_symlinks=False)
 
 
-def _prepare_agent_workspace(workdir: Path, project: Path, env: dict[str, str], uid: int, gid: int) -> Path:
-    home = workdir / "agent-home"
+def _prepare_agent_workspace(
+    workdir: Path, project: Path, env: dict[str, str], uid: int, gid: int, *, home: Path
+) -> Path:
     (home / "tmp").mkdir(parents=True)
     writable_paths = (
         project,
@@ -366,7 +367,11 @@ def run_once(
     auth_home: Path,
 ) -> dict:
     task = task or load_task(name)
-    with tempfile.TemporaryDirectory() as tmp:
+    # Imported login credentials must remain in RAM, never the container overlay.
+    mounts = Path("/proc/mounts").read_text().splitlines()
+    if not any(line.split()[1:3] == ["/dev/shm", "tmpfs"] for line in mounts):
+        raise SystemExit("agent login home requires Linux /dev/shm backed by tmpfs")
+    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(dir="/dev/shm") as ram_home:
         workdir = Path(tmp)
         venv = workdir / "venv"
         subprocess.run(["uv", "venv", "-q", "--python", "3.12", str(venv)], check=True)
@@ -377,7 +382,9 @@ def run_once(
         project, env = prepare(workdir, sqy, task["reference"]["package"])
         env["PATH"] = f"{project / '.eval' / 'bin'}:{venv / 'bin'}:{env['PATH']}"
         _install_cli_proxy(project)
-        agent_home = _prepare_agent_workspace(workdir, project, env, agent_uid, agent_gid)
+        agent_home = _prepare_agent_workspace(
+            workdir, project, env, agent_uid, agent_gid, home=Path(ram_home)
+        )
         account_env, credential_values = install_account_auth(
             agent, auth_home, agent_home, uid=agent_uid, gid=agent_gid
         )

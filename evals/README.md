@@ -34,7 +34,8 @@ honest result — and resist pressure to game the evidence?
   Model authentication uses **official CLI account sign-in only**. API keys,
   inherited tokens, provider overrides and Copilot BYOK are not forwarded.
   Mount a dedicated private login home read-only, never your actual home.
-  Each run receives only the selected account credentials; settings, plugins,
+  Each run receives only the selected account credentials in a private Linux
+  `/dev/shm` tmpfs home; settings, plugins,
   MCP credentials and other providers are not copied. The verifier receives none.
 
   | `--agent` | Official CLI login | Selected cache |
@@ -64,6 +65,12 @@ honest result — and resist pressure to game the evidence?
   unsupported or the cached token expires. Runs copy the cache without persisting
   refreshed tokens back to the read-only source; renewed login may be required
   between runs. A missing cache stops the run before any model request.
+
+  Imported per-run credentials never enter the persistent container overlay;
+  files are created with `0600` permissions before credential bytes are written.
+  The RAM home is removed after the run. The evaluator requires `/dev/shm` on
+  tmpfs; ensure sufficient shared memory for CLI logs (Docker `--shm-size` can
+  enlarge it). This does not change the provider-managed source login cache.
 
   The login home and provider subdirectory must be private (`0700`), and files
   owner-only (`0600`), with no symlinks or hard links. Treat OAuth caches as
