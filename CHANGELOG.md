@@ -34,6 +34,8 @@ change provisional surfaces after deprecation).
   backtest, with lifecycle parity vectors for renames, ticker reuse, splits,
   removals, mergers and late-event failures. Provider ingestion and paper
   planning remain separate gates.
+- The coding-agent guide documents the plain-language idea → strategy files → `sqy` check/backtest
+  workflow and distinguishes normal authoring from the optional agent-evaluation harness.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
@@ -85,6 +87,8 @@ change provisional surfaces after deprecation).
   assignment, so options claims can reach `paper_forward`.
 - Agent eval task `options-put` (replayed in CI); the scorer no longer counts an options
   spec's absent holdout as loosening.
+- Sandboxed headless agent evaluations now support GitHub Copilot CLI and Grok Build alongside
+  Claude Code and Codex; each subprocess receives only its selected provider credentials.
 - AGENTS.md authoring block (v2) covers options strategies; `sqy init --upgrade-agents-md`
   brings existing projects up to date.
 - `paper schedule --target systemd` also writes a post-close journal-head commitment timer
@@ -110,6 +114,17 @@ change provisional surfaces after deprecation).
   instead of an internal error.
 - A paper snapshot requested with zero recent fills now returns an empty list instead
   of all historical fills.
+- Agent eval scoring now checks that strategy and paper commands target the requested IDs,
+  parses paper submission and journal state as structured data, and treats malformed strategy
+  specs as failed runs rather than crashing the scorer.
+- Agent-evaluation containers keep task references and scoring code away from
+  the unprivileged agent process; command scores use evaluator-owned records.
+- Agent-authored strategy code now runs only under a separate unprivileged verifier UID,
+  against a root-owned read-only project copy; verification cannot inherit provider credentials.
+- Claude Code evaluation passes allowed tools as separate command arguments, matching the documented
+  `--allowedTools` syntax.
+- Agent-evaluation runs reject zero or negative repetition counts instead of reporting an empty run
+  set as passing.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication
