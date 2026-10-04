@@ -17,6 +17,8 @@ change provisional surfaces after deprecation).
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
 - A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
+  Rolling mean, standard deviation and correlation use centred windows (grammar version 2), so
+  constant windows have exactly zero dispersion instead of rounding noise.
 - A deterministic genetic formula-search core over synthetic training inputs, with family-budget
   checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no
   trial ledger, issues no evidence grade, and does not access a holdout.

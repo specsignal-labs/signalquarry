@@ -106,10 +106,9 @@ def test_ts_mean_matches_a_naive_window_on_every_window(period: int) -> None:
     )
 
 
-@pytest.mark.parametrize("period", [2, 3, 7, 40])
+@pytest.mark.parametrize("period", [1, 2, 3, 7, 40])
 def test_ts_std_matches_a_naive_population_std_on_every_window(period: int) -> None:
-    # Values far below one: a variance floor of one would show here. Period 1 is a flat window,
-    # covered by the known-defect tests below.
+    # Values far below one: a variance floor of one would show here.
     close, volume = _research_panels()
     _assert_same(
         _evaluate(f"ts_std(close, {period})", _context(close, volume)), _reference(close, period, np.std)
@@ -189,14 +188,9 @@ def test_division_by_zero_becomes_nan_not_infinity() -> None:
     assert np.isfinite(actual[np.isfinite(actual)]).all()
 
 
-# Known numerical defects (found by the mutation pass; see the pull request). ts_std and ts_corr
-# build window variance as E[x^2] - mean^2 from running sums, which cancels on level-sized values
-# that are not exactly representable (a typical price such as 123.456). A flat window therefore
-# gets a tiny positive deviation instead of exactly zero, so `x / ts_std(x, n)` yields a huge number
-# where the grammar documents NaN, and ts_corr against a flat series is "defined" noise instead of
-# NaN. A fix changes numeric results, so it needs a grammar-version bump (ADR 0011); these are
-# marked xfail until then and should be un-marked by that change.
-_KNOWN_DEFECT = "flat-window variance is rounding noise, not zero; fix needs a grammar-version bump"
+# Constant windows. Window statistics are computed from centred windows, not running sums, so a
+# flat stretch of a price that is not exactly representable (123.456) has exactly zero dispersion
+# and its mean is the price itself; running sums left rounding noise there (grammar version 1).
 
 
 def _drifting_with_a_flat_stretch() -> np.ndarray:
@@ -206,21 +200,18 @@ def _drifting_with_a_flat_stretch() -> np.ndarray:
     return prices
 
 
-@pytest.mark.xfail(strict=False, reason=_KNOWN_DEFECT)
 def test_ts_std_of_a_flat_stretch_is_exactly_zero() -> None:
     context = _context(_drifting_with_a_flat_stretch())
     flat = _evaluate("ts_std(close, 10)", context)[215:225]
     assert (flat == 0.0).all()
 
 
-@pytest.mark.xfail(strict=False, reason=_KNOWN_DEFECT)
 def test_dividing_by_the_std_of_a_flat_stretch_is_nan() -> None:
     context = _context(_drifting_with_a_flat_stretch())
     ratio = _evaluate("close / ts_std(close, 10)", context)[215:225]
     assert np.isnan(ratio).all()
 
 
-@pytest.mark.xfail(strict=False, reason=_KNOWN_DEFECT)
 def test_ts_corr_against_a_flat_price_series_is_undefined() -> None:
     rng = np.random.default_rng(2)
     flat = np.full((40, 1), 123.456)
@@ -551,3 +542,15 @@ def test_checked_scores_accepts_only_finite_numbers_for_declared_symbols() -> No
     for error, code, scores in cases:
         with pytest.raises(error, match=f"^{code}$"):
             checked_scores(scores, universe)  # type: ignore[arg-type]
+
+
+def test_ts_mean_of_a_flat_stretch_is_the_price_itself() -> None:
+    context = _context(_drifting_with_a_flat_stretch())
+    flat = _evaluate("ts_mean(close, 10)", context)[215:225]
+    assert (flat == _drifting_with_a_flat_stretch()[215:225]).all()
+
+
+def test_the_grammar_version_records_the_centred_window_statistics() -> None:
+    from signalquarry._internal.factors.expr import GRAMMAR_VERSION
+
+    assert GRAMMAR_VERSION == 2

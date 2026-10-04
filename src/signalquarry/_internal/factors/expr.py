@@ -20,7 +20,7 @@ from signalquarry._internal.canonical import canonical_hash
 from signalquarry.sdk import xs
 from signalquarry.sdk.factors import FactorCtx
 
-GRAMMAR_VERSION = 1
+GRAMMAR_VERSION = 2
 _SCHEMA = "signalquarry.factor-expression/v1"
 _MAX_SOURCE_CHARS = 512
 _MAX_NODES = 64
@@ -211,70 +211,42 @@ def _delay(values: np.ndarray, period: int) -> np.ndarray:
 
 
 def _rolling(values: np.ndarray, period: int, operation: str, other: np.ndarray | None = None) -> np.ndarray:
-    rows, columns = values.shape
+    """Windowed mean, standard deviation and correlation over complete finite windows.
+
+    Each window is centred on its own last value and then on its own mean (two passes), so a
+    constant window has exactly zero dispersion; running sums would leave rounding noise there.
+    """
+    rows = len(values)
     result = np.full(values.shape, np.nan, dtype=np.float64)
-    counts = np.zeros(columns, dtype=np.int16)
-    sum_x = np.zeros(columns, dtype=np.float64)
-    sum_x2 = np.zeros(columns, dtype=np.float64)
-    sum_y = np.zeros(columns, dtype=np.float64)
-    sum_y2 = np.zeros(columns, dtype=np.float64)
-    sum_xy = np.zeros(columns, dtype=np.float64)
-
-    for end in range(rows):
-        current_x = values[end]
-        finite_x = np.isfinite(current_x)
-        if other is None:
-            counts += finite_x
-            sum_x += np.where(finite_x, current_x, 0.0)
-            sum_x2 += np.where(finite_x, current_x * current_x, 0.0)
-        else:
-            current_y = other[end]
-            finite = finite_x & np.isfinite(current_y)
-            counts += finite
-            sum_x += np.where(finite, current_x, 0.0)
-            sum_x2 += np.where(finite, current_x * current_x, 0.0)
-            sum_y += np.where(finite, current_y, 0.0)
-            sum_y2 += np.where(finite, current_y * current_y, 0.0)
-            sum_xy += np.where(finite, current_x * current_y, 0.0)
-
-        if end >= period:
-            outgoing_x = values[end - period]
-            outgoing_finite_x = np.isfinite(outgoing_x)
-            if other is None:
-                counts -= outgoing_finite_x
-                sum_x -= np.where(outgoing_finite_x, outgoing_x, 0.0)
-                sum_x2 -= np.where(outgoing_finite_x, outgoing_x * outgoing_x, 0.0)
-            else:
-                outgoing_y = other[end - period]
-                outgoing_finite = outgoing_finite_x & np.isfinite(outgoing_y)
-                counts -= outgoing_finite
-                sum_x -= np.where(outgoing_finite, outgoing_x, 0.0)
-                sum_x2 -= np.where(outgoing_finite, outgoing_x * outgoing_x, 0.0)
-                sum_y -= np.where(outgoing_finite, outgoing_y, 0.0)
-                sum_y2 -= np.where(outgoing_finite, outgoing_y * outgoing_y, 0.0)
-                sum_xy -= np.where(outgoing_finite, outgoing_x * outgoing_y, 0.0)
-
-        if end + 1 < period:
+    for end in range(period - 1, rows):
+        window_x = values[end - period + 1 : end + 1]
+        finite = np.isfinite(window_x).all(axis=0)
+        window_y = None if other is None else other[end - period + 1 : end + 1]
+        if window_y is not None:
+            finite &= np.isfinite(window_y).all(axis=0)
+        if not finite.any():
             continue
-        valid = counts == period
+        columns = np.flatnonzero(finite)
+        x = window_x[:, columns]
+        shift_x = x[-1]
+        offset_x = x - shift_x
+        mean_offset_x = offset_x.mean(axis=0)
         if operation == "ts_mean":
-            result[end, valid] = sum_x[valid] / period
-        elif operation == "ts_std":
-            mean = sum_x[valid] / period
-            variance = np.maximum(sum_x2[valid] / period - mean * mean, 0.0)
-            result[end, valid] = np.sqrt(variance)
-        else:
-            mean_x = sum_x[valid] / period
-            mean_y = sum_y[valid] / period
-            variance_x = sum_x2[valid] / period - mean_x * mean_x
-            variance_y = sum_y2[valid] / period - mean_y * mean_y
-            tolerance_x = np.finfo(np.float64).eps * np.maximum(sum_x2[valid] / period, 1.0)
-            tolerance_y = np.finfo(np.float64).eps * np.maximum(sum_y2[valid] / period, 1.0)
-            defined = (variance_x > tolerance_x) & (variance_y > tolerance_y)
-            if defined.any():
-                covariance = sum_xy[valid] / period - mean_x * mean_y
-                correlation = covariance[defined] / np.sqrt(variance_x[defined] * variance_y[defined])
-                result[end, np.flatnonzero(valid)[defined]] = np.clip(correlation, -1.0, 1.0)
+            result[end, columns] = shift_x + mean_offset_x
+            continue
+        centred_x = offset_x - mean_offset_x
+        variance_x = (centred_x * centred_x).mean(axis=0)
+        if window_y is None:
+            result[end, columns] = np.sqrt(variance_x)
+            continue
+        y = window_y[:, columns]
+        centred_y = (y - y[-1]) - (y - y[-1]).mean(axis=0)
+        variance_y = (centred_y * centred_y).mean(axis=0)
+        defined = (variance_x > 0.0) & (variance_y > 0.0)
+        if defined.any():
+            covariance = (centred_x * centred_y).mean(axis=0)
+            correlation = covariance[defined] / np.sqrt(variance_x[defined] * variance_y[defined])
+            result[end, columns[defined]] = np.clip(correlation, -1.0, 1.0)
     return result
 
 
