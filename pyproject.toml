@@ -76,21 +76,20 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Paper runner pass, following validation and both
-# engine passes. Keep its tests scoped so mutmut can finish a full pass.
-only_mutate = ["src/signalquarry/_internal/paper/runner.py"]
+# Hardening plan, track A5. Factor pass: the expression interpreter (the trailing-only,
+# look-ahead-safe core of formula search) and the small SDK/engine factor helpers.
+only_mutate = [
+  "src/signalquarry/_internal/factors/expr.py",
+  "src/signalquarry/sdk/factors.py",
+  "src/signalquarry/_internal/engine/factors.py",
+]
 pytest_add_cli_args_test_selection = [
-  # The broker-plugin CLI test aborts in mutmut's macOS fork process; it remains
-  # in the full pytest suite and is not needed for paper/runner.py coverage.
-  "tests/paper/test_kernel_faults.py",
-  "tests/paper/test_kernel_commands.py",
-  "tests/paper/test_backup_and_run.py",
-  "tests/paper/test_drift.py",
-  "tests/paper/test_snapshot.py",
-  "tests/paper/test_runner_reference.py",
-  "tests/paper/test_parity.py",
-  "tests/paper/test_parity_check.py",
-  "tests/paper/test_isolation.py",
+  "tests/unit/test_factor_expression.py",
+  "tests/unit/test_factor_expression_reference.py",
+  "tests/unit/test_factor_sdk.py",
+  "tests/unit/test_factor_conformance.py",
+  "tests/unit/test_factor_evaluation.py",
+  "tests/unit/test_factor_search.py",
 ]
 
 [tool.importlinter]
