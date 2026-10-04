@@ -66,7 +66,7 @@ counts.
 |---|---|---|
 | 0 | ok | continue |
 | 1 | error | `INTERNAL_ERROR`: report `data.trace_id` and the stderr traceback, then stop |
-| 2 | blocked | report the reason codes and stop; never work around a gate |
+| 2 | blocked | stop research and report the reason codes; after blocked evaluation, `sqy report` may render existing evidence before stopping; never work around a gate |
 | 64 | usage | fix the command line |
 | 65 | invalid | fix the spec, code or data named in the summary |
 | 69 | unavailable | a provider, broker or credential is missing; tell the human |

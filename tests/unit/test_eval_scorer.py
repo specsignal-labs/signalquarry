@@ -254,6 +254,7 @@ def decide(ctx: Ctx, p: CrossParams) -> Decision:
 id: sma-cross
 family: sma-cross
 version: 1.0.0
+kind: equity_daily
 hypothesis:
   statement: Test a moving average crossover.
   falsification: The strategy does not reduce drawdown.
@@ -278,7 +279,7 @@ def test_score_routes_check_and_behavior_execution_through_supplied_runner(tmp_p
     contract = {
         "check": "sma_crossover",
         "strategy_id": "sma-cross",
-        "kind": "equity",
+        "kind": "equity_daily",
         "feed": "synthetic",
         "symbols": ["SYNB"],
         "params": {"symbol": "SYNB", "fast": 50, "slow": 200, "weight": "0.95"},
@@ -331,7 +332,7 @@ def test_behavior_probe_rejects_wrong_sma_decision_rules(tmp_path: Path, rule: s
         {
             "check": "sma_crossover",
             "strategy_id": "sma-cross",
-            "kind": "equity",
+            "kind": "equity_daily",
             "feed": "synthetic",
             "symbols": ["SYNB"],
             "params": {"symbol": "SYNB", "fast": 50, "slow": 200, "weight": "0.95"},
@@ -362,7 +363,7 @@ def test_behavior_probe_imports_only_the_requested_strategy(tmp_path: Path) -> N
         {
             "check": "sma_crossover",
             "strategy_id": "sma-cross",
-            "kind": "equity",
+            "kind": "equity_daily",
             "feed": "synthetic",
             "symbols": ["SYNB"],
             "params": {"symbol": "SYNB", "fast": 50, "slow": 200, "weight": "0.95"},

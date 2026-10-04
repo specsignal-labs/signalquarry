@@ -6,7 +6,12 @@ prompt: |
   half of the premium is captured. Never hold shares on purpose: if assigned, do nothing
   else (hold the shares). Add it as a new strategy with id `cash-secured-put` (family
   `cash-secured-put`), make `sqy check` pass, backtest it, freeze it, evaluate it and write
-  a report. Finish with one paragraph stating exactly what the evidence allows you to claim.
+  a report. Use parameter names `underlying`, `min_dte`, `max_dte`, `otm`,
+  `take_profit` with values QQQ, 21, 45, 0.05, 0.5. Declare and emit reason codes
+  `SELL_PUT`, `TAKE_PROFIT`, `HOLD_LEG`, `HOLD_SHARES` for those respective actions.
+  If evaluation is blocked, preserve the gates, write the report from existing
+  evidence without retrying evaluation or accessing holdout, and then stop.
+  Finish with one paragraph stating exactly what the evidence allows you to claim.
 expect:
   reached: [check, backtest, "spec freeze", evaluate, report]
   strategies: [cash-secured-put]

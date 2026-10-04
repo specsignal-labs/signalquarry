@@ -75,8 +75,8 @@ def _same_value(actual: object, expected: object) -> bool:
 
 
 def _check_declared_spec(spec: dict[str, Any], contract: dict[str, Any], errors: list[str]) -> None:
-    expected_kind = contract.get("kind", "equity")
-    if spec.get("kind", "equity") != expected_kind:
+    expected_kind = contract.get("kind", "equity_daily")
+    if spec.get("kind", "equity_daily") != expected_kind:
         errors.append(f"strategy kind must be {expected_kind}")
     data = spec.get("data") or {}
     if data.get("feed") != contract.get("feed", "synthetic"):
