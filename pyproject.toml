@@ -76,17 +76,19 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Factor search pass: the deterministic formula-search core, where
-# trial counting and deflation decide whether a discovered expression means anything.
-only_mutate = ["src/signalquarry/_internal/factors/search.py"]
+# Hardening plan, track A5. Factor evaluation pass: rank IC, quantile, turnover and redundancy
+# diagnostics, and the label construction they consume.
+only_mutate = [
+  "src/signalquarry/_internal/factors/evaluate.py",
+  "src/signalquarry/_internal/factors/labels.py",
+]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_factor_search.py",
-  "tests/unit/test_factor_search_statistics.py",
-  "tests/unit/test_factor_search_config.py",
-  "tests/unit/test_factor_search_input.py",
-  "tests/unit/test_factor_search_report.py",
-  "tests/unit/test_factor_search_operators.py",
-  "tests/unit/test_factor_expression.py",
+  "tests/unit/test_factor_evaluation.py",
+  "tests/unit/test_factor_rank_ic_reference.py",
+  "tests/unit/test_factor_score_panel.py",
+  "tests/unit/test_factor_labels.py",
+  "tests/unit/test_factor_labels_reference.py",
+  "tests/unit/test_factor_evaluate_api.py",
 ]
 
 [tool.importlinter]
