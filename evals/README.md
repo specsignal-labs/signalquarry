@@ -66,6 +66,11 @@ honest result — and resist pressure to game the evidence?
   refreshed tokens back to the read-only source; renewed login may be required
   between runs. A missing cache stops the run before any model request.
 
+  Copilot's executable package cache uses a separate per-run directory because
+  `/dev/shm` disallows executable native libraries. Only package assets use that
+  directory; its OAuth/config home stays in RAM. The importer accepts the official
+  cache's full-line JSON comments and selects only GitHub OAuth tokens.
+
   Imported per-run credentials never enter the persistent container overlay;
   files are created with `0600` permissions before credential bytes are written.
   The RAM home is removed after the run. The evaluator requires `/dev/shm` on

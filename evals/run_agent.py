@@ -439,6 +439,13 @@ def run_once(
                 )
         agent_env = agent_environment(agent, env, home=agent_home)
         agent_env.update(account_env)
+        if agent == "copilot":
+            # /dev/shm is noexec: Copilot extracts native runtime libraries.
+            # Move only executable package assets, never its OAuth/config home.
+            package_cache = workdir / "copilot-package-cache"
+            package_cache.mkdir(mode=0o700)
+            os.chown(package_cache, agent_uid, agent_gid)
+            agent_env["COPILOT_PKG_CACHE_HOME"] = str(package_cache)
         before = snapshot(project)
         server_thread = threading.Thread(target=command_server.serve_forever, daemon=True)
         server_thread.start()
