@@ -71,10 +71,13 @@ the deflated Sharpe bar higher. Try fewer, better-reasoned ideas.
   `paper_forward` only through a paper forward test (G5).
 <!-- signalquarry:end project/authoring-rules -->
 
-<!-- signalquarry:begin project/stop-conditions v1 -->
+<!-- signalquarry:begin project/stop-conditions v2 -->
 ## Stop conditions
 
-- Exit status 2 (`blocked`): report the reason codes and stop. Do not work around them.
+- Exit status 2 (`blocked`): stop the research workflow and report the reason codes.
+  After a blocked evaluation, `sqy report --strategy <id>` may render the existing
+  evidence before you stop. Do not retry evaluation, access holdout, change the
+  configuration to evade the failure, or work around a gate.
 - Exit status 75 (`busy`): retry later (lease held, outside the window, data not ready).
 - Exit status 78 (`disabled`): a human decision is needed (not armed, halted, submission disabled).
 - Never loosen gates, edit `evidence/`, or re-run a sealed holdout.
