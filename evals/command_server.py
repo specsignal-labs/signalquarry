@@ -7,6 +7,7 @@ import json
 import socketserver
 import subprocess
 from collections.abc import Callable
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -81,3 +82,36 @@ class EvalCommandServer(socketserver.UnixStreamServer):
             "stderr": completed.stderr or "",
             "exit": completed.returncode,
         }
+
+
+class _HttpCommandHandler(BaseHTTPRequestHandler):
+    def do_POST(self) -> None:
+        self.connection.settimeout(5)
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            size = 0
+        if not 0 < size <= MAX_REQUEST_BYTES:
+            self.send_error(400)
+            return
+        response = handle_command_request(self.rfile.read(size), self.server.invoke)  # type: ignore[attr-defined]
+        payload = json.dumps(response).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, _format: str, *args: object) -> None:
+        pass
+
+
+class EvalHttpCommandServer(HTTPServer):
+    """Loopback-only transport for sandboxes that cannot allow one Unix socket."""
+
+    invoke = EvalCommandServer.invoke
+
+    def __init__(self, runner: Callable[[list[str]], subprocess.CompletedProcess[str]]):
+        self.runner = runner
+        self.records: list[dict[str, Any]] = []
+        super().__init__(("127.0.0.1", 0), _HttpCommandHandler)

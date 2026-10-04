@@ -102,19 +102,8 @@ def test_unknown_agent_is_rejected() -> None:
         agent_command("shell", "complete the task")
 
 
-@pytest.mark.parametrize(
-    ("agent", "credential"),
-    [
-        ("claude", "ANTHROPIC_API_KEY"),
-        ("codex", "OPENAI_API_KEY"),
-        ("codex", "CODEX_API_KEY"),
-        ("copilot", "COPILOT_GITHUB_TOKEN"),
-        ("grok", "XAI_API_KEY"),
-    ],
-)
-def test_agent_environment_keeps_only_local_runtime_and_selected_credentials(
-    agent: str, credential: str
-) -> None:
+@pytest.mark.parametrize("agent", sorted(AGENT_EXECUTABLES))
+def test_agent_environment_keeps_only_local_runtime_and_selected_credentials(agent: str) -> None:
     source = {
         "HOME": "/sandbox/home",
         "PATH": "/sandbox/bin",
@@ -122,11 +111,19 @@ def test_agent_environment_keeps_only_local_runtime_and_selected_credentials(
         "SIGNALQUARRY_CACHE_DIR": "/sandbox/cache",
         "ANTHROPIC_API_KEY": "other-provider-key",
         "OPENAI_API_KEY": "other-provider-key",
+        "CODEX_API_KEY": "must-not-pass",
+        "XAI_API_KEY": "must-not-pass",
+        "COPILOT_PROVIDER_API_KEY": "must-not-pass",
+        "COPILOT_GITHUB_TOKEN": "must-not-pass",
+        "GH_TOKEN": "must-not-pass",
+        "GITHUB_TOKEN": "must-not-pass",
+        "ANTHROPIC_AUTH_TOKEN": "must-not-pass",
+        "CLAUDE_CODE_OAUTH_TOKEN": "must-not-pass",
+        "ANTHROPIC_BASE_URL": "must-not-pass",
+        "CODEX_HOME": "/host/home",
         "APCA_API_KEY_ID": "broker-key",
         "UNRELATED_SECRET": "must-not-pass",
     }
-    source[credential] = "provider-key"
-
     assert agent_environment(agent, source, home=Path("/sandbox/run-home")) == {
         "HOME": "/sandbox/run-home",
         "TEMP": "/sandbox/run-home/tmp",
@@ -135,7 +132,6 @@ def test_agent_environment_keeps_only_local_runtime_and_selected_credentials(
         "PATH": "/sandbox/bin",
         "SIGNALQUARRY_CONFIG_DIR": "/sandbox/config",
         "SIGNALQUARRY_CACHE_DIR": "/sandbox/cache",
-        ("CODEX_API_KEY" if agent == "codex" else credential): "provider-key",
     }
 
 

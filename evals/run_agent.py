@@ -8,7 +8,7 @@ Each run gets a fresh virtualenv with the wheel installed, a fresh demo project
 under git, and a trusted command proxy. Scoring uses artifacts and deterministic behavior
 probes (see score.py). Results are written to evals/results/<timestamp>.json or
 SIGNALQUARRY_EVAL_RESULTS_DIR. Not run in CI: it needs an agent CLI and its
-credentials, and costs tokens.
+account login, and consumes the selected provider allowance.
 
 Bar for release: every task passes in 3/3 runs within 15 minutes, with zero
 tampering.
@@ -33,9 +33,10 @@ from pwd import getpwnam
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from command_server import EvalCommandServer  # noqa: E402
+from command_server import EvalCommandServer, EvalHttpCommandServer  # noqa: E402
 from harness import load_task, prepare, tasks  # noqa: E402
 from score import score, snapshot  # noqa: E402
+from subscription_auth import install_account_auth  # noqa: E402
 
 TIMEOUT_SECONDS = 15 * 60
 MAX_VERIFICATION_FILES = 10_000
@@ -59,24 +60,17 @@ _COMMON_AGENT_ENV = {
     "SIGNALQUARRY_CACHE_DIR",
     "SIGNALQUARRY_CONFIG_DIR",
     "SIGNALQUARRY_EVAL_SOCKET",
+    "SIGNALQUARRY_EVAL_URL",
     "TEMP",
     "TERM",
     "TMP",
     "TMPDIR",
 }
-_AGENT_CREDENTIAL_ENV = {
-    "claude": {"ANTHROPIC_API_KEY"},
-    "codex": {"OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_MODEL"},
-    "copilot": {
-        "COPILOT_GITHUB_TOKEN",
-        "COPILOT_PROVIDER_API_KEY",
-        "COPILOT_PROVIDER_BASE_URL",
-        "COPILOT_PROVIDER_TYPE",
-        "COPILOT_MODEL",
-        "GH_TOKEN",
-        "GITHUB_TOKEN",
-    },
-    "grok": {"XAI_API_KEY"},
+_AGENT_RUNTIME_ENV = {
+    "claude": set(),
+    "codex": {"CODEX_MODEL"},
+    "copilot": {"COPILOT_MODEL"},
+    "grok": set(),
 }
 
 
@@ -126,16 +120,11 @@ def agent_command(agent: str, prompt: str, *, codex_model: str | None = None) ->
 
 
 def agent_environment(agent: str, source: dict[str, str], *, home: Path) -> dict[str, str]:
-    """Pass only the selected agent credential and required local runtime variables."""
-    if agent not in _AGENT_CREDENTIAL_ENV:
+    """Allow runtime variables only; API keys, BYOK and inherited tokens never pass."""
+    if agent not in _AGENT_RUNTIME_ENV:
         raise SystemExit(f"unknown agent {agent}")
-    allowed = _COMMON_AGENT_ENV | _AGENT_CREDENTIAL_ENV[agent]
+    allowed = _COMMON_AGENT_ENV | _AGENT_RUNTIME_ENV[agent]
     env = {key: value for key, value in source.items() if key in allowed}
-    if agent == "codex":
-        # Noninteractive Codex accepts CODEX_API_KEY; do not write an auth file.
-        fallback_key = env.pop("OPENAI_API_KEY", None)
-        if "CODEX_API_KEY" not in env and fallback_key:
-            env["CODEX_API_KEY"] = fallback_key
     env["HOME"] = str(home)
     for name in ("TEMP", "TMP", "TMPDIR"):
         env[name] = str(home / "tmp")
@@ -329,13 +318,20 @@ import json
 import os
 import socket
 import sys
+import urllib.request
 
 request = json.dumps({"argv": sys.argv[1:]}, separators=(",", ":")).encode("utf-8") + b"\\n"
-with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-    connection.connect(os.environ["SIGNALQUARRY_EVAL_SOCKET"])
-    connection.sendall(request)
-    with connection.makefile("rb") as response_file:
-        response = json.loads(response_file.readline())
+if "SIGNALQUARRY_EVAL_URL" in os.environ:
+    message = urllib.request.Request(os.environ["SIGNALQUARRY_EVAL_URL"], data=request,
+                                     headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(message, timeout=900) as result:
+        response = json.load(result)
+else:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.connect(os.environ["SIGNALQUARRY_EVAL_SOCKET"])
+        connection.sendall(request)
+        with connection.makefile("rb") as response_file:
+            response = json.loads(response_file.readline())
 sys.stdout.write(response.get("stdout", ""))
 sys.stderr.write(response.get("stderr", ""))
 raise SystemExit(int(response.get("exit", 70)))
@@ -348,7 +344,7 @@ raise SystemExit(int(response.get("exit", 70)))
 
 
 def _safe_cli_environment(source: dict[str, str], home: Path, venv: Path) -> dict[str, str]:
-    allowed = _COMMON_AGENT_ENV - {"SIGNALQUARRY_EVAL_SOCKET"}
+    allowed = _COMMON_AGENT_ENV - {"SIGNALQUARRY_EVAL_SOCKET", "SIGNALQUARRY_EVAL_URL"}
     env = {key: value for key, value in source.items() if key in allowed}
     env["HOME"] = str(home)
     env["PATH"] = f"{venv / 'bin'}:/usr/local/bin:/usr/bin:/bin"
@@ -367,6 +363,7 @@ def run_once(
     agent_gid: int,
     verifier_uid: int,
     verifier_gid: int,
+    auth_home: Path,
 ) -> dict:
     task = task or load_task(name)
     with tempfile.TemporaryDirectory() as tmp:
@@ -381,6 +378,9 @@ def run_once(
         env["PATH"] = f"{project / '.eval' / 'bin'}:{venv / 'bin'}:{env['PATH']}"
         _install_cli_proxy(project)
         agent_home = _prepare_agent_workspace(workdir, project, env, agent_uid, agent_gid)
+        account_env, credential_values = install_account_auth(
+            agent, auth_home, agent_home, uid=agent_uid, gid=agent_gid
+        )
         verifier_home = _prepare_verifier_home(workdir, verifier_uid, verifier_gid)
         socket_path = workdir / "sqy.sock"
         cli_env = _safe_cli_environment(env, agent_home, venv)
@@ -414,10 +414,24 @@ def run_once(
             )
             return completed
 
-        command_server = EvalCommandServer(socket_path, run_cli)
-        socket_path.chmod(0o666)
-        env["SIGNALQUARRY_EVAL_SOCKET"] = str(socket_path)
+        if agent == "codex":
+            command_server = EvalHttpCommandServer(run_cli)
+            env["SIGNALQUARRY_EVAL_URL"] = f"http://127.0.0.1:{command_server.server_port}/"
+        else:
+            command_server = EvalCommandServer(socket_path, run_cli)
+            socket_path.chmod(0o666)
+            env["SIGNALQUARRY_EVAL_SOCKET"] = str(socket_path)
+        if agent == "codex":
+            # Keep workspace-write and enforce loopback-only command networking.
+            config = agent_home / ".codex" / "config.toml"
+            with config.open("a") as stream:
+                stream.write(
+                    "\n[sandbox_workspace_write]\nnetwork_access = true\n"
+                    "[features.network_proxy]\nenabled = true\n"
+                    'allow_upstream_proxy = false\ndomains = { "127.0.0.1" = "allow" }\n'
+                )
         agent_env = agent_environment(agent, env, home=agent_home)
+        agent_env.update(account_env)
         before = snapshot(project)
         server_thread = threading.Thread(target=command_server.serve_forever, daemon=True)
         server_thread.start()
@@ -425,17 +439,22 @@ def run_once(
             completed, timed_out = _run_as_user(
                 agent_uid,
                 agent_gid,
-                agent_command(agent, task["prompt"], codex_model=agent_env.get("CODEX_MODEL")),
+                agent_command(
+                    agent,
+                    f"For all SignalQuarry CLI calls, use this executable: {project / '.eval' / 'bin' / 'sqy'}. "
+                    "Do not invoke another sqy executable or call SignalQuarry through Python.\n\n"
+                    + task["prompt"],
+                    codex_model=agent_env.get("CODEX_MODEL"),
+                ),
                 cwd=project,
                 env=agent_env,
                 timeout=max(0.01, deadline - time.monotonic()),
             )
             output = completed.stdout
             error_output = completed.stderr
-            for key, value in agent_env.items():
-                if value and (key.endswith("_API_KEY") or key.endswith("_TOKEN")):
-                    output = output.replace(value, "[REDACTED]")
-                    error_output = error_output.replace(value, "[REDACTED]")
+            for value in sorted(credential_values, key=len, reverse=True):
+                output = output.replace(value, "[REDACTED]")
+                error_output = error_output.replace(value, "[REDACTED]")
         finally:
             command_server.shutdown()
             command_server.server_close()
@@ -474,6 +493,8 @@ def run_once(
                 "seconds": round(elapsed, 1),
                 "timed_out": timed_out,
                 "agent_exit": completed.returncode,
+                "authentication": "cli-account",
+                "api_key_fallback": False,
                 "codex_model": agent_env.get("CODEX_MODEL") if agent == "codex" else None,
                 "stderr": error_output[-2000:],
                 **usage,
@@ -499,6 +520,12 @@ def main() -> int:
     )
     parser.add_argument("--agent", choices=sorted(AGENT_EXECUTABLES), required=True)
     parser.add_argument("--wheel", type=Path, required=True)
+    parser.add_argument(
+        "--auth-home",
+        type=Path,
+        required=True,
+        help="private selected-provider CLI login home (read-only mount)",
+    )
     parser.add_argument("--task", action="append", help="task id (default: all)")
     parser.add_argument("--runs", type=positive_run_count, default=3)
     args = parser.parse_args()
@@ -527,12 +554,14 @@ def main() -> int:
             agent_gid=agent_gid,
             verifier_uid=verifier_uid,
             verifier_gid=verifier_gid,
+            auth_home=args.auth_home,
         )
         for name, task in task_specs
         for _ in range(args.runs)
     ]
     out = results_dir / f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-{args.agent}.json"
     out.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
+    out.chmod(0o600)
     for item in results:
         print(
             f"{item['task']:<15} passed={item['passed']} seconds={item['seconds']} tampering={item['tampering']}"

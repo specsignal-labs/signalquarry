@@ -1,11 +1,11 @@
 # Isolated agent-eval runner. The agent gets a throwaway filesystem with no host home directory,
-# no SSH keys and no broker or data credentials; only the agent CLI's own API key is passed in.
+# no SSH keys and no broker or data credentials; only the selected CLI account cache is projected into each run.
 #
 #   uv build --wheel --out-dir dist
 #   docker build -f evals/Dockerfile -t signalquarry-evals .
 #   install -d -m 700 evals/results
-#   docker run --rm -e ANTHROPIC_API_KEY -v "$PWD/evals/results:/results" \
-#     signalquarry-evals --agent claude --runs 3
+#   docker run --rm -v "$PWD/evals/results:/results" -v "$AUTH_DIR:/login:ro" \
+#     signalquarry-evals --agent claude --auth-home /login --runs 3
 FROM node:22-bookworm-slim AS node
 FROM python:3.12-slim-bookworm
 COPY --from=node /usr/local/ /usr/local/
