@@ -60,3 +60,4 @@ nav:
       - "0011 Formulaic factor expressions": adr/0011-formulaic-factor-expressions.md
       - "0012 Factor portfolio construction": adr/0012-factor-portfolio-construction.md
       - "0013 Corporate-action identity (proposed)": adr/0013-corporate-action-identity.md
+      - "0014 Real-data formula search (proposed)": adr/0014-real-data-formula-search.md
