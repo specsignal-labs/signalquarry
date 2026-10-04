@@ -81,8 +81,7 @@ def install_account_auth(
         token_map = payload.get("authTokens")
         if token_map is not None:
             if not isinstance(token_map, dict) or not all(
-                isinstance(scope, str) and scope.startswith("https://github.com:")
-                for scope in token_map
+                isinstance(scope, str) and scope.startswith("https://github.com:") for scope in token_map
             ):
                 raise SystemExit("Copilot requires official GitHub OAuth cache scopes")
             tokens = _oauth_tokens(token_map)
