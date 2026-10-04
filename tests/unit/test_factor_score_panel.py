@@ -45,7 +45,7 @@ def test_the_universe_identity_binds_every_dated_membership_field() -> None:
 def test_only_the_named_symbols_are_eligible_and_scored_in_each_row() -> None:
     panel = _panel()
     first = _membership(panel)[0]
-    subset = replace(first, symbols=("S03", "S07"))
+    subset = replace(first, symbols=(panel.symbols[3], panel.symbols[7]))
     result = score_factor(factor_definition_of(previous_close), P(), panel, (subset,))
     assert result.eligible[0].tolist() == [index in (3, 7) for index in range(10)]
     assert result.scores[0, 3] == 13.0 and result.scores[0, 7] == 17.0
