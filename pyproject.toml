@@ -76,21 +76,19 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Calendar and factor-integrity pass: the NYSE session calendar everything
-# is dated by, the factor look-ahead conformance check, and the factor trial log.
+# Hardening plan, track A5. Evidence pass: the dependency-free bundle verifier a reviewer runs, and
+# the run-artifact helpers it relies on.
 only_mutate = [
-  "src/signalquarry/_internal/calendar/nyse.py",
-  "src/signalquarry/_internal/validation/factor_conformance.py",
-  "src/signalquarry/_internal/validation/factor_trials.py",
+  "src/signalquarry/_internal/evidence/verify.py",
+  "src/signalquarry/_internal/evidence/runs.py",
 ]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_nyse_calendar.py",
-  "tests/unit/test_nyse_calendar_reference.py",
-  "tests/unit/test_factor_conformance.py",
-  "tests/unit/test_factor_conformance_results.py",
-  "tests/unit/test_factor_trial_ledger.py",
-  "tests/unit/test_factor_trials.py",
-  "tests/unit/test_factor_trial_entries.py",
+  "tests/unit/test_bundle_verify.py",
+  "-k",
+  "not vendored",
+  "tests/unit/test_run_artifact_streaming.py",
+  "tests/unit/test_bundle_verify_contract.py",
+  "tests/unit/test_run_artifacts_contract.py",
 ]
 
 [tool.importlinter]
