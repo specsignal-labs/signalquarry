@@ -21,6 +21,9 @@ change provisional surfaces after deprecation).
 - Point-in-time universe and research-panel mutation coverage: cutoff, listing-age, price and
   percentile boundaries, classification and asset snapshot contracts, the private classification
   cache, and panel integrity and windowing rules.
+- Calendar and factor-integrity mutation coverage: Easter and weekday arithmetic against independent
+  references across the tracked range, the exact report of the synthetic factor checks, and the exact
+  content of recorded factor trials.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.

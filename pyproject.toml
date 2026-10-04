@@ -76,22 +76,21 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Point-in-time universe and research-panel pass: the monthly universe
-# build that guards against survivorship and look-ahead, and the panel it feeds.
+# Hardening plan, track A5. Calendar and factor-integrity pass: the NYSE session calendar everything
+# is dated by, the factor look-ahead conformance check, and the factor trial log.
 only_mutate = [
-  "src/signalquarry/_internal/data/universe.py",
-  "src/signalquarry/_internal/data/universe_build.py",
-  "src/signalquarry/_internal/data/panel.py",
+  "src/signalquarry/_internal/calendar/nyse.py",
+  "src/signalquarry/_internal/validation/factor_conformance.py",
+  "src/signalquarry/_internal/validation/factor_trials.py",
 ]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_universe_build.py",
-  "tests/unit/test_universe_build_boundaries.py",
-  "tests/unit/test_research_panel.py",
-  "tests/unit/test_asset_snapshots.py",
-  "tests/unit/test_asset_snapshot_contract.py",
-  "tests/unit/test_classification_snapshot_contract.py",
-  "tests/unit/test_research_panel_contract.py",
-  "tests/unit/test_universe_build_helpers.py",
+  "tests/unit/test_nyse_calendar.py",
+  "tests/unit/test_nyse_calendar_reference.py",
+  "tests/unit/test_factor_conformance.py",
+  "tests/unit/test_factor_conformance_results.py",
+  "tests/unit/test_factor_trial_ledger.py",
+  "tests/unit/test_factor_trials.py",
+  "tests/unit/test_factor_trial_entries.py",
 ]
 
 [tool.importlinter]
