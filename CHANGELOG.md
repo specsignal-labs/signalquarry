@@ -102,6 +102,12 @@ change provisional surfaces after deprecation).
 - Options backtests, evaluations and sweeps on real data use recorded chains where they exist
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
+### Changed
+- Building each decision's per-symbol bar windows is about 26% faster on the 10y x 3,000-symbol
+  diagnostic (184.7s to 135.9s on one arm64 laptop run; 10y x 500 symbols 28.0s to 20.2s). The four
+  price fields are adjusted in one block and the per-decision session window is shared, with
+  identical values, read-only arrays and ledger hashes.
+
 ### Fixed
 - Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
 - Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
