@@ -4,6 +4,30 @@ Every project has an `AGENTS.md` (and a `CLAUDE.md` that imports it) written for
 agents. It covers the golden path, authoring rules, the claim ladder, stop
 conditions and what agents must never do.
 
+## From a plain-language idea to a checked strategy
+
+The coding agent interprets the user's description and edits the project;
+SignalQuarry does not execute natural-language instructions. Have the agent
+first restate the idea as explicit entry, exit, sizing, universe, and risk rules.
+It should ask about any material ambiguity instead of silently choosing a
+rule. Record the hypothesis and how it could be falsified in `strategy.yaml`,
+and put deterministic strategy logic in `strategy.py` as a pure
+`decide(ctx, params)` function.
+
+Then have the agent follow that project's `AGENTS.md` golden path: read
+`sqy docs --llms --full`, run `sqy check`, use or fetch the configured dataset
+(`sqy data fetch --strategy <id>` when needed and authorized), and run
+`sqy backtest`. Demo data stays explicitly synthetic. A backtest is exploratory;
+the agent must report the returned evidence grade and claim level, not infer
+market validity from a successful run. Freezing, evaluation, holdout access,
+and any paper workflow must follow the project's gates and human-only steps.
+
+The `evals/` harness serves a different purpose: it runs a selected coding-agent
+CLI against fresh demo projects and scores the artifacts the agent leaves
+behind. It is for repeatable agent-behavior evaluation, not required to author
+or backtest an ordinary strategy. It does not make `sqy` call a model or grant
+an agent paper-trading authority.
+
 ## The envelope
 
 Each command prints one JSON object on stdout (`schema: signalquarry.cli/v1`):
@@ -40,7 +64,7 @@ counts.
 |---|---|---|
 | 0 | ok | continue |
 | 1 | error | `INTERNAL_ERROR`: report `data.trace_id` and the stderr traceback, then stop |
-| 2 | blocked | report the reason codes and stop; never work around a gate |
+| 2 | blocked | stop research and report the reason codes; after blocked evaluation, `sqy report` may render existing evidence before stopping; never work around a gate |
 | 64 | usage | fix the command line |
 | 65 | invalid | fix the spec, code or data named in the summary |
 | 69 | unavailable | a provider, broker or credential is missing; tell the human |

@@ -141,3 +141,20 @@ jobs:
         run: uv sync --locked --python 3.12
       - name: Performance targets (warn at 1.5x, fail at 2x)
         run: uv run python tools/bench.py
+
+  agent-eval-image:
+    # Build the disposable image without agent credentials or agent invocations.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+      - name: Build the SignalQuarry wheel
+        run: uv build --wheel --out-dir dist
+      - name: Build the isolated agent-eval image
+        run: docker build --pull --file evals/Dockerfile --tag signalquarry-evals:ci .
