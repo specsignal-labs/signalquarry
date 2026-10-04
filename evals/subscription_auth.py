@@ -32,7 +32,12 @@ def _read_cache(root: Path, relative: str, agent_uid: int) -> dict:
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > MAX_AUTH_BYTES:
         raise SystemExit("account login cache must be a bounded regular file")
     try:
-        payload = json.loads(source.read_text())
+        text = source.read_text()
+        if relative == ".copilot/config.json":
+            # Official Copilot prepends full-line comments to its JSON cache.
+            # Keep URLs inside strings intact; unsupported JSONC fails closed.
+            text = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+        payload = json.loads(text)
     except (OSError, ValueError, RecursionError):
         raise SystemExit("invalid account login cache") from None
     if not isinstance(payload, dict):
@@ -73,7 +78,16 @@ def install_account_auth(
             raise SystemExit("Claude subscription type is missing; verify the subscription login")
         payload = {"claudeAiOauth": oauth}
     elif agent == "copilot":
-        tokens = _oauth_tokens(payload.get("loggedInUsers", []))
+        token_map = payload.get("authTokens")
+        if token_map is not None:
+            if not isinstance(token_map, dict) or not all(
+                isinstance(scope, str) and scope.startswith("https://github.com:")
+                for scope in token_map
+            ):
+                raise SystemExit("Copilot requires official GitHub OAuth cache scopes")
+            tokens = _oauth_tokens(token_map)
+        else:
+            tokens = _oauth_tokens(payload.get("loggedInUsers", []))
         if len(tokens) != 1:
             raise SystemExit("Copilot requires one cached OAuth account; use a dedicated CLI login home")
         token = tokens.pop()

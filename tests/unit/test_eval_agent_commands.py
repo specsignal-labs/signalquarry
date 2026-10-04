@@ -251,3 +251,35 @@ def test_codex_model_is_an_explicit_argument_without_changing_sandbox_policy() -
     assert command[-3:] == ["--model", "gpt-5", "complete the task"]
     assert command[command.index("--sandbox") + 1] == "workspace-write"
     assert 'approval_policy="never"' in command
+
+
+def test_official_copilot_commented_cache_keeps_urls_and_account_tokens(tmp_path: Path) -> None:
+    from evals.subscription_auth import _oauth_tokens, _read_cache
+
+    tmp_path.chmod(0o700)
+    directory = tmp_path / ".copilot"
+    directory.mkdir(mode=0o700)
+    cache = directory / "config.json"
+    cache.write_text(
+        "// Official CLI configuration\n"
+        '{"authTokens":{"https://github.com:example:github":{"token":"gho_test"}},'
+        '"loggedInUsers":[{"host":"https://github.com","login":"example"}]}\n'
+    )
+    cache.chmod(0o600)
+    payload = _read_cache(tmp_path, ".copilot/config.json", 10001)
+    assert payload["loggedInUsers"][0]["host"] == "https://github.com"
+    assert _oauth_tokens(payload["authTokens"]) == {"gho_test"}
+    assert _oauth_tokens({"token": "github_pat_must_not_pass"}) == set()
+
+
+def test_non_copilot_cache_does_not_accept_comments(tmp_path: Path) -> None:
+    from evals.subscription_auth import _read_cache
+
+    tmp_path.chmod(0o700)
+    directory = tmp_path / ".codex"
+    directory.mkdir(mode=0o700)
+    cache = directory / "auth.json"
+    cache.write_text("// Unsupported comment\n{}\n")
+    cache.chmod(0o600)
+    with pytest.raises(SystemExit, match="invalid account login cache"):
+        _read_cache(tmp_path, ".codex/auth.json", 10001)
