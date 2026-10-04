@@ -76,19 +76,22 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Factor evaluation pass: rank IC, quantile, turnover and redundancy
-# diagnostics, and the label construction they consume.
+# Hardening plan, track A5. Point-in-time universe and research-panel pass: the monthly universe
+# build that guards against survivorship and look-ahead, and the panel it feeds.
 only_mutate = [
-  "src/signalquarry/_internal/factors/evaluate.py",
-  "src/signalquarry/_internal/factors/labels.py",
+  "src/signalquarry/_internal/data/universe.py",
+  "src/signalquarry/_internal/data/universe_build.py",
+  "src/signalquarry/_internal/data/panel.py",
 ]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_factor_evaluation.py",
-  "tests/unit/test_factor_rank_ic_reference.py",
-  "tests/unit/test_factor_score_panel.py",
-  "tests/unit/test_factor_labels.py",
-  "tests/unit/test_factor_labels_reference.py",
-  "tests/unit/test_factor_evaluate_api.py",
+  "tests/unit/test_universe_build.py",
+  "tests/unit/test_universe_build_boundaries.py",
+  "tests/unit/test_research_panel.py",
+  "tests/unit/test_asset_snapshots.py",
+  "tests/unit/test_asset_snapshot_contract.py",
+  "tests/unit/test_classification_snapshot_contract.py",
+  "tests/unit/test_research_panel_contract.py",
+  "tests/unit/test_universe_build_helpers.py",
 ]
 
 [tool.importlinter]

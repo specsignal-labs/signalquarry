@@ -220,7 +220,7 @@ def verify_asset_manifest(manifest: dict[str, Any], page: AssetPage) -> tuple[Ob
         observed = datetime.fromisoformat(manifest["observed_at"].replace("Z", "+00:00"))
         if observed.tzinfo is None or observed.utcoffset() != timedelta(0):
             raise ValueError("observation time")
-    except (KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise LibraryError("DATA_MANIFEST_INVALID", "asset observation time") from exc
     assets = assets_from_page(page)
     if (

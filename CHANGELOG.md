@@ -18,6 +18,9 @@ change provisional surfaces after deprecation).
 - Factor-evaluation mutation coverage: forward-return labels against a day-by-day reference with
   corporate-action boundaries, rank-IC/quintile/turnover/capacity diagnostics against hand-worked
   and per-day references, and score-panel timing and universe-identity checks.
+- Point-in-time universe and research-panel mutation coverage: cutoff, listing-age, price and
+  percentile boundaries, classification and asset snapshot contracts, the private classification
+  cache, and panel integrity and windowing rules.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
