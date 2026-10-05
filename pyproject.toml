@@ -76,21 +76,19 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Paper runner pass, following validation and both
-# engine passes. Keep its tests scoped so mutmut can finish a full pass.
-only_mutate = ["src/signalquarry/_internal/paper/runner.py"]
+# Hardening plan, track A5. Evidence pass: the dependency-free bundle verifier a reviewer runs, and
+# the run-artifact helpers it relies on.
+only_mutate = [
+  "src/signalquarry/_internal/evidence/verify.py",
+  "src/signalquarry/_internal/evidence/runs.py",
+]
 pytest_add_cli_args_test_selection = [
-  # The broker-plugin CLI test aborts in mutmut's macOS fork process; it remains
-  # in the full pytest suite and is not needed for paper/runner.py coverage.
-  "tests/paper/test_kernel_faults.py",
-  "tests/paper/test_kernel_commands.py",
-  "tests/paper/test_backup_and_run.py",
-  "tests/paper/test_drift.py",
-  "tests/paper/test_snapshot.py",
-  "tests/paper/test_runner_reference.py",
-  "tests/paper/test_parity.py",
-  "tests/paper/test_parity_check.py",
-  "tests/paper/test_isolation.py",
+  "tests/unit/test_bundle_verify.py",
+  "-k",
+  "not vendored",
+  "tests/unit/test_run_artifact_streaming.py",
+  "tests/unit/test_bundle_verify_contract.py",
+  "tests/unit/test_run_artifacts_contract.py",
 ]
 
 [tool.importlinter]

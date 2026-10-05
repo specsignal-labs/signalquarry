@@ -20,3 +20,10 @@ Every CLI envelope reports the claim level and trial counts. Gate failure exits 
 directory (transferable on sale) and chains every family append into
 `evidence/project_index.jsonl`. The DSR denominator stays project-wide; a family log
 that disagrees with the index is treated as corrupt.
+
+## Reporting a blocked evaluation
+
+A blocked evaluation stops research, retries and holdout access. Rendering the
+existing evidence with `sqy report` is allowed before stopping: the report retains
+the returned grade, claim level and failure reasons. This reporting step does not
+change gates, configuration, trial budgets or evidence records.

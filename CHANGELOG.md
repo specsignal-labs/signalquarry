@@ -13,10 +13,25 @@ change provisional surfaces after deprecation).
   pre-open paper-parity cases.
 - Options-simulator mutation coverage with short wheel, quote, expiry-boundary, and
   action-refusal reference cases.
+- Formula-search mutation coverage with independent references for the significance arithmetic,
+  configuration and input contracts, report assembly, and genetic operators.
+- Factor-evaluation mutation coverage: forward-return labels against a day-by-day reference with
+  corporate-action boundaries, rank-IC/quintile/turnover/capacity diagnostics against hand-worked
+  and per-day references, and score-panel timing and universe-identity checks.
+- Point-in-time universe and research-panel mutation coverage: cutoff, listing-age, price and
+  percentile boundaries, classification and asset snapshot contracts, the private classification
+  cache, and panel integrity and windowing rules.
+- Calendar and factor-integrity mutation coverage: Easter and weekday arithmetic against independent
+  references across the tracked range, the exact report of the synthetic factor checks, and the exact
+  content of recorded factor trials.
+- Evidence mutation coverage: every defect code of the standalone bundle verifier and its command
+  line, and run identity, artifact layout, cleanup after failure and result documents.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
 - A versioned internal factor-expression interpreter for a bounded, trailing-only AST grammar.
+  Rolling mean, standard deviation and correlation use centred windows (grammar version 2), so
+  constant windows have exactly zero dispersion instead of rounding noise.
 - A deterministic genetic formula-search core over synthetic training inputs, with family-budget
   checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no
   trial ledger, issues no evidence grade, and does not access a holdout.
@@ -34,6 +49,8 @@ change provisional surfaces after deprecation).
   backtest, with lifecycle parity vectors for renames, ticker reuse, splits,
   removals, mergers and late-event failures. Provider ingestion and paper
   planning remain separate gates.
+- The coding-agent guide documents the plain-language idea → strategy files → `sqy` check/backtest
+  workflow and distinguishes normal authoring from the optional agent-evaluation harness.
 - Options core (toward 1.0): OCC identities, quote rules, one contract resolver for simulation
   and paper, the wheel state machine, the options authoring API (`signalquarry.sdk.options`) and
   `kind: options_single_leg` specs. Equity configuration hashes are unchanged.
@@ -85,6 +102,8 @@ change provisional surfaces after deprecation).
   assignment, so options claims can reach `paper_forward`.
 - Agent eval task `options-put` (replayed in CI); the scorer no longer counts an options
   spec's absent holdout as loosening.
+- Sandboxed headless agent evaluations now support GitHub Copilot CLI and Grok Build alongside
+  Claude Code and Codex; each subprocess receives only its selected provider credentials.
 - AGENTS.md authoring block (v2) covers options strategies; `sqy init --upgrade-agents-md`
   brings existing projects up to date.
 - `paper schedule --target systemd` also writes a post-close journal-head commitment timer
@@ -98,12 +117,29 @@ change provisional surfaces after deprecation).
 - Options backtests, evaluations and sweeps on real data use recorded chains where they exist
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
+### Changed
+- Building each decision's per-symbol bar windows is about 26% faster on the 10y x 3,000-symbol
+  diagnostic (184.7s to 135.9s on one arm64 laptop run; 10y x 500 symbols 28.0s to 20.2s). The four
+  price fields are adjusted in one block and the per-decision session window is shared, with
+  identical values, read-only arrays and ledger hashes.
+
 ### Fixed
 - Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
 - Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
   instead of an internal error.
 - A paper snapshot requested with zero recent fills now returns an empty list instead
   of all historical fills.
+- Agent eval scoring now checks that strategy and paper commands target the requested IDs,
+  parses paper submission and journal state as structured data, and treats malformed strategy
+  specs as failed runs rather than crashing the scorer.
+- Agent-evaluation containers keep task references and scoring code away from
+  the unprivileged agent process; command scores use evaluator-owned records.
+- Agent-authored strategy code now runs only under a separate unprivileged verifier UID,
+  against a root-owned read-only project copy; verification cannot inherit provider credentials.
+- Claude Code evaluation passes allowed tools as separate command arguments, matching the documented
+  `--allowedTools` syntax.
+- Agent-evaluation runs reject zero or negative repetition counts instead of reporting an empty run
+  set as passing.
 - Exported study results were always labelled `historical`: synthetic runs are now
   `diagnostic` and options runs `option_proxy`, with options costs in the assumptions.
 - Exported options profiles say `asset_class: options` (from the spec, not the publication

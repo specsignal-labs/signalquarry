@@ -448,6 +448,8 @@ def _effective_observations(values: np.ndarray) -> float:
     count = len(values)
     if count < 3:
         return float(count)
+    if float(np.ptp(values)) == 0.0:
+        return float(count)
     centered = values - float(values.mean())
     variance = float(np.dot(centered, centered))
     if variance <= 0:
@@ -469,7 +471,7 @@ def _t_statistic(daily_ic: tuple[float | None, ...]) -> tuple[int, float, float 
         return count, float(count), None, None
     deviation = float(values.std(ddof=1))
     effective = _effective_observations(values)
-    if not math.isfinite(deviation) or deviation <= 0:
+    if float(np.ptp(values)) == 0.0 or not math.isfinite(deviation) or deviation <= 0:
         return count, effective, None, None
     icir = float(values.mean() / deviation)
     statistic = icir * math.sqrt(effective)
