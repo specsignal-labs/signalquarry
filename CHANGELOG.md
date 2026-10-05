@@ -24,6 +24,8 @@ change provisional surfaces after deprecation).
 - Calendar and factor-integrity mutation coverage: Easter and weekday arithmetic against independent
   references across the tracked range, the exact report of the synthetic factor checks, and the exact
   content of recorded factor trials.
+- Evidence mutation coverage: every defect code of the standalone bundle verifier and its command
+  line, and run identity, artifact layout, cleanup after failure and result documents.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
