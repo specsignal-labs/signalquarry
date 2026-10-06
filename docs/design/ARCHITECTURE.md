@@ -199,7 +199,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
   - The `delta` strike rule is paper-only.
 - **Determinism:** prices stored as int64 micro-units; a Decimal ledger (precision 28, HALF_EVEN); float64 signals; PCG64 randomness seeded from `configuration_hash`.
 - Dataset identities and backtest ledgers stream canonical JSON chunks into SHA-256, preserving existing hashes while bounding temporary memory.
-- **Performance targets:** the default CI benchmark warns at 1.5× and fails at 2× for the existing workloads. `tools/bench.py --full` also checks both 3,000-symbol cases against strict 3-minute and 2-GB ceilings in isolated native processes. The spooled engine case is diagnostic only; it bypasses the public 500-symbol spec cap in memory.
+- **Performance targets:** the default CI benchmark warns at 1.5× and fails at 2× for the existing workloads. `tools/bench.py --full` also checks both 3,000-symbol cases against strict 3-minute and 2-GB ceilings in isolated native processes. The spooled engine case is diagnostic only; it bypasses the public 500-symbol spec cap in memory. The 3-minute target is calibrated on Apple Silicon; the scheduled CI run uses a 5-minute ceiling for the spooled case on shared Linux runners (`--spooled-ceiling`).
 
 | Workload | Target |
 |---|---|
