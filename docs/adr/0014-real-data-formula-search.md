@@ -1,6 +1,7 @@
 # 0014. Real-data formula search and the factor holdout
 
-Status: proposed (2026-10-04)
+Status: proposed (2026-10-04); the six design questions were settled by the owner on 2026-10-06 (see
+"Decisions"). It becomes accepted when the acceptance tests below pass.
 
 ## Context
 
@@ -74,7 +75,8 @@ internal. Each trial's p-value is stored in its metrics so later searches can re
 - Re-running an identical search appends nothing and returns the recorded results, which doubles
   as a determinism check.
 - Factor trials remain separate from the strategy trial counts and budgets, as today. Whether
-  they should also enter the strategy DSR denominator is an open question below.
+  they should also enter the strategy DSR denominator was decided on 2026-10-06: they do not (see
+  Decisions, 3).
 
 ### 5. A factor holdout, enforced structurally
 
@@ -124,17 +126,29 @@ Four independently reviewable changes: (a) reason codes plus `factor holdout sea
 (b) ledger-derived accounting and a formula-aware trial append; (c) `factor search` at T1;
 (d) `factor emit`. Nothing in (a) or (b) exposes search to users.
 
-## Open questions for the owner
+## Decisions
 
-1. A family has many factors and each declares its own `trial_budget` and `holdout`. Which is
-   authoritative for the family: the first sealed, the most conservative, or one declared at the
-   family level? (The strategy side has the same shape and settles it per family.)
-2. Seal explicitly (proposed) or automatically at the first search of a family.
-3. Should factor trials join the strategy project-wide DSR denominator? Today they are separate
-   by design; joining is more conservative but couples two budgets.
-4. The null-test threshold in test 2.
-5. Whether T1 results may ever appear in published evidence (proposed: never).
-6. Benjamini-Hochberg per family (current) or across all families.
+Settled by the owner on 2026-10-06, following the recommendations proposed here.
+
+1. **Family budget and holdout: the most conservative declaration wins.** A family has many
+   factors, each declaring its own `trial_budget` and `holdout`. For the family, the effective
+   `trial_budget` is the smallest declared and the effective holdout is the longest declared
+   `months`, so the largest sealed region. The effective values are recorded when the holdout is
+   sealed and the family's first trial is appended; a later factor that declares something more
+   lenient does not loosen them.
+2. **The seal is explicit.** `sqy factor holdout seal --family F` is a human command. A search
+   never seals automatically and fails closed with `FACTOR_HOLDOUT_UNSEALED` without one.
+3. **Factor trials stay out of the strategy DSR denominator.** The two budgets remain separate
+   and uncoupled, as today. The factor search count is reported next to any strategy built from a
+   factor so a reader can judge it, but it does not change that strategy's deflation.
+4. **Null-test threshold:** at most 10 percent of 200 independent pure-noise panels, with a large
+   budget, may produce any discovery.
+5. **T1 results never appear in published evidence.**
+6. **Benjamini-Hochberg is applied per family,** as the search core does now, not across families.
+
+Related change, also decided 2026-10-06: a factor trial's identity is (family, configuration) in
+every evidence layout, so evaluating the same configuration under a second family is that family's
+own trial.
 
 ## Consequences
 
