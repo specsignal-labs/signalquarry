@@ -80,6 +80,9 @@ def record_factor_trial(
 ) -> tuple[dict[str, Any], bool]:
     """Persist one verified evaluation identity; repeated identities are idempotent.
 
+    Identity is per family: the same configuration evaluated under a second family is that family's
+    own trial, in the shared project log as well as in per-family logs.
+
     This is a storage helper, not a provenance verifier or evaluation gate.
     """
     if not _SLUG.fullmatch(family) or not _SLUG.fullmatch(factor_id):
@@ -107,6 +110,7 @@ def record_factor_trial(
     for entry in log.entries():
         if (
             entry.get("kind") == "factor_trial"
+            and entry.get("family") == family
             and entry.get("trial_configuration_hash") == trial["trial_configuration_hash"]
         ):
             return entry, False
