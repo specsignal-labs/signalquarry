@@ -9,6 +9,10 @@ engine diagnostic, and a 3,000-symbol research panel. The diagnostic bypasses
 the public 500-symbol spec cap only through an in-memory model copy.
 Engine cases warn above 1.5× their target and fail above 2×; 3,000-symbol cases
 have a strict 3-minute / 2-GB ceiling. Data is synthetic; timings exclude generation.
+
+``--spooled-ceiling SECONDS`` raises only the spooled diagnostic's time ceiling (default 180). The
+180-second target is calibrated on Apple Silicon; the scheduled CI workflow passes a looser ceiling
+because shared Linux runners are slower and noisier. Memory stays capped at 2 GB either way.
 """
 
 from __future__ import annotations
@@ -119,12 +123,28 @@ def _isolated_case(name: str) -> dict[str, float | str]:
     return json.loads(completed.stdout)
 
 
+MEMORY_CEILING_MB = 2000.0
+DEFAULT_CEILING_SECONDS = 180.0
+
+
+def ceiling_verdict(elapsed: float, rss: float, ceiling_seconds: float = DEFAULT_CEILING_SECONDS) -> str:
+    """``ok`` strictly below both ceilings, otherwise ``FAIL``."""
+    return "ok" if elapsed < ceiling_seconds and rss < MEMORY_CEILING_MB else "FAIL"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "--full", action="store_true", help="also run 500-symbol engine and 3,000-symbol diagnostics"
+    )
+    parser.add_argument(
+        "--spooled-ceiling",
+        type=float,
+        default=DEFAULT_CEILING_SECONDS,
+        metavar="SECONDS",
+        help="time ceiling for the 3,000-symbol spooled diagnostic (default 180; CI passes a looser one)",
     )
     parser.add_argument("--case", choices=("spooled", "panel"), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -156,15 +176,16 @@ def main(argv: list[str] | None = None) -> int:
             float(spooled["rss"]),
             str(spooled["ledger_hash"]),
         )
-        verdict = "ok" if elapsed < 180 and rss < 2000 else "FAIL"
+        verdict = ceiling_verdict(elapsed, rss, args.spooled_ceiling)
         failed |= verdict == "FAIL"
         print(
-            f"{'10y x 3000 spooled diagnostic':<36} {elapsed:7.2f}s  target 180.0s  peak {rss:6.0f} MB  {verdict}"
+            f"{'10y x 3000 spooled diagnostic':<36} {elapsed:7.2f}s  "
+            f"target {args.spooled_ceiling:5.1f}s  peak {rss:6.0f} MB  {verdict}"
         )
         print(f"  ledger {ledger_hash}")
         panel = _isolated_case("panel")
         elapsed, rss = float(panel["elapsed"]), float(panel["rss"])
-        verdict = "ok" if elapsed < 180 and rss < 2000 else "FAIL"
+        verdict = ceiling_verdict(elapsed, rss)
         failed |= verdict == "FAIL"
         print(
             f"{'10y x 3000 research panel':<36} {elapsed:7.2f}s  target 180.0s  peak {rss:6.0f} MB  {verdict}"

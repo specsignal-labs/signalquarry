@@ -14,7 +14,7 @@ That API does not exist. What exists today:
   `previous_family_p_values` from the caller. On real data a caller could understate them, which
   silently weakens the family budget, the expected-maximum deflation and the Benjamini-Hochberg
   correction that are the point of the search.
-- `record_factor_trial` is a storage helper: idempotent per configuration hash, not a verifier.
+- `record_factor_trial` is a storage helper: idempotent per family and configuration hash, not a verifier.
   Nothing calls it from a search.
 - `sqy factor evaluate` replays the dataset and universe manifests, but its output is scope
   `unverified` and records no trial.
@@ -111,7 +111,7 @@ conventions when implemented.
 
 1. Planted signal: a synthetic panel with a known factor is found.
 2. Null: across many independent pure-noise panels with a large budget, the fraction of runs with
-   any discovery stays at or below an agreed threshold (proposed: 10 percent over 200 panels).
+   any discovery stays at or below the decided threshold: 10 percent over 200 panels.
 3. Determinism: identical inputs give identical trials, ledger entries and report hash.
 4. Look-ahead: perturbing every row at or after the training cutoff changes no score and no trial.
 5. Holdout isolation: instrumentation shows no row at or after the seal start reaches the

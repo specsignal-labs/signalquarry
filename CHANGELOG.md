@@ -26,6 +26,9 @@ change provisional surfaces after deprecation).
   content of recorded factor trials.
 - Evidence mutation coverage: every defect code of the standalone bundle verifier and its command
   line, and run identity, artifact layout, cleanup after failure and result documents.
+- Paper-state mutation coverage: the arm token's issue/check order and boundaries, journal chaining and
+  durability, the single-writer lease, the isolated strategy child's exact environment and failure
+  reporting, and the scheduler templates' times, commands and quoting.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
@@ -118,6 +121,8 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Changed
+- Factor trials are identified per family: recording the same configuration under a second family is that
+  family's own trial in the default project evidence layout too (as it already was with `per_family`).
 - Building each decision's per-symbol bar windows is about 26% faster on the 10y x 3,000-symbol
   diagnostic (184.7s to 135.9s on one arm64 laptop run; 10y x 500 symbols 28.0s to 20.2s). The four
   price fields are adjusted in one block and the per-decision session window is shared, with
