@@ -26,6 +26,9 @@ change provisional surfaces after deprecation).
   content of recorded factor trials.
 - Evidence mutation coverage: every defect code of the standalone bundle verifier and its command
   line, and run identity, artifact layout, cleanup after failure and result documents.
+- Paper-state mutation coverage: the arm token's issue/check order and boundaries, journal chaining and
+  durability, the single-writer lease, the isolated strategy child's exact environment and failure
+  reporting, and the scheduler templates' times, commands and quoting.
 - Paper-runner mutation coverage with exact snapshot, drift, and deterministic
   order-intent reference cases.
 - An internal, hash-chained factor-trial log with separate project/family configuration counts; recording does not certify provenance or change strategy trial budgets.
