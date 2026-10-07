@@ -118,6 +118,8 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Changed
+- Factor trials are identified per family: recording the same configuration under a second family is that
+  family's own trial in the default project evidence layout too (as it already was with `per_family`).
 - Building each decision's per-symbol bar windows is about 26% faster on the 10y x 3,000-symbol
   diagnostic (184.7s to 135.9s on one arm64 laptop run; 10y x 500 symbols 28.0s to 20.2s). The four
   price fields are adjusted in one block and the per-decision session window is shared, with

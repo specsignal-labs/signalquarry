@@ -12,6 +12,7 @@ import pytest
 
 from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.contracts.factor_spec import FactorEvaluationSpecV1
+from signalquarry._internal.validation import ledger
 from signalquarry._internal.validation.factor_trials import FactorTrialConfiguration, record_factor_trial
 
 from .test_factor_trial_ledger import _configuration, _identity
@@ -86,13 +87,19 @@ def test_per_family_layout_counts_the_same_identity_once_in_each_family(tmp_path
     assert left["trial_configuration_hash"] == right["trial_configuration_hash"]
 
 
-def test_the_default_project_layout_has_one_log_so_an_identity_is_stored_once(tmp_path: Path) -> None:
-    # Pins current behaviour: the identity excludes the family, so with a single shared log the
-    # second family receives the first family's entry rather than a trial of its own.
+def test_the_default_project_layout_counts_the_same_identity_once_per_family(tmp_path: Path) -> None:
     left, left_created = _record(tmp_path, family="alpha")
     right, right_created = _record(tmp_path, family="beta")
-    assert left_created is True and right_created is False
-    assert right == left and right["family"] == "alpha"
+    assert left_created is True and right_created is True
+    assert (left["family"], right["family"]) == ("alpha", "beta")
+    assert right["seq"] == 2 and right["prev"] == left["hash"]
+    assert left["trial_configuration_hash"] == right["trial_configuration_hash"]
+    again, repeated = _record(tmp_path, family="beta", at=AT + timedelta(days=1))
+    assert repeated is False and again == right
+    summary = ledger.factor_trial_summary(tmp_path)
+    assert (summary["project_count"], summary["trial_count"]) == (1, 2)
+    assert ledger.factor_trial_summary(tmp_path, "alpha")["trial_count"] == 1
+    assert ledger.factor_trial_summary(tmp_path, "beta")["trial_count"] == 1
 
 
 def test_the_time_is_recorded_in_utc_whatever_zone_it_was_given_in(tmp_path: Path) -> None:
