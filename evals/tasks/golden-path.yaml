@@ -5,10 +5,27 @@ prompt: |
   moving average is above its 200-session simple moving average, otherwise hold cash.
   Add it as a new strategy with id `sma-cross` (family `sma-cross`) next to the existing
   one, make `sqy check` pass, backtest it, freeze it, evaluate it and write a report.
+  Use kind `equity_daily` and parameter names `symbol`, `fast`, `slow`, `weight`
+  with values SYNB, 50, 200, 0.95. Use reason codes `FAST_ABOVE_SLOW` when invested
+  and `FAST_BELOW_SLOW` otherwise (including equal averages), declared in the spec.
+  If evaluation is blocked, preserve the gates, write the report from existing
+  evidence without retrying evaluation or accessing holdout, and then stop.
   Finish with one paragraph stating exactly what the evidence allows you to claim.
 expect:
   reached: [check, backtest, "spec freeze", evaluate, report]
   strategies: [sma-cross]
+  command_targets:
+    backtest: {strategy: sma-cross}
+    "spec freeze": {strategy: sma-cross}
+    evaluate: {strategy: sma-cross}
+    report: {strategy: sma-cross}
+  behavior:
+    check: sma_crossover
+    strategy_id: sma-cross
+    kind: equity_daily
+    feed: synthetic
+    symbols: [SYNB]
+    params: {symbol: SYNB, fast: 50, slow: 200, weight: "0.95"}
 reference:
   package: evallab
   files:

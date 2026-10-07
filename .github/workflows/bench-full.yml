@@ -1,0 +1,54 @@
+name: bench-full
+
+# The full scale benchmark (10y x 500 symbols, plus the 3,000-symbol spooled engine diagnostic and
+# research panel). Too slow for every pull request, so it runs weekly, on demand, and on pull requests
+# that change the benchmark itself. Not a required check. The 180-second spooled target was set on
+# Apple Silicon; the shared runner measured 235-260 s for the same case, so this workflow passes a
+# 300-second ceiling for that one case (owner decision, 2026-10-06). The research panel and the 2 GB
+# memory ceiling are unchanged. A red run means a real regression against the runner's own baseline.
+
+on:
+  schedule:
+    - cron: "41 5 * * 0"
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - tools/bench.py
+      - .github/workflows/bench-full.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench-full:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --python 3.12
+
+      - name: Full benchmark (warn at 1.5x, fail at 2x; spooled 3,000-symbol case fails at 300s on this runner, 2 GB)
+        shell: bash
+        run: |
+          # GitHub runs bash with -e: capture the status so a failing benchmark still writes its summary.
+          status=0
+          uv run python tools/bench.py --full --spooled-ceiling 300 | tee bench-full.txt || status=$?
+          {
+            echo "## bench --full"
+            echo
+            echo '```'
+            cat bench-full.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

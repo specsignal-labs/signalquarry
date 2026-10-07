@@ -199,20 +199,21 @@ class _Views:
 
     def __init__(self, dataset: Dataset, symbols: tuple[str, ...]) -> None:
         self.dataset = dataset
-        self.adjusted: dict[str, dict[str, np.ndarray]] = {}
+        self.adjusted: dict[str, np.ndarray] = {}  # symbol -> (len(FIELDS), sessions), FIELDS order
         self.cumulative: dict[str, np.ndarray] = {}
         self.volume: dict[str, np.ndarray] = {}
         self.present: dict[str, np.ndarray] = {}
         self.last_before: dict[str, np.ndarray] = {}  # [stop] -> last present index < stop, or -1
         self.sessions = np.array(dataset.sessions, dtype="datetime64[D]")
+        self._window: tuple[tuple[int, int], np.ndarray] | None = None
         for symbol in symbols:
             item = dataset.series[symbol]
             cumulative = dataset.cumulative_split(symbol)
             self.cumulative[symbol] = cumulative
             # raw × F(t): adjusted to the first session's share basis; divide by F(cutoff) at use.
-            self.adjusted[symbol] = {
-                name: _micro_to_float(item.micro[name], item.present) * cumulative for name in FIELDS
-            }
+            self.adjusted[symbol] = np.stack(
+                [_micro_to_float(item.micro[name], item.present) * cumulative for name in FIELDS]
+            )
             self.volume[symbol] = np.where(item.present, item.volume / cumulative, np.nan)
             self.present[symbol] = item.present
             running = np.maximum.accumulate(np.where(item.present, np.arange(len(item.present)), -1))
@@ -220,18 +221,24 @@ class _Views:
 
     def bars(self, symbol: str, start: int, stop: int) -> Bars:
         cutoff = self.cumulative[symbol][stop - 1]
-
-        def view(array: np.ndarray) -> np.ndarray:
-            window = array[start:stop] / cutoff
-            window.setflags(write=False)
-            return window
-
-        sessions = self.sessions[start:stop].copy()
-        sessions.setflags(write=False)
+        # One division and one write-protect cover all four price fields; the rows are
+        # read-only views of that block. The session window is identical for every symbol
+        # in a decision, so it is copied and frozen once and shared.
+        prices = self.adjusted[symbol][:, start:stop] / cutoff
+        prices.setflags(write=False)
         volume = self.volume[symbol][start:stop] * cutoff
         volume.setflags(write=False)
-        opens, highs, lows, closes = (view(self.adjusted[symbol][name]) for name in FIELDS)
-        return Bars(symbol, sessions, opens, highs, lows, closes, volume)
+        return Bars(
+            symbol, self._session_window(start, stop), prices[0], prices[1], prices[2], prices[3], volume
+        )
+
+    def _session_window(self, start: int, stop: int) -> np.ndarray:
+        cached = self._window
+        if cached is None or cached[0] != (start, stop):
+            window = self.sessions[start:stop].copy()
+            window.setflags(write=False)
+            cached = self._window = ((start, stop), window)
+        return cached[1]
 
     def last_present(self, symbol: str, stop: int) -> int | None:
         last = int(self.last_before[symbol][stop])
