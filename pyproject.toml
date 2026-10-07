@@ -76,19 +76,22 @@ strict = ["src/signalquarry/sdk", "src/signalquarry/api", "src/signalquarry/plug
 [tool.mutmut]
 process_isolation = "forkserver"
 on_dependency_change = "rerun"
-# Hardening plan, track A5. Evidence pass: the dependency-free bundle verifier a reviewer runs, and
-# the run-artifact helpers it relies on.
+# Hardening plan, track A5. Paper state pass: the arm token, journal, single-writer lease, run
+# isolation and scheduler templates, which gate whether a paper run may touch an account at all.
 only_mutate = [
-  "src/signalquarry/_internal/evidence/verify.py",
-  "src/signalquarry/_internal/evidence/runs.py",
+  "src/signalquarry/_internal/paper/arm.py",
+  "src/signalquarry/_internal/paper/isolate.py",
+  "src/signalquarry/_internal/paper/journal.py",
+  "src/signalquarry/_internal/paper/lease.py",
+  "src/signalquarry/_internal/paper/schedule.py",
 ]
 pytest_add_cli_args_test_selection = [
-  "tests/unit/test_bundle_verify.py",
-  "-k",
-  "not vendored",
-  "tests/unit/test_run_artifact_streaming.py",
-  "tests/unit/test_bundle_verify_contract.py",
-  "tests/unit/test_run_artifacts_contract.py",
+  "tests/paper/test_paper_state_contract.py",
+  "tests/paper/test_isolation.py",
+  "tests/paper/test_isolation_contract.py",
+  "tests/paper/test_schedule_templates.py",
+  "tests/paper/test_kernel_commands.py",
+  "tests/paper/test_kernel_faults.py",
 ]
 
 [tool.importlinter]
