@@ -2,8 +2,10 @@ name: bench-full
 
 # The full scale benchmark (10y x 500 symbols, plus the 3,000-symbol spooled engine diagnostic and
 # research panel). Too slow for every pull request, so it runs weekly, on demand, and on pull requests
-# that change the benchmark itself. Not a required check: the 3,000-symbol targets were set on a
-# laptop and shared runners are slower and noisier, so read a red run as "look at the trend".
+# that change the benchmark itself. Not a required check. The 180-second spooled target was set on
+# Apple Silicon; the shared runner measured 235-260 s for the same case, so this workflow passes a
+# 300-second ceiling for that one case (owner decision, 2026-10-06). The research panel and the 2 GB
+# memory ceiling are unchanged. A red run means a real regression against the runner's own baseline.
 
 on:
   schedule:
@@ -36,12 +38,12 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked --python 3.12
 
-      - name: Full benchmark (warn at 1.5x, fail at 2x; 3,000-symbol cases fail at 180s or 2 GB)
+      - name: Full benchmark (warn at 1.5x, fail at 2x; spooled 3,000-symbol case fails at 300s on this runner, 2 GB)
         shell: bash
         run: |
           # GitHub runs bash with -e: capture the status so a failing benchmark still writes its summary.
           status=0
-          uv run python tools/bench.py --full | tee bench-full.txt || status=$?
+          uv run python tools/bench.py --full --spooled-ceiling 300 | tee bench-full.txt || status=$?
           {
             echo "## bench --full"
             echo
