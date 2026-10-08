@@ -38,6 +38,8 @@ change provisional surfaces after deprecation).
 - A deterministic genetic formula-search core over synthetic training inputs, with family-budget
   checks, complexity and library-correlation penalties, and deflated-t/BH diagnostics. It writes no
   trial ledger, issues no evidence grade, and does not access a holdout.
+- Optional local `sqy-mcp` adapter over the command API for coding agents;
+  human-only paper arming and trial-budget extension remain terminal-only.
 - Internal, dataset-identity keyed Parquet research panels derived from verified cached pages,
   with explicit pre-decision windows, missing-bar masks, and a load-once path for factor research.
 - `sqy universe build` creates a hashed, replay-verifiable common-stock membership manifest from
