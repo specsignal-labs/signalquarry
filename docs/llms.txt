@@ -10,6 +10,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - [quickstart](quickstart.md): Install, create a demo project and run the golden path.
 - [authoring](authoring.md): Write decide(ctx, params) and strategy.yaml; rules sqy check enforces.
 - [evidence](evidence.md): Claim ladder, trial ledger, freeze and sealed holdout, gates G1–G4, reports.
+- [research](research.md): The research method: baselines, variants, comparisons, studies; a worked study.
 - [data](data.md): Alpaca credentials, fetching and verifying data, point-in-time adjustment.
 - [paper](paper.md): Paper deployments, the arm step, run-once, journal, guards and scheduling.
 - [agents](agents.md): The JSON envelope, exit codes and human-only actions for coding agents.
