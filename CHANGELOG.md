@@ -57,6 +57,10 @@ change provisional surfaces after deprecation).
   trial rule for each kind of arm, refusal before spending, resume and a rule-bound verdict.
   The strict `study.yaml` contract (`signalquarry.study/v1`) is in place; no command reads it
   yet.
+- Pure regime slices (trend, trailing-volatility thirds and calendar year, each labelled from
+  information through the previous session only) with a per-regime performance table, and a
+  parameter-sensitivity summary (the best grid point, its adjacent points, a plateau ratio and
+  per-axis medians). No command uses them yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
