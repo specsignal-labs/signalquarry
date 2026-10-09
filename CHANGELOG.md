@@ -65,6 +65,8 @@ change provisional surfaces after deprecation).
   information through the previous session only) with a per-regime performance table, and a
   parameter-sensitivity summary (the best grid point, its adjacent points, a plateau ratio and
   per-axis medians). No command uses them yet.
+- `sqy data quality` reports dataset completeness and consistency, writes a report of dates
+  and counts, and summarizes the history available for a strategy's evaluation.
 - An internal, pure data-quality assessment of a daily dataset: calendar coverage, gaps,
   OHLC consistency, non-positive prices, zero volume, stale closes and large moves that no
   recorded split explains. Its report holds dates and counts only, never a price, volume or

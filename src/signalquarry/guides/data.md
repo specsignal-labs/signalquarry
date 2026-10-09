@@ -42,6 +42,33 @@ are older than 15 minutes when you decide, so free plans can use SIP too.
 Set `SIGNALQUARRY_OFFLINE=1` to forbid every network call (the project CI
 template does this).
 
+## Data quality
+
+```bash
+sqy data quality --strategy sma-trend
+sqy data quality --dataset-id alpaca-sip-1day-example
+```
+
+The command checks session calendars, missing bars, OHLC consistency, nonpositive
+prices, zero volume, stale closes and large moves unexplained by recorded splits.
+Synthetic datasets skip the holiday and missing-trading-day checks. Findings are
+information and do not block a run; the command succeeds even when it finds issues.
+
+The full report is written to `data/quality/DATASET_ID.json` in the project, or
+`data/quality/synthetic.json` for synthetic data. A later assessment of the same
+dataset overwrites that report. It holds dates and counts only, with no price,
+volume or return values. The command envelope contains a compact summary and
+the report's SHA-256.
+
+With `--strategy`, the sufficiency block describes the common history of the
+strategy's symbols. It reports years before the family's sealed holdout, or the
+configured holdout when unsealed, and whole walk-forward test folds after the
+training burn-in. The flags compare that history with G1's five-year requirement
+and G2's six-fold requirement. They do not establish that either gate passes:
+evaluation also checks trading activity and performance. Warm-up sessions are
+the strategy's declared lookback. Options strategies have no holdout, so none is
+subtracted.
+
 ## Prospective asset snapshots
 
 ```bash
