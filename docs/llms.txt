@@ -37,6 +37,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy holdout`: Seal a family's holdout early, or show seals and openings.
 - `sqy sweep`: Backtest a parameter grid (each point on real data is a trial); reports PBO.
 - `sqy runs`: List, show and compare backtest runs.
+- `sqy study`: Declared comparisons: a subject, baselines and bounded variants under one rule.
 - `sqy backtest`: Backtest a strategy and write run artifacts.
 - `sqy evidence`: Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
 - `sqy commit`: Salted commitments to frozen strategies and journal heads (OpenTimestamps).

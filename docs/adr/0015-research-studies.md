@@ -124,6 +124,15 @@ a budget and opening a holdout stay human-only, as today.
 8. Tampering: an edited study log or result document is detected.
 9. Claim: a study never changes the claim level of any strategy.
 
+## Implementation status
+
+Implemented as proposed, pending the open questions: the contract, `study init | check | run |
+ls | show`, the study log and its verification, resume and `--rerun`. The acceptance tests
+above are in `tests/e2e/test_study_flow.py`. Not yet built: `study compare` as a separate
+re-render (a run always writes its comparison), parallel arms, and per-arm walk-forward folds.
+Each open question below is one decision in the code: whether an arm `counts` in
+`api.study`, and the outcome rule in `validation.compare.verdict`.
+
 ## Open questions for the owner
 
 1. **Sensitivity arms are not trials.** Proposed above. The stricter alternative counts every

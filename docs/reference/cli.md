@@ -313,6 +313,56 @@ Compare two or more runs against the first; writes comparison.md.
 | `runs` | run ids; the first is the reference |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+## `sqy study`
+
+Declared comparisons: a subject, baselines and bounded variants under one rule.
+
+### `sqy study init`
+
+Scaffold studies/ID/study.yaml for a strategy.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | the subject strategy id (required) |
+| `--id` | id of the new study (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study check`
+
+Validate a study, list its arms and the trials it would record; runs nothing.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study run`
+
+Run every arm on one dataset and window and compare them by the declared rule.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--rerun` | recompute arms that already have a run and require the same ledger hash |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study ls`
+
+List studies and the verdict of each one's latest run.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study show`
+
+Show the latest recorded result of a study.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
 ## `sqy backtest`
 
 Backtest a strategy and write run artifacts.
