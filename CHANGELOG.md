@@ -10,6 +10,10 @@ change provisional surfaces after deprecation).
 - Human-only `sqy factor holdout seal` and read-only `status`, with fixed conservative
   family declarations, a verified chained seal log, and internal ledger-derived
   trial accounting, formula append, budget and training-window checks (ADR 0014 steps a/b).
+- A deterministic synthetic cross-sectional panel (`synthetic_panel`) with market and sector
+  structure, late listings, delistings, missing bars, splits, dividends and an optional planted
+  signal carried in volume, plus dated synthetic memberships. Existing synthetic data is
+  byte-identical. No command uses it yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
