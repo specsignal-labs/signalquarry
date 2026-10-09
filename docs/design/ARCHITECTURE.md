@@ -259,6 +259,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Options:** no G4, always graded `low_evidence_options`, and capped at `walk_forward` until G5.
 - **Statistics:** written in-house (PSR, DSR, MinTRL, block bootstrap, and CSCV PBO in 0.2) using numpy + `statistics.NormalDist`, with no SciPy. Goldens reproduce the published numeric examples.
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
+- **Data quality:** `data.quality.assess` inspects an in-memory dataset against the NYSE calendar and its own bars (coverage, gaps, OHLC consistency, non-positive prices, zero volume, stale closes, moves no recorded split explains) and returns dates, counts and finding codes only. It is pure and writes nothing; a later command will record its report beside the dataset manifest.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -436,7 +437,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
 | `factors` | `engine`, `data`, `sdk`, `canonical` |
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
-| `data` | `contracts`, `canonical` |
+| `data` | `contracts`, `canonical`, `calendar` |
 | `project` | `sdk`, `contracts`, `canonical` |
 | `options` | `calendar` |
 | `sdk` | — |
@@ -459,7 +460,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `run` |
-| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
+| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |

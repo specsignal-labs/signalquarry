@@ -7,6 +7,10 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- An internal, pure data-quality assessment of a daily dataset: calendar coverage, gaps,
+  OHLC consistency, non-positive prices, zero volume, stale closes and large moves that no
+  recorded split explains. Its report holds dates and counts only, never a price, volume or
+  return. No command uses it yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
