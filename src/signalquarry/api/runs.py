@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -18,6 +18,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, Literal, cast
 
 import numpy as np
+from pydantic import ValidationError
 
 from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.engine.backtest import EngineError
@@ -38,12 +39,20 @@ from signalquarry._internal.evidence.runs import (
 from signalquarry._internal.project.project import ProjectError, find_root
 from signalquarry._internal.validation.benchmark import BenchmarkCurve, benchmark_curve, benchmark_summary
 from signalquarry._internal.validation.compare import RunSeries, compare_runs
+from signalquarry._internal.validation.diagnostics import cost_curve_break_even, fold_consistency
 from signalquarry._internal.validation.evaluate import equity_returns
 from signalquarry._internal.validation.metrics import drawdown_episodes, summarize, trading_activity
+from signalquarry._internal.validation.regimes import (
+    calendar_regime,
+    regime_table,
+    trend_regime,
+    volatility_regime,
+)
+from signalquarry._internal.validation.sensitivity import sensitivity
 from signalquarry._internal.validation.stats import moments
 from signalquarry.api.envelope import Envelope
 from signalquarry.api.evidence import holdout_state, record_run_trial, trial_evidence
-from signalquarry.api.resolve import Resolved
+from signalquarry.api.resolve import Resolved, resolve
 
 Detail = Literal["full", "summary"]
 
@@ -461,4 +470,191 @@ def runs_compare(run_ids: Sequence[str], *, project: Path | None = None) -> Enve
         warnings=[] if comparison["comparable"] else ["RUNS_NOT_COMPARABLE"],
         data={"comparison_id": comparison_id, **comparison},
         artifacts=artifacts,
+    )
+
+
+def _unavailable(reason: str) -> dict[str, Any]:
+    return {"status": "unavailable", "reason": reason}
+
+
+def _diagnostic_regimes(directory: Path, series: RunSeries) -> dict[str, Any]:
+    benchmark_returns = None
+    levels = None
+    if (directory / "benchmark.csv").is_file():
+        try:
+            sessions, equity = read_curve(directory / "benchmark.csv")
+            if tuple(sessions) != series.sessions:
+                raise ValueError("benchmark sessions differ")
+            initial = Decimal(str(series.document["spec"]["account"]["initial_cash"]))
+            values = np.array([float(initial), *(float(item) for item in equity)])
+            levels, benchmark_returns = values[1:], values[1:] / values[:-1] - 1.0
+        except (OSError, KeyError, ValueError, ArithmeticError):
+            raise _RunError("RUN_ARTIFACT_INVALID", "benchmark.csv is unreadable or not aligned") from None
+    calendar = regime_table(calendar_regime(series.sessions), series.returns, benchmark_returns)
+    block = {
+        "status": "ok",
+        "note": "These regimes were not declared before the run; they are descriptive hypothesis generation.",
+        "calendar": {"status": "ok", "rows": calendar},
+        "trend": _unavailable("The run has no benchmark.csv."),
+        "volatility": _unavailable("The run has no benchmark.csv."),
+    }
+    if levels is not None and benchmark_returns is not None:
+        for kind, labels in (
+            ("trend", trend_regime(levels)),
+            ("volatility", volatility_regime(benchmark_returns)),
+        ):
+            block[kind] = {"status": "ok", "rows": regime_table(labels, series.returns, benchmark_returns)}
+    return block
+
+
+def _diagnostic_costs(root: Path, document: dict[str, Any]) -> dict[str, Any]:
+    recorded_spec: dict[str, Any] = document.get("spec") or {}
+    if recorded_spec.get("kind") == "options_single_leg":
+        return _unavailable("Options strategies use a different cost model.")
+    reason = "The project no longer reproduces that run."
+    resolved = resolve("diagnose", document["strategy_id"], root)
+    if isinstance(resolved, Envelope):
+        return _unavailable(reason)
+    strategy = resolved.strategy
+    if is_options(strategy.spec):
+        return _unavailable(reason)
+    try:
+        params = strategy.definition.params.model_validate(document["params"])
+        strategy = replace(strategy, params=params)
+        if (
+            strategy.configuration_hash != document["configuration_hash"]
+            or resolved.dataset.identity() != document["dataset_identity"]
+        ):
+            return _unavailable(reason)
+        window = document["window"]
+        start = date.fromisoformat(window["start"]) if window["start"] else None
+        end = date.fromisoformat(window["end"]) if window["end"] else None
+        points: list[dict[str, Any]] = []
+        for multiplier in (0, 1, 2, 4):
+            result = simulate(
+                strategy.spec,
+                strategy.definition,
+                params,
+                resolved.dataset,
+                start=start,
+                end=end,
+                cost_multiplier=Decimal(multiplier),
+            )
+            metrics = summarize(result.sessions, result.equity, strategy.spec.account.initial_cash)
+            points.append(
+                {
+                    "multiplier": multiplier,
+                    **{key: metrics[key] for key in ("total_return", "sharpe", "max_drawdown")},
+                }
+            )
+    except (ValidationError, EngineError, KeyError, ValueError, ArithmeticError):
+        return _unavailable(reason)
+    if points[1]["total_return"] != document["metrics"]["total_return"]:
+        return _unavailable("The multiplier-1 simulation does not reproduce the run's recorded total return.")
+    return {
+        "status": "ok",
+        "points": points,
+        "break_even": cost_curve_break_even(
+            [(point["multiplier"], point["total_return"]) for point in points]
+        ),
+        "note": "Descriptive: multipliers scale the simulator's execution cost bps; other fees stay as declared.",
+    }
+
+
+def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | None = None) -> Envelope:
+    """Write descriptive diagnostics for a recorded run without changing it or its evidence."""
+    root = _project_root("diagnose", project)
+    if isinstance(root, Envelope):
+        return root
+    if run_id is None:
+        found = iter_runs(root, strategy_id=strategy_id)
+        if not found:
+            return Envelope(
+                command="diagnose",
+                status="invalid",
+                reason_codes=["REPORT_NO_RUNS"],
+                summary=f"no backtest runs for {strategy_id}",
+            )
+        run_id = found[-1][0].name
+    try:
+        directory, document = _load(root, run_id)
+        if document["strategy_id"] != strategy_id:
+            raise _RunError("RUN_ARTIFACT_INVALID", f"{run_id}: run belongs to another strategy")
+        series = _series(directory, document)
+        regimes = _diagnostic_regimes(directory, series)
+    except _RunError as exc:
+        return Envelope(command="diagnose", status="invalid", reason_codes=[exc.code], summary=exc.detail)
+    costs = _diagnostic_costs(root, document)
+    configuration = document["configuration_hash"]
+    evaluations = [
+        item
+        for item in iter_runs(root, "evaluation.json")
+        if item[1].get("configuration_hash") == configuration
+    ]
+    folds: dict[str, Any] = (
+        {
+            "status": "ok",
+            "evaluation_id": evaluations[-1][0].name,
+            "consistency": fold_consistency(evaluations[-1][1]["folds"]),
+        }
+        if evaluations
+        else _unavailable("No recorded evaluation matches this configuration.")
+    )
+    sweeps = [
+        item
+        for item in iter_runs(root, "sweep.json", kind="sweeps")
+        if any(point.get("configuration_hash") == configuration for point in item[1].get("points", []))
+    ]
+    parameters: dict[str, Any] = (
+        {
+            "status": "ok",
+            "sweep_id": sweeps[-1][0].name,
+            **sensitivity(sweeps[-1][1]["grid"], sweeps[-1][1]["points"]),
+        }
+        if sweeps
+        else _unavailable("No recorded sweep contains this configuration.")
+    )
+    sections = {"regimes": regimes, "costs": costs, "folds": folds, "parameters": parameters}
+    diagnostics_id = unique_run_id(root, run_id, kind="diagnostics")
+    artifacts = write_run(
+        root,
+        diagnostics_id,
+        {
+            "diagnostics.json": result_document(
+                schema="signalquarry.diagnostics/v1",
+                run_id=run_id,
+                diagnostics_id=diagnostics_id,
+                strategy_id=strategy_id,
+                configuration_hash=configuration,
+                dataset_identity=document["dataset_identity"],
+                evidence=document["evidence"],
+                **sections,
+            )
+        },
+        kind="diagnostics",
+    )
+    scored = [
+        {"kind": kind, **row}
+        for kind in ("calendar", "trend", "volatility")
+        for row in regimes[kind].get("rows", [])
+        if row["status"] == "ok" and row["sharpe"] is not None
+    ]
+    consistency: dict[str, Any] = folds.get("consistency", {})
+    count = consistency.get("folds", 0)
+    ahead = consistency.get("ahead_of_benchmark")
+    return Envelope(
+        command="diagnose",
+        summary=f"descriptive diagnostics for {run_id}",
+        evidence=document["evidence"],
+        artifacts=artifacts,
+        data={
+            "run_id": run_id,
+            "diagnostics_id": diagnostics_id,
+            "available": [name for name, section in sections.items() if section["status"] == "ok"],
+            "break_even": costs.get("break_even"),
+            "share_positive": consistency.get("share_positive"),
+            "share_ahead_of_benchmark": round(ahead / count, 6) if ahead is not None and count else None,
+            "plateau": parameters.get("plateau"),
+            "worst_regime": min(scored, key=lambda row: row["sharpe"], default=None),
+        },
     )
