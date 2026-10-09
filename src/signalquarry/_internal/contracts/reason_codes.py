@@ -1066,6 +1066,12 @@ _CODES += (
         "An asset-keyed dataset has inconsistent identity, provenance, cutoff or raw-mark data.",
         "Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks.",
     ),
+    ReasonCode(
+        "BENCHMARK_DATA_MISSING",
+        Category.DATA,
+        "No recorded dataset covers the declared benchmark for the run's sessions; results are shown without a comparison.",
+        "Run `sqy data fetch --strategy <id>` (it fetches the benchmark too) and repeat the command.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

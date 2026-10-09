@@ -7,7 +7,7 @@ import csv
 import json
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.evidence.report import equity_svg, render_report
@@ -27,6 +27,17 @@ def _runs(root: Path, name: str, strategy_id: str) -> list[tuple[Path, dict[str,
         if document.get("strategy_id") == strategy_id:
             found.append((path.parent, document))
     return found
+
+
+def _benchmark_symbol(result: dict[str, Any] | None) -> str:
+    block = (result or {}).get("benchmark")
+    symbol = cast(dict[str, Any], block).get("symbol") if isinstance(block, dict) else None
+    return symbol if isinstance(symbol, str) else "benchmark"
+
+
+def _curve(path: Path) -> list[tuple[str, Decimal]]:
+    with path.open(encoding="utf-8") as handle:
+        return [(row["session"], Decimal(row["equity"])) for row in csv.DictReader(handle)]
 
 
 def report(strategy_id: str, *, run_id: str | None = None, project: Path | None = None) -> Envelope:
@@ -82,11 +93,16 @@ def report(strategy_id: str, *, run_id: str | None = None, project: Path | None 
         return envelope
     chart = None
     if result_dir is not None and (result_dir / "equity.csv").is_file():
-        with (result_dir / "equity.csv").open(encoding="utf-8") as handle:
-            chart = (
-                equity_svg([(row["session"], Decimal(row["equity"])) for row in csv.DictReader(handle)])
-                or None
+        chart = (
+            equity_svg(
+                _curve(result_dir / "equity.csv"),
+                benchmark=_curve(result_dir / "benchmark.csv")
+                if (result_dir / "benchmark.csv").is_file()
+                else None,
+                benchmark_label=_benchmark_symbol(result),
             )
+            or None
+        )
     text = render_report(
         spec=strategy.spec.model_dump(mode="json", by_alias=True),
         result=result,

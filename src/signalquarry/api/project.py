@@ -35,9 +35,10 @@ from signalquarry._internal.project.project import (
     load_config,
     load_strategies,
 )
+from signalquarry._internal.validation.benchmark import benchmark_curve, benchmark_summary
 from signalquarry._internal.validation.conformance import import_policy, run_checks
 from signalquarry._internal.validation.factor_conformance import run_factor_checks
-from signalquarry._internal.validation.metrics import summarize
+from signalquarry._internal.validation.metrics import drawdown_episodes, summarize, trading_activity
 from signalquarry.api.envelope import Envelope
 from signalquarry.sdk.factors import ATTRIBUTE as FACTOR_ATTRIBUTE
 from signalquarry.sdk.factors import FactorDef
@@ -305,6 +306,28 @@ def check_factor(module_name: str, *, project: Path | None = None, params_json: 
     )
 
 
+def _benchmark_headline(block: dict[str, Any] | None) -> dict[str, Any]:
+    """The few benchmark numbers an agent should see without opening ``result.json``."""
+    if block is None:
+        return {}
+    return {
+        "benchmark_total_return": block["metrics"].get("total_return"),
+        "benchmark_max_drawdown": block["metrics"].get("max_drawdown"),
+        "excess_total_return": block["relative"].get("excess_total_return"),
+        "beta": block["relative"].get("beta"),
+        "information_ratio": block["relative"].get("information_ratio"),
+    }
+
+
+def _versus(block: dict[str, Any] | None) -> str:
+    if block is None or block["metrics"].get("total_return") is None:
+        return ""
+    return (
+        f"; {block['symbol']} buy-and-hold {block['metrics']['total_return']:.2%}, "
+        f"max drawdown {block['metrics']['max_drawdown']:.2%}"
+    )
+
+
 def backtest(
     strategy_id: str, *, start: date | None = None, end: date | None = None, project: Path | None = None
 ) -> Envelope:
@@ -331,6 +354,7 @@ def backtest(
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
     scratch: TemporaryDirectory[str] | None = None
+    traded: tuple[Decimal, Decimal] | None = None  # notional bought and sold (equity runs)
     try:
         if is_options(strategy.spec):
             result = simulate(
@@ -373,6 +397,7 @@ def backtest(
             result = spool.result
             fill_count = spool.fill_count
             fees = spool.fees
+            traded = (spool.bought, spool.sold)
             fill_rows = spool.fills_csv_rows()
             decision_chunks = spool.decisions_chunks()
     except EngineError as exc:
@@ -391,6 +416,31 @@ def backtest(
     metrics = summarize(
         result.sessions, result.equity, strategy.spec.account.initial_cash, fills=fill_count, fees=fees
     )
+    # Descriptive context for the same run: none of it enters a gate or the claim level.
+    initial = strategy.spec.account.initial_cash
+    context: dict[str, Any] = {"drawdowns": drawdown_episodes(result.sessions, result.equity, initial)}
+    if traded is not None:
+        context["activity"] = trading_activity(
+            result.sessions, result.equity, bought=traded[0], sold=traded[1], fees=fees
+        )
+    benchmark = None
+    source = resolved.benchmark_source()
+    if source is not None:
+        try:
+            benchmark = benchmark_curve(strategy.spec, source[0], source[1], result.sessions)
+        except EngineError:
+            benchmark = None
+    next_actions: list[dict[str, str]] = []
+    if benchmark is not None:
+        context["benchmark"] = benchmark_summary(benchmark, returns, initial)
+    elif strategy.spec.benchmark is not None:
+        warnings.append("BENCHMARK_DATA_MISSING")
+        next_actions.append(
+            {
+                "command": f"sqy data fetch --strategy {strategy_id}",
+                "why": f"No recorded dataset covers the benchmark {strategy.spec.benchmark}.",
+            }
+        )
     run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
     evidence = {
         "grade": resolved.evidence_grade,
@@ -416,6 +466,7 @@ def backtest(
                 evidence=evidence,
                 metrics=metrics,
                 warnings=result.warnings,
+                **context,
             ),
             "equity.csv": csv_chunks(
                 ["session", "equity", "settled_cash"],
@@ -423,6 +474,19 @@ def backtest(
                     [s.isoformat(), e, c]
                     for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
                 ],
+            ),
+            **(
+                {}
+                if benchmark is None
+                else {
+                    "benchmark.csv": csv_chunks(
+                        ["session", "equity"],
+                        [
+                            [s.isoformat(), e]
+                            for s, e in zip(benchmark.sessions, benchmark.equity, strict=True)
+                        ],
+                    )
+                }
             ),
             "fills.csv": csv_chunks(
                 ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"],
@@ -435,8 +499,10 @@ def backtest(
         scratch.cleanup()
     return Envelope(
         command="backtest",
-        summary=f"{strategy_id}: total return {metrics['total_return']:.2%}, max drawdown {metrics['max_drawdown']:.2%} ({resolved.evidence_grade} data: {resolved.dataset_id})",
-        metrics=metrics,
+        summary=f"{strategy_id}: total return {metrics['total_return']:.2%}, max drawdown {metrics['max_drawdown']:.2%}"
+        + _versus(context.get("benchmark"))
+        + f" ({resolved.evidence_grade} data: {resolved.dataset_id})",
+        metrics={**metrics, **_benchmark_headline(context.get("benchmark"))},
         evidence=evidence,
         artifacts=artifacts,
         warnings=sorted({*warnings, *(warning.split(":", 1)[0] for warning in result.warnings)})
@@ -453,6 +519,7 @@ def backtest(
             "dataset_identity": result.dataset_identity,
         },
         next_actions=[
+            *next_actions,
             {
                 "command": f"sqy spec freeze --strategy {strategy_id}",
                 "why": "Freeze the configuration and seal the holdout before evaluating.",
