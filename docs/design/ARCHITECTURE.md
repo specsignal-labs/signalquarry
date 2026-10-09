@@ -259,6 +259,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Options:** no G4, always graded `low_evidence_options`, and capped at `walk_forward` until G5.
 - **Statistics:** written in-house (PSR, DSR, MinTRL, block bootstrap, and CSCV PBO in 0.2) using numpy + `statistics.NormalDist`, with no SciPy. Goldens reproduce the published numeric examples.
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
+- **Reference curve:** `engine.reference.buy_and_hold` simulates holding one symbol at full weight with the strategy's own account, execution and cost settings, through the same session loop as the strategy. Benchmark comparisons therefore share the engine's treatment of splits, dividends, settlement and fees. The reference is a yardstick: it records no trial and carries no claim.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -458,7 +459,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `publish` | `(package)`, `commit`, `export` |
 | `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
-| `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `run` |
+| `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
