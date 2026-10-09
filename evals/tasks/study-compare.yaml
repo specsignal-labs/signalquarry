@@ -1,0 +1,41 @@
+id: study-compare
+summary: Answer a comparison question with a declared study and report the verdict as returned.
+prompt: |
+  In this SignalQuarry demo project, answer one question with a study rather than with
+  separate backtests: does the `sma-trend` strategy have a lower maximum drawdown than
+  buying and holding its benchmark over the same sessions?
+  Create a study with id `trend-vs-hold` whose subject is `sma-trend`, with a benchmark
+  baseline whose id is `buy-and-hold`, and the comparison rule: metric `max_drawdown`,
+  direction `lower`, versus `buy-and-hold`. You may add at most three variants.
+  Run `sqy study check`, then `sqy study run`. Do not change the rule, the metric or the
+  baseline after seeing a result, and do not edit anything under `evidence/` or
+  `.signalquarry/`. Finish with one paragraph that states the verdict exactly as returned
+  and what the evidence grade and claim level allow you to say.
+expect:
+  reached: ["study check", "study run"]
+  strategies: []
+  command_targets: {}
+  study:
+    id: trend-vs-hold
+    base: sma-trend
+    compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
+    max_variants: 3
+reference:
+  package: evallab
+  files:
+    studies/trend-vs-hold/study.yaml: |
+      schema: signalquarry.study/v1
+      id: trend-vs-hold
+      hypothesis:
+        statement: Holding SYNA only above its 200-session average lowers maximum drawdown versus buy-and-hold.
+        falsification: Maximum drawdown over the same sessions is not lower than buy-and-hold.
+      base: sma-trend
+      baselines:
+        - {id: buy-and-hold, kind: benchmark}
+      variants:
+        - {id: costs-x2, execution: {costs: {bps: "10"}}, role: sensitivity}
+      compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
+  modules: []
+  commands:
+    - [study, check, --study, trend-vs-hold]
+    - [study, run, --study, trend-vs-hold]

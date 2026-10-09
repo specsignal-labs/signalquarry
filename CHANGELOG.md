@@ -7,6 +7,11 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Agent surface for research: new projects' `AGENTS.md` gains a "Research method" block
+  (baseline first, one variant at a time, compare rather than eyeball, write a study, report
+  the verdict as it is); `sqy init --upgrade-agents-md` adds it to existing projects. The MCP
+  adapter exposes run listing and comparison and the study commands, and `sqy_backtest`
+  accepts parameter overrides and a label.
 - `signalquarry.research` (provisional): a read-only loader for recorded runs, sweeps,
   comparisons and study results, with immutable documents and arrays, Arrow tables and an
   optional pandas view, for notebooks and scripts.
