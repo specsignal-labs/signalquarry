@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- An engine-simulated buy-and-hold reference curve: one symbol at full weight under the
+  strategy's own account, execution and cost settings, with dividends reinvested. It records
+  no trial.
 - Pure benchmark-relative metrics (excess return, tracking error, information ratio, beta,
   alpha, correlation, up and down capture), ranked drawdown episodes, and one-way turnover
   with fee drag. They are descriptive: no gate or claim level reads them.
