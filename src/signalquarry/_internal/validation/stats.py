@@ -151,3 +151,31 @@ def pbo_cscv(matrix: np.ndarray, *, blocks: int = 10) -> dict[str, float | int]:
         "configurations": configurations,
         "median_logit": round(float(np.median(lambdas)), 6),
     }
+
+
+def paired_block_bootstrap_sharpe_difference(
+    returns: np.ndarray, other: np.ndarray, *, block: int = 20, samples: int = 1000, seed: int = 0
+) -> tuple[float, float]:
+    """5th and 95th percentiles of (per-period Sharpe of ``returns`` minus that of ``other``)."""
+    values = np.asarray(returns, dtype=np.float64)
+    paired = np.asarray(other, dtype=np.float64)
+    if len(values) != len(paired):
+        raise ValueError("PAIRED_RETURNS_NOT_ALIGNED")
+    finite = np.isfinite(values) & np.isfinite(paired)
+    values, paired = values[finite], paired[finite]
+    n = len(values)
+    if n < block * 2:
+        return float("nan"), float("nan")
+    rng = np.random.Generator(np.random.PCG64(seed))
+    starts = np.arange(n - block + 1)
+    count = math.ceil(n / block)
+    stats = np.empty(samples)
+    for k in range(samples):
+        picks = rng.choice(starts, size=count)
+        sample = np.concatenate([values[s : s + block] for s in picks])[:n]
+        paired_sample = np.concatenate([paired[s : s + block] for s in picks])[:n]
+        std, paired_std = sample.std(ddof=1), paired_sample.std(ddof=1)
+        sharpe = sample.mean() / std if std > 0 else 0.0
+        paired_sharpe = paired_sample.mean() / paired_std if paired_std > 0 else 0.0
+        stats[k] = sharpe - paired_sharpe
+    return float(np.percentile(stats, 5)), float(np.percentile(stats, 95))
