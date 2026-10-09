@@ -78,6 +78,9 @@ change provisional surfaces after deprecation).
   structure, late listings, delistings, missing bars, splits, dividends and an optional planted
   signal carried in volume, plus dated synthetic memberships. Existing synthetic data is
   byte-identical. No command uses it yet.
+- ADR 0016 (proposed): a data-provider contract, a built-in local import and what imported or
+  back-adjusted data may claim. ADR 0017 (proposed; it would lift a pre-1.0 non-goal):
+  point-in-time feature datasets, as-of access and models fitted per fold. Documentation only.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
