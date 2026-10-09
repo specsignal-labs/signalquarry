@@ -106,7 +106,7 @@ type = "layers"
 # Parenthesized layers are optional until their modules exist.
 layers = [
   "signalquarry.cli",
-  "signalquarry.api",
+  "signalquarry.api | signalquarry.research",
   "(signalquarry._internal.paper) | signalquarry._internal.evidence | (signalquarry._internal.publish)",
   "(signalquarry._internal.validation) | (signalquarry._internal.factors)",
   "(signalquarry._internal.engine)",

@@ -190,6 +190,43 @@ signalquarry.api.universe_snapshot(*, project: 'Path | None' = None, source: 'As
 signalquarry.api.universe_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.version() -> 'Envelope'
+signalquarry.research.ResearchError: class(Exception)
+signalquarry.research.Run: class(object)
+signalquarry.research.Run.run_id: field str
+signalquarry.research.Run.path: field Path
+signalquarry.research.Run.document: field Mapping[str, Any]
+signalquarry.research.Run.sessions: field tuple[date, ...]
+signalquarry.research.Run.equity: field NDArray[np.float64]
+signalquarry.research.Run.returns: field NDArray[np.float64]
+signalquarry.research.Run.benchmark: field NDArray[np.float64] | None
+signalquarry.research.Run.configuration_hash: property
+signalquarry.research.Run.decisions(self) -> 'Iterator[dict[str, Any]]'
+signalquarry.research.Run.fills(self) -> 'pa.Table'
+signalquarry.research.Run.grade: property
+signalquarry.research.Run.label: property
+signalquarry.research.Run.metrics: property
+signalquarry.research.Run.params: property
+signalquarry.research.Run.strategy_id: property
+signalquarry.research.Run.to_arrow(self) -> 'pa.Table'
+signalquarry.research.Run.to_pandas(self) -> 'Any'
+signalquarry.research.Sweep: class(object)
+signalquarry.research.Sweep.sweep_id: field str
+signalquarry.research.Sweep.path: field Path
+signalquarry.research.Sweep.document: field Mapping[str, Any]
+signalquarry.research.Sweep.grid: property
+signalquarry.research.Sweep.pbo: property
+signalquarry.research.Sweep.points: property
+signalquarry.research.Sweep.runs(self) -> 'tuple[Run, ...]'
+signalquarry.research.Sweep.to_arrow(self) -> 'pa.Table'
+signalquarry.research.latest_run(strategy: 'str', project: 'Path | str | None' = None) -> 'Run'
+signalquarry.research.latest_study(study_id: 'str', project: 'Path | str | None' = None) -> 'Mapping[str, Any]'
+signalquarry.research.list_runs(project: 'Path | str | None' = None, *, strategy: 'str | None' = None) -> 'tuple[Mapping[str, Any], ...]'
+signalquarry.research.list_studies(project: 'Path | str | None' = None) -> 'tuple[Mapping[str, Any], ...]'
+signalquarry.research.list_sweeps(project: 'Path | str | None' = None) -> 'tuple[Mapping[str, Any], ...]'
+signalquarry.research.load_comparison(comparison_id: 'str', project: 'Path | str | None' = None) -> 'Mapping[str, Any]'
+signalquarry.research.load_run(run_id: 'str', project: 'Path | str | None' = None) -> 'Run'
+signalquarry.research.load_study(study_run_id: 'str', project: 'Path | str | None' = None) -> 'Mapping[str, Any]'
+signalquarry.research.load_sweep(sweep_id: 'str', project: 'Path | str | None' = None) -> 'Sweep'
 signalquarry.plugins.API_VERSION: int
 signalquarry.plugins.BrokerPlugin: class(Protocol)
 signalquarry.plugins.BrokerPlugin.create(self, alias: 'str', key_id: 'str | None', secret_key: 'str | None') -> 'Any'

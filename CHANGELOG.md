@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `signalquarry.research` (provisional): a read-only loader for recorded runs, sweeps,
+  comparisons and study results, with immutable documents and arrays, Arrow tables and an
+  optional pandas view, for notebooks and scripts.
 - Research studies (ADR 0015, proposed): `sqy study init | check | run | ls | show`. A study
   runs a subject strategy, baselines (benchmark, volatility-matched benchmark, another
   strategy) and bounded variants on one dataset and window, counts every candidate
