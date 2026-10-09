@@ -7,6 +7,8 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy data quality` reports dataset completeness and consistency, writes a report of dates
+  and counts, and summarizes the history available for a strategy's evaluation.
 - An internal, pure data-quality assessment of a daily dataset: calendar coverage, gaps,
   OHLC consistency, non-positive prices, zero volume, stale closes and large moves that no
   recorded split explains. Its report holds dates and counts only, never a price, volume or

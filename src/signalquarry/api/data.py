@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""``sqy data fetch | verify | ls``: explicit, hash-recorded market-data collection."""
+"""``sqy data``: explicit, hash-recorded market-data collection and diagnostics."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import UTC, date, datetime, timedelta
@@ -10,6 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
+from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.data.action_observations import store_action_capture, verify_action_capture
 from signalquarry._internal.data.alpaca import AlpacaDataClient, ProviderError, RawPage
 from signalquarry._internal.data.credentials import load_data_credentials
@@ -20,8 +22,12 @@ from signalquarry._internal.data.library import (
     dataset_from_manifest,
     make_manifest,
 )
+from signalquarry._internal.data.quality import assess
 from signalquarry._internal.project.project import ProjectError, find_root, load_config, load_strategies
+from signalquarry._internal.validation.evaluate import add_months
 from signalquarry.api.envelope import Envelope
+from signalquarry.api.evidence import family_seal, holdout_start_for
+from signalquarry.api.resolve import Resolved, resolve
 
 HISTORY_START = date(2016, 1, 1)  # Alpaca stock history begins in 2016
 _SYMBOL = re.compile(r"[A-Z][A-Z0-9.]{0,9}\Z")
@@ -244,6 +250,114 @@ def data_verify(*, project: Path | None = None) -> Envelope:
             sorted({item["error"].split(":", 1)[0] for item in failed}),
         )
     envelope.summary = f"{len(results) - len(failed)} of {len(results)} data records verified"
+    return envelope
+
+
+def _quality_sufficiency(resolved: Resolved, rows: dict[str, Any]) -> dict[str, Any]:
+    spec = resolved.strategy.spec
+    selected = [rows[symbol] for symbol in spec.data.symbols]
+    holdout = None if spec.kind == "options_single_leg" else family_seal(resolved.root, spec.family)
+    years, folds = 0.0, 0
+    if selected and all(row["present"] for row in selected):
+        first = date.fromisoformat(max(row["first"] for row in selected))
+        last = date.fromisoformat(min(row["last"] for row in selected))
+        if first <= last:
+            holdout = holdout or holdout_start_for(spec, last)
+            pre_end = min(last, holdout - timedelta(days=1)) if holdout else last
+            years = max(0.0, (pre_end - first).days / 365.25)
+            cursor = add_months(first, spec.evaluation.walk_forward.train_months)
+            while True:
+                fold_end = add_months(cursor, spec.evaluation.walk_forward.test_months) - timedelta(days=1)
+                if fold_end > pre_end:
+                    break
+                folds += 1
+                cursor = fold_end + timedelta(days=1)
+    return {
+        "years": round(years, 2),
+        "g1_years_ok": years >= 5,
+        "walk_forward_folds": folds,
+        "g2_folds_ok": folds >= 6,
+        "holdout_start": holdout.isoformat() if holdout else None,
+        "warm_up_sessions": resolved.strategy.definition.lookback(resolved.strategy.params),
+    }
+
+
+def data_quality(
+    *, strategy_id: str | None = None, dataset_id: str | None = None, project: Path | None = None
+) -> Envelope:
+    """Assess a recorded dataset or a strategy's inputs and write a value-free report."""
+    envelope = Envelope(command="data quality")
+    if (strategy_id is None) == (dataset_id is None):
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "usage",
+            ["USAGE_INVALID"],
+            "give exactly one of --strategy and --dataset-id",
+        )
+        return envelope
+    resolved = None
+    if strategy_id is not None:
+        resolved = resolve(envelope.command, strategy_id, project)
+        if isinstance(resolved, Envelope):
+            return resolved
+        root, dataset, dataset_id = resolved.root, resolved.dataset, resolved.dataset_id
+        wanted = set(resolved.strategy.spec.data.symbols)
+        benchmark = resolved.strategy.spec.benchmark
+        if benchmark is not None and benchmark in dataset.series:
+            wanted.add(benchmark)
+        report = assess(dataset, symbols=tuple(wanted), check_calendar=resolved.grade != "synthetic")
+    else:
+        try:
+            root = find_root(project)
+            library = library_for(root)
+            matches = [item for item in library.manifests() if item.get("dataset_id") == dataset_id]
+            if len(matches) != 1:
+                raise LibraryError("DATA_MANIFEST_INVALID", "expected exactly one matching dataset")
+            dataset = dataset_from_manifest(library, matches[0])
+        except ProjectError as exc:
+            envelope.status, envelope.reason_codes, envelope.summary = "invalid", [exc.code], exc.detail
+            return envelope
+        except LibraryError as exc:
+            envelope.status, envelope.reason_codes, envelope.summary = "invalid", [exc.code], str(exc)
+            return envelope
+        except (OSError, KeyError, TypeError, ValueError) as exc:
+            envelope.status, envelope.reason_codes, envelope.summary = (
+                "invalid",
+                ["DATA_MANIFEST_INVALID"],
+                str(exc),
+            )
+            return envelope
+        report = assess(dataset, check_calendar=dataset.source != "synthetic")
+    assert dataset_id is not None
+    if not dataset_id or Path(dataset_id).name != dataset_id or dataset_id in (".", ".."):
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "invalid",
+            ["DATA_MANIFEST_INVALID"],
+            "dataset id must be a file name",
+        )
+        return envelope
+    path = root / "data" / "quality" / f"{dataset_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    envelope.artifacts = [
+        {"path": str(path.relative_to(root)), "kind": "data_quality", "sha256": file_sha256(path)}
+    ]
+    envelope.data = {
+        "dataset_id": dataset_id,
+        **{key: report[key] for key in ("dataset_identity", "ok", "findings", "sessions", "common_window")},
+        "symbols": {
+            symbol: {
+                key: row[key] for key in ("present", "first", "last", "coverage", "longest_gap", "findings")
+            }
+            for symbol, row in report["symbols"].items()
+        },
+    }
+    if resolved is not None:
+        envelope.data["sufficiency"] = _quality_sufficiency(resolved, report["symbols"])
+    findings = report["findings"]
+    detail = f"{len(findings)} findings ({', '.join(findings)})" if findings else "no findings"
+    envelope.summary = f"{dataset_id}: {len(report['symbols'])} symbols, {detail}"
+    if findings:
+        envelope.warnings.append("DATA_QUALITY_FINDINGS")
     return envelope
 
 

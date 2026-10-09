@@ -41,6 +41,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `DATA_PANEL_INVALID` | data | A derived research panel is missing, malformed, or has a file-hash mismatch. | Rebuild the panel from verified cached pages and its dataset manifest. |
 | `DATA_PANEL_LOOKBACK_INVALID` | usage | A research panel lookback must be a positive number of sessions. | Set lookback to a positive integer, or omit it for all prior sessions. |
 | `DATA_PANEL_SYMBOL_INVALID` | data | A research panel request has duplicate or unavailable symbols. | Select each symbol once from the panel's recorded symbol list. |
+| `DATA_QUALITY_FINDINGS` | data | The dataset quality report contains informational findings. | Review the report under data/quality and verify the affected dates before a study. |
 | `DECISION_SYMBOL_NOT_DECLARED` | signal | A target used a symbol not declared in strategy.yaml data.symbols. | Declare the symbol or remove it from the target. |
 | `DECISION_WEIGHT_ABOVE_LIMIT` | risk | A target weight exceeds limits.max_weight_per_symbol. | Lower the weight or raise the declared limit. |
 | `DEPENDENCY_MISSING` | environment | A required runtime dependency cannot be imported. | Reinstall with `pip install signalquarry`. |
@@ -146,6 +147,16 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `PUBLICATION_STRATEGY_UNKNOWN` | usage | The publication policy names a strategy the project does not define. | Use strategy ids from strategy.yaml. |
 | `PYTHON_ARCH_EMULATED` | environment | Python is running under Rosetta emulation on Apple Silicon. | Use a native arm64 Python build. |
 | `PYTHON_VERSION_UNSUPPORTED` | environment | SignalQuarry needs Python 3.12 or newer. | Install Python 3.12+ and recreate the environment. |
+| `QUALITY_GAP` | data | A symbol has an internal gap longer than the configured session threshold. | Investigate the reported gap dates and recover missing bars when available. |
+| `QUALITY_OHLC_INCONSISTENT` | data | Present bars have open or close outside the low-high range or low above high. | Verify the affected source bars and correct or refetch inconsistent data. |
+| `QUALITY_PRICE_NONPOSITIVE` | data | Present bars contain a nonpositive OHLC price. | Verify the source bars and replace invalid prices with corrected provider data. |
+| `QUALITY_SESSION_ON_HOLIDAY` | data | The dataset records a weekday session on a known NYSE closure. | Verify the reported dates against provider timestamps and the trading calendar. |
+| `QUALITY_SESSION_ON_WEEKEND` | data | The dataset records a session on a weekend. | Check provider timestamps and session-date normalization for the reported dates. |
+| `QUALITY_STALE_CLOSE` | data | A symbol has consecutive identical raw closes meeting the stale-run threshold. | Investigate the reported run for illiquidity or stale provider bars. |
+| `QUALITY_SYMBOL_EMPTY` | data | A selected symbol has no present bars in the dataset. | Verify the symbol and fetch its required history before studying it. |
+| `QUALITY_TRADING_DAY_MISSING` | data | A known NYSE trading day is absent between the dataset's first and last sessions. | Check provider coverage and fetch missing dates when available. |
+| `QUALITY_UNEXPLAINED_MOVE` | data | A symbol has a large close-to-close move unexplained by recorded splits. | Verify the source bars and corporate actions around the reported session. |
+| `QUALITY_ZERO_VOLUME` | data | Present bars contain nonpositive or undefined volume. | Check whether the reported sessions traded and verify the provider's volume fields. |
 | `REASON_CODE_UNDECLARED` | signal | A strategy returned a reason code it did not declare in strategy.yaml. | Declare the code under reason_codes in strategy.yaml. |
 | `REASON_CODE_UNKNOWN` | usage | The code is not a framework or declared strategy reason code. | Check spelling; codes are UPPER_SNAKE_CASE. |
 | `REPORT_CONFIGURATION_CHANGED` | evidence | The reported runs used a different configuration than the current code and spec. | Rerun the backtest and evaluation for the current configuration. |

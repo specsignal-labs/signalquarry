@@ -185,6 +185,7 @@ from signalquarry.api.data import (  # noqa: E402
     data_fetch,
     data_ls,
     data_probe_options,
+    data_quality,
     data_record_options,
     data_verify,
 )
@@ -246,6 +247,7 @@ __all__ = [
     "data_fetch",
     "data_ls",
     "data_probe_options",
+    "data_quality",
     "data_record_options",
     "data_verify",
     "docs",

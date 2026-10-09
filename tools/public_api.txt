@@ -136,6 +136,7 @@ signalquarry.api.data_capture_actions(symbols: 'tuple[str, ...]', start: 'date',
 signalquarry.api.data_fetch(*, strategy_id: 'str | None' = None, symbols: 'tuple[str, ...]' = (), start: 'date | None' = None, end: 'date | None' = None, feed: 'str | None' = None, project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, today: 'date | None' = None) -> 'Envelope'
 signalquarry.api.data_ls(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.data_probe_options(underlying: 'str', month: 'str', *, broker: 'OptionContractSource | None' = None, client: 'AlpacaDataClient | None' = None) -> 'Envelope'
+signalquarry.api.data_quality(*, strategy_id: 'str | None' = None, dataset_id: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.data_record_options(underlying: 'str', *, max_dte: 'int' = 60, width: 'float' = 0.2, options_feed: 'str' = 'indicative', stock_feed: 'str' = 'iex', project: 'Path | None' = None, client: 'AlpacaDataClient | None' = None, now: 'datetime | None' = None) -> 'Envelope'
 signalquarry.api.data_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.docs(catalog: 'list[dict[str, Any]]', *, full: 'bool') -> 'Envelope'

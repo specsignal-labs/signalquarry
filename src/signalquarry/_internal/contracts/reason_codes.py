@@ -1067,6 +1067,74 @@ _CODES += (
         "Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "DATA_QUALITY_FINDINGS",
+        Category.DATA,
+        "The dataset quality report contains informational findings.",
+        "Review the report under data/quality and verify the affected dates before a study.",
+    ),
+    ReasonCode(
+        "QUALITY_SESSION_ON_WEEKEND",
+        Category.DATA,
+        "The dataset records a session on a weekend.",
+        "Check provider timestamps and session-date normalization for the reported dates.",
+    ),
+    ReasonCode(
+        "QUALITY_SESSION_ON_HOLIDAY",
+        Category.DATA,
+        "The dataset records a weekday session on a known NYSE closure.",
+        "Verify the reported dates against provider timestamps and the trading calendar.",
+    ),
+    ReasonCode(
+        "QUALITY_TRADING_DAY_MISSING",
+        Category.DATA,
+        "A known NYSE trading day is absent between the dataset's first and last sessions.",
+        "Check provider coverage and fetch missing dates when available.",
+    ),
+    ReasonCode(
+        "QUALITY_SYMBOL_EMPTY",
+        Category.DATA,
+        "A selected symbol has no present bars in the dataset.",
+        "Verify the symbol and fetch its required history before studying it.",
+    ),
+    ReasonCode(
+        "QUALITY_GAP",
+        Category.DATA,
+        "A symbol has an internal gap longer than the configured session threshold.",
+        "Investigate the reported gap dates and recover missing bars when available.",
+    ),
+    ReasonCode(
+        "QUALITY_OHLC_INCONSISTENT",
+        Category.DATA,
+        "Present bars have open or close outside the low-high range or low above high.",
+        "Verify the affected source bars and correct or refetch inconsistent data.",
+    ),
+    ReasonCode(
+        "QUALITY_PRICE_NONPOSITIVE",
+        Category.DATA,
+        "Present bars contain a nonpositive OHLC price.",
+        "Verify the source bars and replace invalid prices with corrected provider data.",
+    ),
+    ReasonCode(
+        "QUALITY_ZERO_VOLUME",
+        Category.DATA,
+        "Present bars contain nonpositive or undefined volume.",
+        "Check whether the reported sessions traded and verify the provider's volume fields.",
+    ),
+    ReasonCode(
+        "QUALITY_STALE_CLOSE",
+        Category.DATA,
+        "A symbol has consecutive identical raw closes meeting the stale-run threshold.",
+        "Investigate the reported run for illiquidity or stale provider bars.",
+    ),
+    ReasonCode(
+        "QUALITY_UNEXPLAINED_MOVE",
+        Category.DATA,
+        "A symbol has a large close-to-close move unexplained by recorded splits.",
+        "Verify the source bars and corporate actions around the reported session.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 
