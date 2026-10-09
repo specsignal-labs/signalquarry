@@ -68,6 +68,16 @@ Claim levels, in order: `none` → `in_sample` → `walk_forward` → `holdout_p
 `paper_forward`. Synthetic data never rises above `none`; options results are graded
 `low_evidence_options` and have no holdout step.
 
+Factor families use a separate `factor_holdouts` chained log. The validation
+module `factor_holdouts.py` combines registered declarations conservatively,
+reads fixed seals, validates training boundaries in dataset sessions, and
+serializes new seal/formula writes with a nonblocking POSIX lock on the existing
+project configuration. `factor_trials.py` derives trial counts and prior p-values
+from history and builds on its existing append helper to record normalized formula
+identities within the sealed budget. The explicit human seal and read-only status
+commands grant no search, opening, publication or trading authority; strategy
+accounting remains separate.
+
 ### Paper `run-once` (equities)
 
 ```mermaid
@@ -456,7 +466,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_holdouts`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
@@ -485,6 +495,8 @@ flowchart LR
   sqy --> c_factor["factor"]
   c_factor --> c_factor_ls["ls"]
   c_factor --> c_factor_evaluate["evaluate"]
+  c_factor --> c_factor_holdout_seal["holdout seal"]
+  c_factor --> c_factor_holdout_status["holdout status"]
   sqy --> c_data["data"]
   c_data --> c_data_fetch["fetch"]
   c_data --> c_data_capture_actions["capture-actions"]

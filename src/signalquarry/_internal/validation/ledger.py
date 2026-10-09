@@ -6,6 +6,8 @@
   of distinct configurations is the ``N`` of the deflated Sharpe ratio.
 * ``factor_trials.jsonl`` — one line per distinct factor evaluation identity,
   separate from strategy trials and counted by factor configuration hash.
+* ``factor_holdouts.jsonl`` — fixed, explicit human seals for factor families;
+  separate from strategy seals and holdout openings.
 * ``freezes.jsonl`` — ``sqy spec freeze`` records (hypothesis, gates, holdout seal) and
   ``sqy holdout seal`` records (``kind: seal``: a family's seal without a freeze).
 * ``holdouts.jsonl`` — the single permitted opening of each family's holdout.
@@ -93,12 +95,13 @@ class ChainedLog:
         return entry
 
 
-KINDS = ("trials", "factor_trials", "freezes", "holdouts")
+KINDS = ("trials", "factor_trials", "freezes", "holdouts", "factor_holdouts")
 SCHEMAS = {
     "trials": "signalquarry.trial/v1",
     "factor_trials": "signalquarry.factor-trial/v1",
     "freezes": "signalquarry.freeze/v1",
     "holdouts": "signalquarry.holdout-opening/v1",
+    "factor_holdouts": "signalquarry.factor-holdout/v1",
 }
 
 
@@ -158,6 +161,10 @@ def trials(root: Path, family: str | None = None) -> ChainedLog:
 
 def factor_trials(root: Path, family: str | None = None) -> ChainedLog:
     return _log(root, "factor_trials", family)
+
+
+def factor_holdouts(root: Path, family: str | None = None) -> ChainedLog:
+    return _log(root, "factor_holdouts", family)
 
 
 def freezes(root: Path, family: str | None = None) -> ChainedLog:

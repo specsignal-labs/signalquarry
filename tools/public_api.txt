@@ -145,6 +145,8 @@ signalquarry.api.evidence_export(family: 'str', *, tier: 'str' = 'public', out: 
 signalquarry.api.evidence_verify(*, base: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.explain(code: 'str') -> 'Envelope'
 signalquarry.api.factor_evaluate(factor_id: 'str', dataset_id: 'str', *, universe_manifests: 'Sequence[Path]', project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.factor_holdout_seal(family: 'str', dataset_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.factor_holdout_status(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.factor_ls(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_seal(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_status(*, project: 'Path | None' = None) -> 'Envelope'

@@ -82,6 +82,25 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
 | `--project` | project directory (default: search upwards) |
 
+### `sqy factor holdout seal`
+
+Explicit human command: fix a family's factor holdout once; never open it.
+
+| Option | Meaning |
+|---|---|
+| `--family` | registered factor family (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--project` | project directory (default: search upwards) |
+
+### `sqy factor holdout status`
+
+Read factor seals and ledger-derived trial usage.
+
+| Option | Meaning |
+|---|---|
+| `--family` | show only this factor family |
+| `--project` | project directory (default: search upwards) |
+
 ## `sqy data`
 
 Fetch, verify and list recorded market data.
