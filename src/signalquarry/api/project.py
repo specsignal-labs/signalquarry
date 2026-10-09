@@ -7,26 +7,14 @@ import importlib
 import json
 import re
 import sys
-from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from datetime import date, timedelta
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any
 
 from signalquarry._internal.contracts import progress
 from signalquarry._internal.engine.backtest import EngineError
-from signalquarry._internal.engine.run import is_options, simulate, simulate_equity_ticks
-from signalquarry._internal.evidence.run_spool import spool_equity_run
-from signalquarry._internal.evidence.runs import (
-    csv_chunks,
-    jsonl_chunks,
-    new_run_id,
-    result_document,
-    unique_run_id,
-    write_run,
-)
 from signalquarry._internal.project import agents_md
 from signalquarry._internal.project.project import (
     LoadedStrategy,
@@ -35,10 +23,8 @@ from signalquarry._internal.project.project import (
     load_config,
     load_strategies,
 )
-from signalquarry._internal.validation.benchmark import benchmark_curve, benchmark_summary
 from signalquarry._internal.validation.conformance import import_policy, run_checks
 from signalquarry._internal.validation.factor_conformance import run_factor_checks
-from signalquarry._internal.validation.metrics import drawdown_episodes, summarize, trading_activity
 from signalquarry.api.envelope import Envelope
 from signalquarry.sdk.factors import ATTRIBUTE as FACTOR_ATTRIBUTE
 from signalquarry.sdk.factors import FactorDef
@@ -331,16 +317,9 @@ def _versus(block: dict[str, Any] | None) -> str:
 def backtest(
     strategy_id: str, *, start: date | None = None, end: date | None = None, project: Path | None = None
 ) -> Envelope:
-    from signalquarry._internal.validation.evaluate import equity_returns
-    from signalquarry._internal.validation.stats import moments
-    from signalquarry.api.evidence import (
-        budget_warnings,
-        family_seal,
-        holdout_state,
-        record_run_trial,
-        trial_evidence,
-    )
+    from signalquarry.api.evidence import budget_warnings, family_seal
     from signalquarry.api.resolve import resolve
+    from signalquarry.api.runs import execute_run
 
     resolved = resolve("backtest", strategy_id, project)
     if isinstance(resolved, Envelope):
@@ -353,173 +332,36 @@ def backtest(
             days=1
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
-    scratch: TemporaryDirectory[str] | None = None
-    traded: tuple[Decimal, Decimal] | None = None  # notional bought and sold (equity runs)
     try:
-        if is_options(strategy.spec):
-            result = simulate(
-                strategy.spec,
-                strategy.definition,
-                strategy.params,
-                resolved.dataset,
-                start=start,
-                end=end,
-                recorded_chains=resolved.recorded_chains(),
-            )
-            fill_count = len(result.fills)
-            fees = sum((fill.fee for fill in result.fills), Decimal(0))
-            fill_rows = (
-                [
-                    f.session.isoformat(),
-                    f.symbol,
-                    f.side,
-                    f.quantity,
-                    f.price,
-                    f.fee,
-                    f.settle_session.isoformat() if f.settle_session else "",
-                ]
-                for f in result.fills
-            )
-            decision_chunks = jsonl_chunks(result.decisions)
-        else:
-            scratch = TemporaryDirectory(prefix="signalquarry-backtest-")
-            spool = spool_equity_run(
-                simulate_equity_ticks(
-                    strategy.spec,
-                    strategy.definition,
-                    strategy.params,
-                    resolved.dataset,
-                    start=start,
-                    end=end,
-                ),
-                Path(scratch.name),
-            )
-            result = spool.result
-            fill_count = spool.fill_count
-            fees = spool.fees
-            traded = (spool.bought, spool.sold)
-            fill_rows = spool.fills_csv_rows()
-            decision_chunks = spool.decisions_chunks()
+        run = execute_run(resolved, command="backtest", start=start, end=end)
     except EngineError as exc:
-        if scratch is not None:
-            scratch.cleanup()
         return Envelope(command="backtest", status="invalid", reason_codes=[_code_of(exc)], summary=str(exc))
-    returns = equity_returns(result, strategy.spec.account.initial_cash)
-    m = moments(returns)
-    record_run_trial(
-        resolved,
-        command="backtest",
-        returns=returns,
-        moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
-        window=(result.sessions[0], result.sessions[-1]),
-    )
-    metrics = summarize(
-        result.sessions, result.equity, strategy.spec.account.initial_cash, fills=fill_count, fees=fees
-    )
-    # Descriptive context for the same run: none of it enters a gate or the claim level.
-    initial = strategy.spec.account.initial_cash
-    context: dict[str, Any] = {"drawdowns": drawdown_episodes(result.sessions, result.equity, initial)}
-    if traded is not None:
-        context["activity"] = trading_activity(
-            result.sessions, result.equity, bought=traded[0], sold=traded[1], fees=fees
-        )
-    benchmark = None
-    source = resolved.benchmark_source()
-    if source is not None:
-        try:
-            benchmark = benchmark_curve(strategy.spec, source[0], source[1], result.sessions)
-        except EngineError:
-            benchmark = None
-    next_actions: list[dict[str, str]] = []
-    if benchmark is not None:
-        context["benchmark"] = benchmark_summary(benchmark, returns, initial)
-    elif strategy.spec.benchmark is not None:
-        warnings.append("BENCHMARK_DATA_MISSING")
-        next_actions.append(
-            {
-                "command": f"sqy data fetch --strategy {strategy_id}",
-                "why": f"No recorded dataset covers the benchmark {strategy.spec.benchmark}.",
-            }
-        )
-    run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
-    evidence = {
-        "grade": resolved.evidence_grade,
-        "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
-        "holdout": holdout_state(root, strategy.spec.family),
-        "trial": None
-        if resolved.grade == "synthetic"
-        else trial_evidence(root, strategy.spec.family, strategy.configuration_hash),
-    }
-    artifacts = write_run(
-        root,
-        run_id,
-        {
-            "result.json": result_document(
-                run_id=run_id,
-                strategy_id=strategy.spec.id,
-                strategy_version=strategy.spec.version,
-                configuration_hash=strategy.configuration_hash,
-                code_tree_hash=strategy.code_tree_hash,
-                dataset_id=resolved.dataset_id,
-                dataset_identity=result.dataset_identity,
-                ledger_hash=result.ledger_hash,
-                evidence=evidence,
-                metrics=metrics,
-                warnings=result.warnings,
-                **context,
-            ),
-            "equity.csv": csv_chunks(
-                ["session", "equity", "settled_cash"],
-                [
-                    [s.isoformat(), e, c]
-                    for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
-                ],
-            ),
-            **(
-                {}
-                if benchmark is None
-                else {
-                    "benchmark.csv": csv_chunks(
-                        ["session", "equity"],
-                        [
-                            [s.isoformat(), e]
-                            for s, e in zip(benchmark.sessions, benchmark.equity, strict=True)
-                        ],
-                    )
-                }
-            ),
-            "fills.csv": csv_chunks(
-                ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"],
-                fill_rows,
-            ),
-            "decisions.jsonl": decision_chunks,
-        },
-    )
-    if scratch is not None:
-        scratch.cleanup()
+    metrics = run.metrics
     return Envelope(
         command="backtest",
         summary=f"{strategy_id}: total return {metrics['total_return']:.2%}, max drawdown {metrics['max_drawdown']:.2%}"
-        + _versus(context.get("benchmark"))
+        + _versus(run.context.get("benchmark"))
         + f" ({resolved.evidence_grade} data: {resolved.dataset_id})",
-        metrics={**metrics, **_benchmark_headline(context.get("benchmark"))},
-        evidence=evidence,
-        artifacts=artifacts,
-        warnings=sorted({*warnings, *(warning.split(":", 1)[0] for warning in result.warnings)})
+        metrics={**metrics, **_benchmark_headline(run.context.get("benchmark"))},
+        evidence=run.evidence,
+        artifacts=run.artifacts,
+        warnings=sorted(
+            {*warnings, *run.warnings, *(warning.split(":", 1)[0] for warning in run.engine_warnings)}
+        )
         + (
             []
             if resolved.grade == "synthetic"
             else budget_warnings(root, strategy.spec.evaluation.trial_budget, strategy.spec.family)
         ),
         data={
-            "run_id": run_id,
-            "ledger_hash": result.ledger_hash,
+            "run_id": run.run_id,
+            "ledger_hash": run.ledger_hash,
             "configuration_hash": strategy.configuration_hash,
             "dataset_id": resolved.dataset_id,
-            "dataset_identity": result.dataset_identity,
+            "dataset_identity": run.dataset_identity,
         },
         next_actions=[
-            *next_actions,
+            *run.next_actions,
             {
                 "command": f"sqy spec freeze --strategy {strategy_id}",
                 "why": "Freeze the configuration and seal the holdout before evaluating.",

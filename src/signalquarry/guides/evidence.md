@@ -63,6 +63,13 @@ grid): the share of in-sample/out-of-sample splits in which the in-sample winner
 at or below the median out of sample. A PBO near 0.5 means the "best" row is mostly
 luck. Choose one configuration by reasoning, freeze it, then evaluate.
 
+Every point is written as its own run under `.signalquarry/runs/`, with the same
+artifacts as a backtest (`--summary-only` keeps `result.json` and the equity curves
+and leaves out fills and decisions). The sweep itself is recorded in
+`.signalquarry/sweeps/<sweep_id>/` as `sweep.json` (grid, run ids, metrics, PBO) and
+`sweep.csv`. Each run's `result.json` carries the `params` and the hashed `spec`
+that produced it, so runs can be compared later.
+
 ## Freeze and holdout
 
 `sqy spec freeze --strategy <id>` records the configuration hash, hypothesis and

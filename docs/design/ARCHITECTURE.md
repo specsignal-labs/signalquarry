@@ -260,6 +260,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Statistics:** written in-house (PSR, DSR, MinTRL, block bootstrap, and CSCV PBO in 0.2) using numpy + `statistics.NormalDist`, with no SciPy. Goldens reproduce the published numeric examples.
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
 - **Reference curve:** `engine.reference.buy_and_hold` simulates holding one symbol at full weight with the strategy's own account, execution and cost settings, through the same session loop as the strategy. Benchmark comparisons therefore share the engine's treatment of splits, dividends, settlement and fees. The reference is a yardstick: it records no trial and carries no claim. `validation.benchmark` aligns that curve to a run's sessions for the declared `benchmark`; `backtest` and `evaluate` write the comparison into `result.json` and `evaluation.json` (with `benchmark.csv`), and the report renders it from those artifacts. The strategy's dataset is never widened for the benchmark, so dataset identities and ledger hashes are unchanged, and no gate reads the comparison.
+- **One run writer:** `api.runs.execute_run` simulates one resolved strategy, records its trial, computes the descriptive context (benchmark, drawdowns, activity) and writes the run directory. `backtest` and `sweep` both use it, so a sweep point is an ordinary run with the same artifacts and the same ledger hash a backtest of that configuration has. `result.json` records the command, the parameters and the hashed specification. A sweep additionally writes `.signalquarry/sweeps/<id>/` (`sweep.json`, `sweep.csv`).
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -453,7 +454,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Modules |
 |---|---|
 | `cli` | `(package)`, `main` |
-| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `sweep`, `universe` |
+| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `runs`, `sweep`, `universe` |
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
