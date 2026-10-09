@@ -55,6 +55,15 @@ family, default-deny publication policies, checks for one family per commit and 
 cross-family imports, a family extractor that preserves tree hashes, a bundle leak
 scan, a data-room exporter and a guarded deploy script (see its `docs/design/LAB.md`).
 
+### One-off variants
+
+`sqy backtest --strategy <id> --param period=150 --label p150` runs the strategy with
+parameters overridden for that run only. `strategy.yaml` is not changed, the run has
+its own configuration hash, and its `result.json` records the parameters and the
+label. On real data a new configuration is a trial like any other, and the run is
+refused beforehand if it would exceed the family's budget. Evaluation always reads
+`strategy.yaml`: to keep a variant, write its parameters there and freeze.
+
 ### Parameter sweeps
 
 `sqy sweep --strategy <id> --param period=50,100,150` backtests a grid (up to 200

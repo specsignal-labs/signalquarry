@@ -7,11 +7,16 @@ import importlib
 import json
 import re
 import sys
+from collections.abc import Sequence
+from dataclasses import replace
 from datetime import date, timedelta
 from importlib import resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
 from typing import Any
+
+import yaml
+from pydantic import ValidationError
 
 from signalquarry._internal.contracts import progress
 from signalquarry._internal.engine.backtest import EngineError
@@ -314,16 +319,80 @@ def _versus(block: dict[str, Any] | None) -> str:
     )
 
 
+_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+
+
+def _overrides(assignments: Sequence[str]) -> dict[str, Any] | str:
+    """``NAME=VALUE`` parameter overrides for one run, or what is wrong with them."""
+    values: dict[str, Any] = {}
+    for assignment in assignments:
+        name, separator, value = assignment.partition("=")
+        name = name.strip()
+        if not separator or not name or not value.strip():
+            return f"expected NAME=VALUE, got {assignment!r}"
+        if name in values:
+            return f"parameter {name} is given more than once"
+        values[name] = yaml.safe_load(value.strip())
+    return values
+
+
 def backtest(
-    strategy_id: str, *, start: date | None = None, end: date | None = None, project: Path | None = None
+    strategy_id: str,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+    params: Sequence[str] = (),
+    label: str | None = None,
+    project: Path | None = None,
 ) -> Envelope:
-    from signalquarry.api.evidence import budget_warnings, family_seal
+    """Backtest a strategy and write its run directory.
+
+    ``params`` (``NAME=VALUE``) overrides parameters for this run only: ``strategy.yaml`` is
+    not changed, the run has its own configuration hash, and on real data it is a trial like
+    any other, refused beforehand when it would exceed the family's budget. ``label`` is a
+    short name stored with the run.
+    """
+    from signalquarry.api.evidence import budget_shortfall, budget_warnings, family_seal
     from signalquarry.api.resolve import resolve
     from signalquarry.api.runs import execute_run
 
+    overrides = _overrides(params)
+    if isinstance(overrides, str):
+        return Envelope(command="backtest", status="usage", reason_codes=["USAGE_INVALID"], summary=overrides)
+    if label is not None and not _LABEL.match(label):
+        return Envelope(
+            command="backtest",
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="label: up to 64 letters, digits, dots, underscores or hyphens, starting with a letter or digit",
+        )
     resolved = resolve("backtest", strategy_id, project)
     if isinstance(resolved, Envelope):
         return resolved
+    if overrides:
+        base = resolved.strategy
+        try:
+            changed = base.definition.params.model_validate({**base.params.model_dump(), **overrides})
+        except ValidationError as exc:
+            error = exc.errors()[0]
+            return Envelope(
+                command="backtest",
+                status="invalid",
+                reason_codes=["STRATEGY_PARAMS_INVALID"],
+                summary=f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}",
+            )
+        resolved = replace(resolved, strategy=replace(base, params=changed))
+        if resolved.grade != "synthetic":
+            shortfall = budget_shortfall(
+                resolved.root, resolved.strategy.spec, {resolved.strategy.configuration_hash}
+            )
+            if shortfall is not None:
+                return Envelope(
+                    command="backtest",
+                    status="blocked",
+                    reason_codes=["TRIAL_BUDGET_EXHAUSTED"],
+                    summary=shortfall,
+                )
     root, strategy = resolved.root, resolved.strategy
     warnings: list[str] = []
     seal = family_seal(root, strategy.spec.family)
@@ -333,7 +402,7 @@ def backtest(
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
     try:
-        run = execute_run(resolved, command="backtest", start=start, end=end)
+        run = execute_run(resolved, command="backtest", start=start, end=end, label=label)
     except EngineError as exc:
         return Envelope(command="backtest", status="invalid", reason_codes=[_code_of(exc)], summary=str(exc))
     metrics = run.metrics
@@ -359,13 +428,26 @@ def backtest(
             "configuration_hash": strategy.configuration_hash,
             "dataset_id": resolved.dataset_id,
             "dataset_identity": run.dataset_identity,
+            **({"params_override": overrides} if overrides else {}),
+            **({} if label is None else {"label": label}),
         },
         next_actions=[
             *run.next_actions,
-            {
-                "command": f"sqy spec freeze --strategy {strategy_id}",
-                "why": "Freeze the configuration and seal the holdout before evaluating.",
-            },
+            *(
+                [
+                    {
+                        "command": "edit strategy.yaml params, then sqy spec freeze",
+                        "why": "This run used overridden parameters; evaluation reads strategy.yaml.",
+                    }
+                ]
+                if overrides
+                else [
+                    {
+                        "command": f"sqy spec freeze --strategy {strategy_id}",
+                        "why": "Freeze the configuration and seal the holdout before evaluating.",
+                    }
+                ]
+            ),
             {
                 "command": f"sqy evaluate --strategy {strategy_id}",
                 "why": "Walk-forward and stress gates decide what you may claim.",

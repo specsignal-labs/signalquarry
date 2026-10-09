@@ -168,6 +168,13 @@ def _configure_backtest(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", required=True, help="strategy id from strategy.yaml")
     parser.add_argument("--start", type=date.fromisoformat, help="first session (YYYY-MM-DD)")
     parser.add_argument("--end", type=date.fromisoformat, help="last session (YYYY-MM-DD)")
+    parser.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        help="NAME=VALUE parameter override for this run only (repeatable); strategy.yaml is not changed",
+    )
+    parser.add_argument("--label", help="short name stored with the run")
     parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
 
 
@@ -630,7 +637,14 @@ COMMANDS: tuple[Command, ...] = (
     Command(
         "backtest",
         "Backtest a strategy and write run artifacts.",
-        lambda args: api.backtest(args.strategy, start=args.start, end=args.end, project=args.project),
+        lambda args: api.backtest(
+            args.strategy,
+            start=args.start,
+            end=args.end,
+            params=args.param,
+            label=args.label,
+            project=args.project,
+        ),
         _configure_backtest,
     ),
     Command(
