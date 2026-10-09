@@ -79,12 +79,19 @@ def init(
         "paper_broker": "simulated" if demo else "alpaca-paper",
         "underlying": "QQQ",
     }
-    if kind not in ("equity", "options") or (kind == "options" and lab):
+    if kind == "factor" and (not demo or lab):
         return Envelope(
             command="init",
             status="usage",
             reason_codes=["USAGE_INVALID"],
-            summary="--kind is equity or options (not with --lab)",
+            summary="--kind factor requires --demo and cannot be combined with --lab",
+        )
+    if kind not in ("equity", "options", "factor") or (kind == "options" and lab):
+        return Envelope(
+            command="init",
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="--kind is equity, options (not with --lab), or factor (requires --demo)",
         )
     created: list[str] = []
     if lab and demo:
@@ -130,6 +137,14 @@ def init(
             text = text.replace("--strategy sma-trend", "--strategy wheel")
             file.write_text(text, encoding="utf-8")
         first = "wheel"
+    if kind == "factor":
+        copy(resources.files("signalquarry") / "templates" / "factors", Path("src") / package_name)
+        config_path = target / "signalquarry.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8")
+            + f'\n[factors]\nmodules = ["{package_name}.volume_shock.factor"]\n',
+            encoding="utf-8",
+        )
     return Envelope(
         command="init",
         summary=f"created {target.name} ({'strategy lab' if lab else 'synthetic demo data' if demo else 'Alpaca data'})",
@@ -141,10 +156,29 @@ def init(
         },
         next_actions=[
             {"command": f"cd {target}", "why": "Run the remaining commands inside the project."},
-            {"command": "sqy check", "why": "Verify the starter strategy meets the contract."},
-            {"command": "python tools/new_family.py NAME", "why": "Start the first real strategy family."}
-            if lab
-            else {"command": f"sqy backtest --strategy {first}", "why": "Run a first backtest."},
+            *(
+                [
+                    {"command": "sqy factor ls", "why": "List the registered starter factor."},
+                    {
+                        "command": "sqy check --factor-id volume-shock",
+                        "why": "Check the factor's synthetic conformance.",
+                    },
+                    {
+                        "command": "sqy factor evaluate --factor volume-shock --synthetic",
+                        "why": "Evaluate synthetic diagnostics without recording evidence.",
+                    },
+                ]
+                if kind == "factor"
+                else [
+                    {"command": "sqy check", "why": "Verify the starter strategy meets the contract."},
+                    {
+                        "command": "python tools/new_family.py NAME",
+                        "why": "Start the first real strategy family.",
+                    }
+                    if lab
+                    else {"command": f"sqy backtest --strategy {first}", "why": "Run a first backtest."},
+                ]
+            ),
         ],
     )
 

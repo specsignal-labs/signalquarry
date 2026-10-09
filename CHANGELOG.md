@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Offline factor diagnostics via `sqy factor evaluate --synthetic` and a registered
+  volume-shock starter via `sqy init NAME --demo --kind factor`; synthetic results
+  make no real-market claims and record no trials or holdout access.
 - A deterministic synthetic cross-sectional panel (`synthetic_panel`) with market and sector
   structure, late listings, delistings, missing bars, splits, dividends and an optional planted
   signal carried in volume, plus dated synthetic memberships. Existing synthetic data is
