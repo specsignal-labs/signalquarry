@@ -174,3 +174,74 @@ def test_chart_draws_the_benchmark_only_when_it_lines_up() -> None:
     assert "A&amp;B" in named
     assert equity_svg(points, benchmark=points[:1]).count("<polyline") == 1
     assert equity_svg(points[:1], benchmark=points[:1]) == ""
+
+
+def test_growth_chart_rebases_each_curve_and_skips_what_does_not_line_up() -> None:
+    from signalquarry._internal.evidence.report import growth_svg
+
+    days = ["2025-01-06", "2025-01-07", "2025-01-08"]
+    first = list(zip(days, [Decimal("100"), Decimal("110"), Decimal("121")], strict=True))
+    second = list(zip(days, [Decimal("50"), Decimal("45"), Decimal("60")], strict=True))
+    svg = growth_svg([("a&b", first), ("other", second), ("short", first[:2])])
+    assert svg.count("<polyline") == 2 and "a&amp;b" in svg and ">other<" in svg and "short" not in svg
+    assert ">1.21<" in svg and ">0.90<" in svg  # growth of 1: 121/100 at the top, 45/50 at the bottom
+    assert 'aria-label="Growth of 1 from 2025-01-06 to 2025-01-08 for 2 runs"' in svg
+    assert growth_svg([("one", first[:1])]) == ""
+    assert growth_svg([("zero", [(days[0], Decimal("0")), (days[1], Decimal("1"))])]) == ""
+    flat = growth_svg([("flat", [(days[0], Decimal("5")), (days[1], Decimal("5"))])])
+    assert flat.count("<polyline") == 1
+
+
+def test_comparison_report_without_pairs_or_chart() -> None:
+    from signalquarry._internal.evidence.report import render_comparison
+
+    comparison = {
+        "reference": "r1",
+        "comparable": False,
+        "reasons": ["COMPARE_DATASET_DIFFERS", "COMPARE_GRADE_DIFFERS"],
+        "runs": [
+            {
+                "run_id": "r1",
+                "strategy_id": "s",
+                "configuration_hash": "sha256:1",
+                "dataset_identity": "sha256:a",
+                "grade": "historical",
+                "metrics": {"total_return": 0.1},
+            },
+            {
+                "run_id": "r2",
+                "strategy_id": "s",
+                "configuration_hash": "sha256:2",
+                "dataset_identity": "sha256:b",
+                "grade": "synthetic",
+                "metrics": {},
+            },
+        ],
+        "differences": {"r2": {"params": {}, "spec": {"execution.costs.bps": ["5", "10"]}}},
+        "pairs": {},
+    }
+    text = render_comparison(comparison, labels={"r1": "base"}, chart=False)
+    assert "grade `historical`, `synthetic`" in text and "Synthetic data" in text
+    assert "**Not comparable** (COMPARE_DATASET_DIFFERS, COMPARE_GRADE_DIFFERS)" in text
+    assert "| base (reference) | s | 10.00% |" in text and "| r2 | s | – |" in text
+    assert "- **r2**: `execution.costs.bps`: `5` → `10`" in text
+    assert "![Growth of 1]" not in text and "## Against the reference" not in text
+
+    same = {**comparison, "differences": {"r2": {"params": {}, "spec": {}}}}
+    assert "- **r2**: no recorded difference" in render_comparison(same, labels={}, chart=True)
+    paired = {
+        **comparison,
+        "comparable": True,
+        "reasons": [],
+        "pairs": {
+            "r2": {
+                "correlation": None,
+                "sharpe_difference": None,
+                "sharpe_difference_90": None,
+                "total_return_difference": -0.05,
+                "max_drawdown_difference": 0.02,
+                "sessions": 2,
+            }
+        },
+    }
+    assert "| r2 | – | – | – | -5.00% | +2.00% |" in render_comparison(paired, labels={}, chart=False)
