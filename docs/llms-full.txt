@@ -99,6 +99,20 @@ Synthetic data proves nothing about markets; the demo's claim level stays `none`
 For real data, create a project without `--demo`, add your Alpaca keys (see
 [Data](data.md)) and run `sqy data fetch --strategy <id>` before backtesting.
 
+### Factor research offline
+
+Create a demo project with `sqy init factor-demo --demo --kind factor`, then
+run these commands inside `factor-demo`:
+
+```bash
+sqy factor ls
+sqy check --factor-id volume-shock
+sqy factor evaluate --factor volume-shock --synthetic
+```
+
+Synthetic results diagnose the factor code path; they are not evidence about
+real markets and record no trial or holdout access.
+
 ## Using a coding agent
 
 Open the project in your agent (Claude Code, Codex, …). It reads `AGENTS.md`
@@ -154,6 +168,10 @@ codes stop the run (`REASON_CODE_UNDECLARED`). State must be JSON-serializable
 and at most 16 KB.
 
 ## Factor portfolios
+
+`sqy init NAME --demo --kind factor` adds a registered volume-shock demonstration
+factor. Evaluate it offline with `sqy factor evaluate --factor volume-shock --synthetic`;
+synthetic diagnostics provide no evidence about real markets.
 
 Import registered factor functions into a normal `@strategy` and return the
 composite through `factor_portfolio`. It reads only the completed bars in
@@ -952,7 +970,7 @@ Create a new strategy project.
 | `--project` | project directory for --upgrade-agents-md |
 | `--demo` | use synthetic data (no credentials needed) |
 | `--lab` | a multi-family strategy lab (per-family ledgers) |
-| `--kind` | starter strategy: equity trend or options wheel (one of `equity`, `options`) |
+| `--kind` | starter: equity trend, options wheel, or factor demo (requires --demo) (one of `equity`, `options`, `factor`) |
 | `--package` | Python package name for strategies (default: from the directory name) |
 
 ## `sqy check`
@@ -987,8 +1005,12 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | Option | Meaning |
 |---|---|
 | `--factor` | registered factor ID (required) |
-| `--dataset-id` | locally recorded dataset manifest ID (required) |
-| `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
+| `--dataset-id` | locally recorded dataset manifest ID |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session |
+| `--synthetic` | use an offline synthetic panel without manifests |
+| `--symbols` | synthetic panel symbol count (default: 200) |
+| `--seed` | synthetic panel random seed (default: 7) |
+| `--planted-ic` | synthetic signal loading (default: 0.05) |
 | `--project` | project directory (default: search upwards) |
 
 ## `sqy data`

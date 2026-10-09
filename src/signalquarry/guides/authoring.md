@@ -46,6 +46,10 @@ and at most 16 KB.
 
 ## Factor portfolios
 
+`sqy init NAME --demo --kind factor` adds a registered volume-shock demonstration
+factor. Evaluate it offline with `sqy factor evaluate --factor volume-shock --synthetic`;
+synthetic diagnostics provide no evidence about real markets.
+
 Import registered factor functions into a normal `@strategy` and return the
 composite through `factor_portfolio`. It reads only the completed bars in
 `Ctx`, standardizes each factor cross-sectionally, and creates an ordinary
