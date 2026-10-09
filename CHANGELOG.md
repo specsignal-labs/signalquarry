@@ -28,6 +28,10 @@ change provisional surfaces after deprecation).
 - Pure benchmark-relative metrics (excess return, tracking error, information ratio, beta,
   alpha, correlation, up and down capture), ranked drawdown episodes, and one-way turnover
   with fee drag. They are descriptive: no gate or claim level reads them.
+- Pure run-comparison maths: a comparability verdict (same dataset, sessions, account and
+  evidence grade), dotted-path differences between two runs' parameters and specifications,
+  return correlation, and a paired moving-block bootstrap interval for the difference in
+  Sharpe ratio. Runs that are not comparable are not differenced. No command uses it yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
