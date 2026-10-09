@@ -290,6 +290,8 @@ Backtest a strategy and write run artifacts.
 | `--strategy` | strategy id from strategy.yaml (required) |
 | `--start` | first session (YYYY-MM-DD) |
 | `--end` | last session (YYYY-MM-DD) |
+| `--param` | NAME=VALUE parameter override for this run only (repeatable); strategy.yaml is not changed |
+| `--label` | short name stored with the run |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy evidence`

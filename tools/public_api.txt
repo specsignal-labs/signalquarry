@@ -123,7 +123,7 @@ signalquarry.api.Envelope.run_id: field str
 signalquarry.api.Envelope.started: field float
 signalquarry.api.Envelope.as_dict(self) -> 'dict[str, Any]'
 signalquarry.api.Envelope.exit_code: property
-signalquarry.api.backtest(strategy_id: 'str', *, start: 'date | None' = None, end: 'date | None' = None, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.backtest(strategy_id: 'str', *, start: 'date | None' = None, end: 'date | None' = None, params: 'Sequence[str]' = (), label: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.bundle_verify(bundle: 'Path', *, max_tier: 'str' = 'public') -> 'Envelope'
 signalquarry.api.cache_dir() -> 'Path'
 signalquarry.api.check(strategy_id: 'str | None' = None, *, project: 'Path | None' = None, parity: 'bool' = False) -> 'Envelope'

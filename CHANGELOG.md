@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy backtest --param NAME=VALUE` (repeatable) runs a one-off variant without editing
+  `strategy.yaml`, and `--label` names the run. A variant has its own configuration hash; on
+  real data it is a trial and is refused beforehand when it would exceed the family's budget.
 - Sweep points are persisted: `sqy sweep` writes each grid point as an ordinary run directory
   and records the sweep in `.signalquarry/sweeps/<sweep_id>/` (`sweep.json`, `sweep.csv`);
   `--summary-only` leaves out per-point fills and decisions. `result.json` now carries the
