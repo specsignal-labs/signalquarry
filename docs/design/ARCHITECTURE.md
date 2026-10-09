@@ -274,6 +274,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Studies (ADR 0015):** `api.study` plans the arms of a `study.yaml` (subject, variants, baselines), checks the trial budgets of every family involved before anything runs, executes strategy arms through `execute_run` (reusing a verified run of the same configuration, dataset and window), builds benchmark arms from the engine reference curve, and derives the verdict with `validation.compare`. Trial counting stays in the existing ledger; the new chained log `studies` records what was attempted. A study clips at the earliest holdout seal and has no code path that opens one.
 - **Research results:** `signalquarry.research` is a public, provisional, read-only loader for recorded runs, sweeps, comparisons and study results, for notebooks and scripts. Documents and arrays are immutable, result documents are checked against their recorded hash, tables are Arrow and pandas is optional. It sits beside `api` in the layer order, reads artifacts through the evidence helpers, and never runs a backtest, records a trial or writes a file.
 - **Regimes and sensitivity:** `validation.regimes` labels each session from information through the previous session only (a label that used its own session would explain returns with hindsight) and tabulates performance per label; `validation.sensitivity` describes how a metric moves around the best point of a parameter grid. Both are descriptive: a regime counts as predeclared only when it is part of a frozen specification or a study file, and neither feeds a gate.
+- **Data quality:** `data.quality.assess` inspects an in-memory dataset against the NYSE calendar and its own bars (coverage, gaps, OHLC consistency, non-positive prices, zero volume, stale closes, moves no recorded split explains) and returns dates, counts and finding codes only. It is pure and writes nothing; a later command will record its report beside the dataset manifest.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -452,7 +453,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `engine`, `data`, `project`, `sdk`, `contracts`, `canonical` |
 | `factors` | `engine`, `data`, `sdk`, `canonical` |
 | `engine` | `data`, `options`, `sdk`, `contracts`, `canonical` |
-| `data` | `contracts`, `canonical` |
+| `data` | `contracts`, `canonical`, `calendar` |
 | `project` | `sdk`, `contracts`, `canonical` |
 | `options` | `calendar` |
 | `sdk` | — |
@@ -476,7 +477,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
-| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
+| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
