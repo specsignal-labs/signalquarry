@@ -48,7 +48,7 @@ def test_init_check_backtest_on_demo_data(tmp_path: Path, capsys: pytest.Capture
     }
     assert payload["metrics"]["sessions"] > 2000
     kinds = {item["kind"] for item in payload["artifacts"]}
-    assert kinds == {"result", "equity", "fills", "decisions"}
+    assert kinds == {"result", "equity", "benchmark", "fills", "decisions"}
     result = json.loads(
         (project / next(a["path"] for a in payload["artifacts"] if a["kind"] == "result")).read_text()
     )

@@ -7,6 +7,13 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Benchmark comparison for the declared `benchmark`: `sqy backtest` writes `benchmark.csv`, a
+  `benchmark` block in `result.json` (benchmark metrics and relative statistics), drawdown
+  episodes and trading activity, and headline benchmark numbers in the envelope's `metrics`;
+  `sqy evaluate` adds the benchmark to every walk-forward fold and to the out-of-sample block;
+  `sqy report` renders the comparison, the per-fold table and the benchmark on the chart.
+  Gates, claim levels, dataset identities and ledger hashes are unchanged. New warning
+  `BENCHMARK_DATA_MISSING` when no recorded dataset covers the benchmark.
 - An engine-simulated buy-and-hold reference curve: one symbol at full weight under the
   strategy's own account, execution and cost settings, with dividends reinvested. It records
   no trial.

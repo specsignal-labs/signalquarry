@@ -219,7 +219,8 @@ Everything that affects results lives here and is hashed into the
 (symbols, feed, staleness), `account` (cash or margin, initial cash),
 `execution` (next open, sizing, costs, minimum order), `params`, `reason_codes`,
 `limits`, `evaluation` (holdout months, walk-forward windows, trial budget) and
-`benchmark`. Run `sqy schema` for the bundled schemas.
+`benchmark` (a symbol every run is compared with as buy-and-hold; see
+[Evidence](evidence.md)). Run `sqy schema` for the bundled schemas.
 
 ## Execution model
 
@@ -371,6 +372,27 @@ not a gate; a wide interval says the sample cannot pin the Sharpe down.
 
 When a gate fails, the answer is a new hypothesis, not looser gates.
 
+## Benchmark comparison
+
+Set `benchmark: <SYMBOL>` in `strategy.yaml` to compare every run with holding that
+symbol. The benchmark is simulated by the same engine: one position at full weight
+under the strategy's own account, execution and cost settings, with dividends
+reinvested. `sqy data fetch --strategy <id>` fetches its bars with the strategy's.
+
+- `sqy backtest` writes `benchmark.csv` beside `equity.csv`, adds a `benchmark`
+  block to `result.json` (the benchmark's own metrics and the run's excess return,
+  tracking error, information ratio, beta, alpha, correlation and up and down
+  capture) and puts the headline numbers in the envelope's `metrics`. It also
+  records the deepest drawdown episodes and one-way turnover with fee drag.
+- `sqy evaluate` adds the benchmark's return and drawdown to each walk-forward fold
+  and an out-of-sample `relative` block, with the number of folds in which the
+  strategy was ahead.
+
+All of it is descriptive. No gate reads the benchmark, the comparison never raises a
+claim level, and the benchmark run is not a trial. Relative statistics need at least
+20 sessions and report `insufficient` otherwise. If no recorded dataset covers the
+benchmark, the command still succeeds and warns `BENCHMARK_DATA_MISSING`.
+
 ## Plugin gates
 
 Installed packages can add gates through the `signalquarry.gates` entry point (see
@@ -382,7 +404,9 @@ envelope's `gates`, and are add-only: a failing or broken plugin gate caps the c
 
 `sqy report --strategy <id>` renders `report.md` and `equity.svg` from run
 artifacts. The claim level and its permitted wording come first; every report
-ends with a hypothetical-results disclaimer.
+ends with a hypothetical-results disclaimer. With a benchmark, the report adds a
+strategy-against-benchmark table, the benchmark line on the chart and a per-fold
+table; drawdown episodes and trading activity are always shown.
 
 Report-section plugins (`signalquarry.report_sections`) append their own headed
 sections to `report.md`.
@@ -1484,6 +1508,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `AGENTS_MD_UNMANAGED` | usage | AGENTS.md has no signalquarry:begin/end blocks, so there is nothing safe to refresh. | Compare it by hand with a fresh `sqy init` template, then keep the markers. |
 | `ASSET_DATASET_INVALID` | data | An asset-keyed dataset has inconsistent identity, provenance, cutoff or raw-mark data. | Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks. |
 | `BACKTEST_RANGE_EMPTY` | data | No sessions in the requested backtest range. | Widen --start/--end or fetch more data. |
+| `BENCHMARK_DATA_MISSING` | data | No recorded dataset covers the declared benchmark for the run's sessions; results are shown without a comparison. | Run `sqy data fetch --strategy <id>` (it fetches the benchmark too) and repeat the command. |
 | `BROKER_CREDENTIALS_REJECTED` | environment | The broker rejected the paper credentials. | Check the keys of the paper profile; use keys of a paper account. |
 | `BROKER_NOT_PAPER_ONLY` | risk | A broker plugin returned a broker that does not declare paper_only = True. | Only paper brokers can be used; there is no live path. Fix or remove the plugin. |
 | `BROKER_ORDER_REJECTED` | execution | The broker rejected an order. | The session is recorded as incomplete and retried on the next unchanged target. |
