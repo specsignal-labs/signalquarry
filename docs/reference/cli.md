@@ -86,6 +86,16 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 
 Fetch, verify and list recorded market data.
 
+### `sqy data quality`
+
+Inspect dataset completeness and consistency.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | assess the dataset and history available to this strategy |
+| `--dataset-id` | assess every symbol in this recorded dataset |
+| `--project` | project directory (default: search upwards from cwd) |
+
 ### `sqy data fetch`
 
 Download daily bars and corporate actions and record a manifest.

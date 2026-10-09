@@ -179,6 +179,10 @@ def _configure_report(parser: argparse.ArgumentParser) -> None:
 
 def _configure_data(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    quality = actions.add_parser("quality", help="Inspect dataset completeness and consistency.")
+    selection = quality.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--strategy", help="assess the dataset and history available to this strategy")
+    selection.add_argument("--dataset-id", help="assess every symbol in this recorded dataset")
     fetch = actions.add_parser(
         "fetch", help="Download daily bars and corporate actions and record a manifest."
     )
@@ -217,10 +221,17 @@ def _configure_data(parser: argparse.ArgumentParser) -> None:
         child.add_argument(
             "--project", type=Path, help="project directory (default: search upwards from cwd)"
         )
-        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+        child.add_argument(
+            "--json",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="write the command envelope as JSON",
+        )
 
 
 def _data(args: argparse.Namespace) -> Envelope:
+    if args.action == "quality":
+        return api.data_quality(strategy_id=args.strategy, dataset_id=args.dataset_id, project=args.project)
     if args.action == "fetch":
         symbols = tuple(item.strip().upper() for item in args.symbols.split(",") if item.strip())
         return api.data_fetch(
