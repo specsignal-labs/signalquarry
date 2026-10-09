@@ -37,6 +37,7 @@ nav:
   - Guides:
       - Writing a strategy: authoring.md
       - Evidence and claims: evidence.md
+      - Research method: research.md
       - Market data: data.md
       - Paper trading: paper.md
       - Working with agents: agents.md

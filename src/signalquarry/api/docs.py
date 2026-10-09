@@ -21,6 +21,7 @@ GUIDES: tuple[tuple[str, str], ...] = (
     ("quickstart", "Install, create a demo project and run the golden path."),
     ("authoring", "Write decide(ctx, params) and strategy.yaml; rules sqy check enforces."),
     ("evidence", "Claim ladder, trial ledger, freeze and sealed holdout, gates G1–G4, reports."),
+    ("research", "The research method: baselines, variants, comparisons, studies; a worked study."),
     ("data", "Alpaca credentials, fetching and verifying data, point-in-time adjustment."),
     ("paper", "Paper deployments, the arm step, run-once, journal, guards and scheduling."),
     ("agents", "The JSON envelope, exit codes and human-only actions for coding agents."),

@@ -11,6 +11,9 @@ change provisional surfaces after deprecation).
   performance, cost sensitivity with an interpolated break-even, recorded fold consistency,
   and recorded parameter sensitivity. `sqy report` includes the newest verified diagnostics
   when present. Diagnostics never change runs, trial counts, gates or claims.
+- A "Research method" guide: five working rules, the commands by question, and one study
+  worked from hypothesis to a rejected verdict, with the study file under
+  `examples/trend_vs_hold_study/`. A test runs that file and checks the numbers the guide quotes.
 - Agent surface for research: new projects' `AGENTS.md` gains a "Research method" block
   (baseline first, one variant at a time, compare rather than eyeball, write a study, report
   the verdict as it is); `sqy init --upgrade-agents-md` adds it to existing projects. The MCP
