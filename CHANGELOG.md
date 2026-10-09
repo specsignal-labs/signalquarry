@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Pure benchmark-relative metrics (excess return, tracking error, information ratio, beta,
+  alpha, correlation, up and down capture), ranked drawdown episodes, and one-way turnover
+  with fee drag. They are descriptive: no gate or claim level reads them.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
