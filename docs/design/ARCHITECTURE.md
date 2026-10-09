@@ -467,7 +467,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
-| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
+| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec`, `study` |
 | `canonical` | `(package)` |
 | `calendar` | `(package)`, `nyse` |
 | `mcp` | `(package)`, `server` |
