@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, cast
 
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
+from signalquarry._internal.contracts.spec import HoldoutSpec
 from signalquarry._internal.data.library import LibraryError, dataset_from_manifest
 from signalquarry._internal.data.panel import PanelStore
 from signalquarry._internal.data.universe_build import verify_universe_manifest
@@ -17,8 +18,17 @@ from signalquarry._internal.factors.evaluate import UniverseAt, rank_ic, score_f
 from signalquarry._internal.factors.labels import derive_forward_return_labels
 from signalquarry._internal.project.factors import LoadedFactor, load_factors
 from signalquarry._internal.project.project import ProjectError, find_root, load_config
+from signalquarry._internal.validation import ledger
 from signalquarry._internal.validation.conformance import import_policy
 from signalquarry._internal.validation.factor_conformance import run_factor_checks
+from signalquarry._internal.validation.factor_holdouts import (
+    effective_factor_declaration,
+    factor_evidence_write,
+    factor_family_seal,
+    factor_holdout_start_for,
+    validate_factor_family,
+)
+from signalquarry._internal.validation.factor_trials import factor_trial_accounting
 from signalquarry.api.data import library_for
 from signalquarry.api.envelope import Envelope
 from signalquarry.api.universe import replay_universe_build
@@ -85,6 +95,155 @@ def check_registered_factor(factor_id: str, *, project: Path | None = None) -> E
             "configuration_hash": item.configuration_hash,
             "checks": [result.as_dict() for result in results],
         },
+    )
+
+
+def _factor_holdout_error(command: str, exc: Exception) -> Envelope:
+    code = getattr(exc, "code", None) or "DATA_MANIFEST_INVALID"
+    if code not in REASON_CODES:
+        code = "DATA_MANIFEST_INVALID"
+    return Envelope(
+        command=command,
+        status="busy" if code == "FACTOR_EVIDENCE_BUSY" else "invalid",
+        reason_codes=[code],
+        summary=str(exc)[:500],
+    )
+
+
+def factor_holdout_seal(family: str, dataset_id: str, *, project: Path | None = None) -> Envelope:
+    """Explicit human command: seal a factor family's holdout once, without opening it.
+
+    This command is not an MCP tool. It fixes the conservative registered
+    declarations and dataset boundary; later declarations never change the seal.
+    """
+    command = "factor holdout seal"
+    try:
+        root = find_root(project)
+        validate_factor_family(family)
+        with factor_evidence_write(root):
+            existing = factor_family_seal(root, family)
+            factors = load_factors(load_config(root))
+            contributors = [
+                (item.spec, item.configuration_hash)
+                for item in factors.values()
+                if item.spec.family == family
+            ]
+            declaration = effective_factor_declaration(contributors) if contributors else None
+            if existing is not None:
+                current = {**(declaration or {}), "dataset_id": dataset_id}
+                differences = {
+                    key: {"sealed": existing[key], "current": current.get(key)}
+                    for key in ("trial_budget", "holdout", "factors", "dataset_id")
+                    if existing[key] != current.get(key)
+                }
+                return Envelope(
+                    command=command,
+                    summary=f"family {family} already sealed from {existing['holdout_start']}",
+                    data={
+                        "family": family,
+                        "holdout_start": existing["holdout_start"],
+                        "newly_sealed": False,
+                        "seal": existing,
+                        "differences": differences,
+                    },
+                    warnings=["FACTOR_HOLDOUT_DECLARATION_CHANGED"] if differences else [],
+                )
+            if declaration is None:
+                raise ledger.LedgerError("FACTOR_FAMILY_EMPTY", family)
+            holdout = HoldoutSpec.model_validate(declaration["holdout"])
+            if holdout.months == 0 and holdout.training_cutoff is None:
+                raise ledger.LedgerError("FACTOR_HOLDOUT_UNDECLARED", family)
+            library = library_for(root)
+            manifests: list[dict[str, Any]] = []
+            for value in cast(list[object], library.manifests()):
+                if not isinstance(value, dict):
+                    raise LibraryError("DATA_MANIFEST_INVALID", "manifest must be an object")
+                manifests.append(cast(dict[str, Any], value))
+            selected = [entry for entry in manifests if entry.get("dataset_id") == dataset_id]
+            if len(selected) != 1:
+                raise LibraryError("DATA_MANIFEST_INVALID", f"expected one manifest for dataset {dataset_id}")
+            dataset = dataset_from_manifest(library, selected[0])
+            last_session = dataset.sessions[-1]
+            start = factor_holdout_start_for(holdout, last_session)
+            entry = ledger.append(
+                root,
+                "factor_holdouts",
+                family,
+                {
+                    "kind": "seal",
+                    "at": datetime.now(UTC),
+                    "family": family,
+                    "holdout_start": start.isoformat() if start is not None else None,
+                    "dataset_id": dataset_id,
+                    "dataset_identity": dataset.identity(),
+                    "dataset_last_session": last_session.isoformat(),
+                    **declaration,
+                },
+            )
+    except (
+        ProjectError,
+        ledger.LedgerError,
+        LibraryError,
+        OSError,
+        TypeError,
+        ValueError,
+        KeyError,
+        IndexError,
+    ) as exc:
+        return _factor_holdout_error(command, exc)
+    return Envelope(
+        command=command,
+        summary=f"family {family} sealed from {entry['holdout_start']}; holdout has not been opened",
+        data={"family": family, "holdout_start": entry["holdout_start"], "newly_sealed": True, "seal": entry},
+        warnings=["HUMAN_ACTION_RECORDED"],
+    )
+
+
+def factor_holdout_status(*, family: str | None = None, project: Path | None = None) -> Envelope:
+    """Read factor family seals and ledger-derived trial usage; never open a holdout."""
+    command = "factor holdout status"
+    try:
+        root = find_root(project)
+        if family is not None:
+            validate_factor_family(family)
+        factors = load_factors(load_config(root))
+        seals = ledger.all_entries(root, "factor_holdouts")
+        families = sorted(
+            {item.spec.family for item in factors.values()} | {entry["family"] for entry in seals}
+        )
+        if family is not None:
+            if family not in families:
+                raise ledger.LedgerError("FACTOR_FAMILY_EMPTY", family)
+            families = [family]
+        rows: list[dict[str, Any]] = []
+        for name in families:
+            seal = factor_family_seal(root, name)
+            accounting = factor_trial_accounting(root, name) if seal is not None else None
+            rows.append(
+                {
+                    "family": name,
+                    "seal": seal,
+                    "holdout_start": seal["holdout_start"] if seal is not None else None,
+                    "trial_budget": accounting.effective_budget if accounting is not None else None,
+                    "holdout": seal["holdout"] if seal is not None else None,
+                    "dataset_id": seal["dataset_id"] if seal is not None else None,
+                    "trials_used": accounting.family_trials_used
+                    if accounting is not None
+                    else sum(
+                        entry.get("kind") == "factor_trial" and entry.get("family") == name
+                        for entry in ledger.all_entries(root, "factor_trials")
+                    ),
+                    "remaining_budget": accounting.remaining_budget if accounting is not None else None,
+                    "state": "sealed" if seal is not None else "not_sealed",
+                    "opened": False,
+                }
+            )
+    except (ProjectError, ledger.LedgerError, OSError, TypeError, ValueError, KeyError) as exc:
+        return _factor_holdout_error(command, exc)
+    return Envelope(
+        command=command,
+        summary=f"{len(rows)} families; holdouts have not been opened",
+        data={"families": rows},
     )
 
 

@@ -34,6 +34,24 @@ evaluation.
 `--base <git ref>` it also fails if any of them changed other than by appending.
 New projects run both in `.github/workflows/check.yml`.
 
+### Factor holdout seals
+
+A human seals a registered factor family's holdout with
+`sqy factor holdout seal --family F --dataset-id D`. The seal fixes the smallest
+declared trial budget, longest holdout months and earliest declared training
+cutoff, together with the dataset identity, last session and contributing factor
+identities, in `factor_holdouts.jsonl`. The start uses the strategy seal's month-end
+arithmetic. Both evidence layouts are supported and `sqy evidence verify` checks
+the seal log and per-family index.
+
+`sqy factor holdout status [--family F]` reads seals and trial usage. Sealing again
+writes nothing; changed declarations warn and cannot alter recorded values.
+Internal formula trial accounting counts evaluated trial identities, including
+trials missing p-values, separately from strategy trials. Budget checks use only
+the recorded seal; strategy budget extensions cannot enlarge it. These foundations
+expose no search, emission, holdout opening or evidence grade, and leave
+`factor evaluate` descriptive and unverified. Sealing is not an MCP tool.
+
 ### Several families in one repository
 
 A research lab that may sell strategy families separately sets

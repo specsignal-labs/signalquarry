@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Human-only `sqy factor holdout seal` and read-only `status`, with fixed conservative
+  family declarations, a verified chained seal log, and internal ledger-derived
+  trial accounting, formula append, budget and training-window checks (ADR 0014 steps a/b).
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and

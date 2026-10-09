@@ -151,11 +151,29 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
     )
     evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
     evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    holdout = actions.add_parser("holdout", help="Inspect factor seals or explicitly seal as a human.")
+    holdout_actions = holdout.add_subparsers(dest="holdout_action", required=True, parser_class=_Parser)
+    seal = holdout_actions.add_parser(
+        "seal",
+        help="Explicit human command: fix a family's factor holdout once; never open it.",
+        description="Explicit human command to seal a factor family's holdout once. Never opens the holdout; not an MCP tool.",
+    )
+    seal.add_argument("--family", required=True, help="registered factor family")
+    seal.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    status = holdout_actions.add_parser("status", help="Read factor seals and ledger-derived trial usage.")
+    status.add_argument("--family", help="show only this factor family")
+    for subparser in (seal, status):
+        subparser.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+        subparser.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
 
 def _factor(args: argparse.Namespace) -> Envelope:
     if args.action == "ls":
         return api.factor_ls(project=args.project)
+    if args.action == "holdout":
+        if args.holdout_action == "seal":
+            return api.factor_holdout_seal(args.family, args.dataset_id, project=args.project)
+        return api.factor_holdout_status(family=args.family, project=args.project)
     return api.factor_evaluate(
         args.factor,
         args.dataset_id,
@@ -707,15 +725,32 @@ def command_catalog() -> list[dict[str, Any]]:
         child = commands.choices[command.name]
         subparsers = next((a for a in child._actions if isinstance(a, argparse._SubParsersAction)), None)
         helps = {c.dest: c.help for c in subparsers._choices_actions} if subparsers else {}
+        subcommands: list[dict[str, Any]] = []
+        for name, subparser in subparsers.choices.items() if subparsers else []:
+            nested = next(
+                (action for action in subparser._actions if isinstance(action, argparse._SubParsersAction)),
+                None,
+            )
+            if nested is None:
+                subcommands.append(
+                    {"name": name, "help": helps.get(name) or "", "options": _options(subparser)}
+                )
+            else:
+                nested_helps = {action.dest: action.help for action in nested._choices_actions}
+                subcommands.extend(
+                    {
+                        "name": f"{name} {child_name}",
+                        "help": nested_helps.get(child_name) or "",
+                        "options": _options(child),
+                    }
+                    for child_name, child in nested.choices.items()
+                )
         catalog.append(
             {
                 "name": command.name,
                 "help": command.help,
                 "options": _options(child),
-                "subcommands": [
-                    {"name": name, "help": helps.get(name) or "", "options": _options(sub)}
-                    for name, sub in (subparsers.choices.items() if subparsers else [])
-                ],
+                "subcommands": subcommands,
             }
         )
     return catalog

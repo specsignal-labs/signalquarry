@@ -1067,6 +1067,50 @@ _CODES += (
         "Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "FACTOR_HOLDOUT_UNSEALED",
+        Category.EVIDENCE,
+        "The factor family has no recorded holdout seal.",
+        "Have a human run `sqy factor holdout seal --family F --dataset-id D` before research trials.",
+    ),
+    ReasonCode(
+        "FACTOR_TRAINING_WINDOW_INVALID",
+        Category.EVIDENCE,
+        "The training cutoff cannot establish the required session gap before the factor holdout.",
+        "Use a dataset session at least the longest label horizon before the first sealed session.",
+    ),
+    ReasonCode(
+        "FACTOR_SEARCH_INPUT_UNVERIFIED",
+        Category.EVIDENCE,
+        "Formula-search inputs have not passed the required identity, provenance or significance checks.",
+        "Verify input manifests, bind normalized formula identity and grammar, and provide a finite p-value in [0, 1].",
+    ),
+    ReasonCode(
+        "FACTOR_FAMILY_EMPTY",
+        Category.USAGE,
+        "No registered factor belongs to the requested family.",
+        "Run `sqy factor ls`; a human must register a factor declaring this family before sealing it.",
+    ),
+    ReasonCode(
+        "FACTOR_HOLDOUT_UNDECLARED",
+        Category.USAGE,
+        "The factor family declares neither holdout months nor a training cutoff.",
+        "Declare a holdout in factor.yaml before a human seals the family.",
+    ),
+    ReasonCode(
+        "FACTOR_HOLDOUT_DECLARATION_CHANGED",
+        Category.EVIDENCE,
+        "Current factor declarations or dataset selection differ from the immutable family seal.",
+        "Review the recorded seal and current declarations; resealing cannot change the fixed values.",
+    ),
+    ReasonCode(
+        "FACTOR_EVIDENCE_BUSY",
+        Category.EVIDENCE,
+        "Another factor seal or formula trial writer holds the project's evidence lock.",
+        "Wait for that writer to finish, then retry; keep the project configuration fixed while writing.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 

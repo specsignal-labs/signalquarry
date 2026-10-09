@@ -51,6 +51,11 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
 | `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
 | `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
+| `FACTOR_EVIDENCE_BUSY` | evidence | Another factor seal or formula trial writer holds the project's evidence lock. | Wait for that writer to finish, then retry; keep the project configuration fixed while writing. |
+| `FACTOR_FAMILY_EMPTY` | usage | No registered factor belongs to the requested family. | Run `sqy factor ls`; a human must register a factor declaring this family before sealing it. |
+| `FACTOR_HOLDOUT_DECLARATION_CHANGED` | evidence | Current factor declarations or dataset selection differ from the immutable family seal. | Review the recorded seal and current declarations; resealing cannot change the fixed values. |
+| `FACTOR_HOLDOUT_UNDECLARED` | usage | The factor family declares neither holdout months nor a training cutoff. | Declare a holdout in factor.yaml before a human seals the family. |
+| `FACTOR_HOLDOUT_UNSEALED` | evidence | The factor family has no recorded holdout seal. | Have a human run `sqy factor holdout seal --family F --dataset-id D` before research trials. |
 | `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
 | `FACTOR_IMPORT_FAILED` | signal | A registered factor module could not be imported. | Fix the module import and its dependencies in the project environment. |
 | `FACTOR_LABEL_ACTIONS_INVALID` | data | A modeled split or cash dividend is invalid or duplicated for the requested outcomes. | Verify action terms and resolve conflicting same-symbol, same-date records before labeling outcomes. |
@@ -64,9 +69,11 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
+| `FACTOR_SEARCH_INPUT_UNVERIFIED` | evidence | Formula-search inputs have not passed the required identity, provenance or significance checks. | Verify input manifests, bind normalized formula identity and grammar, and provide a finite p-value in [0, 1]. |
 | `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
 | `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
 | `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |
+| `FACTOR_TRAINING_WINDOW_INVALID` | evidence | The training cutoff cannot establish the required session gap before the factor holdout. | Use a dataset session at least the longest label horizon before the first sealed session. |
 | `FACTOR_UNIVERSE_INVALID` | data | A factor universe has duplicate, empty, or unavailable symbols. | Supply distinct symbols that exist in the verified panel. |
 | `FACTOR_UNIVERSE_TIMING_INVALID` | data | A factor universe was not observed by its decision cutoff. | Use timezone-aware observation and cutoff times from verified manifests. |
 | `FREEZE_REQUIRED` | evidence | The configuration is not frozen, so claims stay at in_sample and the holdout stays closed. | Run `sqy spec freeze --strategy <id>` before evaluating. |
