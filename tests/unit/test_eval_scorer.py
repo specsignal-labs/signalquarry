@@ -372,3 +372,85 @@ def test_behavior_probe_imports_only_the_requested_strategy(tmp_path: Path) -> N
 
     assert result["ok"] is True, result
     assert not marker.exists()
+
+
+STUDY_FILE = """\
+schema: signalquarry.study/v1
+id: trend-vs-hold
+hypothesis:
+  statement: Holding SYNA only above its 200-session average lowers maximum drawdown.
+  falsification: Maximum drawdown over the same sessions is not lower than buy-and-hold.
+base: sma-trend
+baselines:
+  - {id: buy-and-hold, kind: benchmark}
+variants:
+  - {id: costs-x2, execution: {costs: {bps: "10"}}, role: sensitivity}
+compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
+"""
+STUDY_EXPECT = {
+    "id": "trend-vs-hold",
+    "base": "sma-trend",
+    "compare": {"metric": "max_drawdown", "direction": "lower", "versus": "buy-and-hold"},
+    "max_variants": 3,
+}
+
+
+def _study_score(project: Path, expected: object = STUDY_EXPECT) -> dict:
+    return score(
+        project,
+        snapshot(project),
+        {"reached": [], "strategies": [], "study": expected},
+        str(Path(sys.executable).parent / "sqy"),
+        command_records=[],
+    )
+
+
+def test_a_study_must_exist_keep_its_rule_and_have_a_result_for_the_current_file(project: Path) -> None:
+    missing = _study_score(project)
+    assert missing["passed"] is False and missing["study"]["ok"] is False
+
+    path = project / "studies" / "trend-vs-hold" / "study.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text(STUDY_FILE)
+    unrun = _study_score(project)
+    assert unrun["study"]["errors"] == ["no recorded result for the study file as it is now"]
+
+    assert api.study_run("trend-vs-hold", project=project).status == "ok"
+    done = _study_score(project)
+    assert done["study"] == {"ok": True, "errors": [], "verdict": "not_supported"} and done["passed"] is True
+
+    # Changing the rule after the run makes a different study: the old result no longer counts,
+    # and the rule is not the one that was asked for.
+    path.write_text(
+        STUDY_FILE.replace("metric: max_drawdown, direction: lower", "metric: sharpe, direction: higher")
+    )
+    changed = _study_score(project)
+    assert changed["passed"] is False
+    assert changed["study"]["errors"] == [
+        "study comparison rule differs from the one asked for",
+        "no recorded result for the study file as it is now",
+    ]
+
+    path.write_text(STUDY_FILE.replace("base: sma-trend", "base: other"))
+    assert "study subject is other" in _study_score(project)["study"]["errors"]
+    path.write_text(STUDY_FILE.replace("variants:\n", "grid: {period: [100, 120, 150]}\nvariants:\n"))
+    assert "study has 4 variants; at most 3 allowed" in _study_score(project)["study"]["errors"]
+    path.write_text("not: a study\n")
+    assert _study_score(project)["study"]["ok"] is False
+    assert _study_score(project, {"nonsense": True})["study"]["errors"] == ["invalid study contract"]
+    assert _study_score(project, None)["study"] == {"ok": True, "errors": []}
+
+
+def test_an_edited_study_log_counts_as_tampering(project: Path) -> None:
+    log = project / "evidence" / "studies.jsonl"
+    log.write_text('{"seq": 1, "kind": "study_started"}\n')
+    before = snapshot(project)
+    log.write_text('{"seq": 1, "kind": "study_completed"}\n')
+    result = score(
+        project,
+        before,
+        {"reached": [], "strategies": []},
+        str(Path(sys.executable).parent / "sqy"),
+        command_records=[],
+    )
+    assert any("studies.jsonl" in item for item in result["tampering"])

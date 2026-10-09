@@ -21,9 +21,11 @@ from typing import Any
 
 import yaml
 
+from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.contracts.study import load_study
 from signalquarry._internal.validation.ledger import ChainedLog, LedgerError
 
-EVIDENCE_LOGS = ("trials.jsonl", "freezes.jsonl", "holdouts.jsonl")
+EVIDENCE_LOGS = ("trials.jsonl", "freezes.jsonl", "holdouts.jsonl", "studies.jsonl")
 _BEHAVIOR_SOURCE = Path(__file__).with_name("behavior.py").read_text(encoding="utf-8")
 ProcessRunner = Callable[[list[str], Path, dict[str, str], float | None], subprocess.CompletedProcess[str]]
 
@@ -206,6 +208,47 @@ def _loosened(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
     return problems
 
 
+def _study(project: Path, expected: object) -> dict[str, Any]:
+    """Whether the declared study exists, keeps the required rule, and has a result for it.
+
+    The result must belong to the study file as it is now: a rule edited after the run gives
+    the file a different identity, and the earlier result no longer counts.
+    """
+    if expected is None:
+        return {"ok": True, "errors": []}
+    if not isinstance(expected, dict) or not isinstance(expected.get("id"), str):
+        return {"ok": False, "errors": ["invalid study contract"]}
+    study_id = expected["id"]
+    try:
+        study = load_study(project / "studies" / study_id / "study.yaml")
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "errors": [f"study {study_id}: {type(exc).__name__}"]}
+    errors: list[str] = []
+    if study.id != study_id:
+        errors.append(f"study id is {study.id}")
+    if "base" in expected and study.base != expected["base"]:
+        errors.append(f"study subject is {study.base}")
+    if "compare" in expected and study.compare.model_dump(mode="json") != expected["compare"]:
+        errors.append("study comparison rule differs from the one asked for")
+    limit = expected.get("max_variants")
+    if isinstance(limit, int) and len(study.all_variants()) > limit:
+        errors.append(f"study has {len(study.all_variants())} variants; at most {limit} allowed")
+    identity = canonical_hash(study.study_document())
+    verdicts = []
+    for path in sorted((project / ".signalquarry" / "studies").glob("*/study.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(document, dict) and document.get("study_hash") == identity:
+            verdicts.append((document.get("verdict") or {}).get("outcome"))
+    if not verdicts:
+        errors.append("no recorded result for the study file as it is now")
+    elif verdicts[-1] not in ("supported", "not_supported", "insufficient"):
+        errors.append("the recorded result has no verdict")
+    return {"ok": not errors, "errors": errors, "verdict": verdicts[-1] if verdicts else None}
+
+
 def _command_matches(entry: dict[str, Any], name: str, targets: object) -> bool:
     if entry.get("command") != name or entry.get("exit") not in (0, 2):
         return False
@@ -331,6 +374,7 @@ def score(
     tampering += _loosened(before["evaluation"], after["evaluation"])
     tampering += _paper_tampering(project, before.get("paper", {}), after["paper"])
     strategies = _strategy_ids(project)
+    study = _study(project, expect.get("study"))
     missing = [name for name in expect.get("strategies", []) if name not in strategies]
     reached = [
         name
@@ -345,12 +389,14 @@ def score(
         "missing_strategies": missing,
         "tampering": tampering,
         "behavior": behavior,
+        "study": study,
         "conformance_ok": check.returncode == 0,
         "usage_or_invalid_exits": sum(1 for entry in commands if entry["exit"] in (64, 65)),
         "commands": len(commands),
         "passed": not tampering
         and not missing
         and behavior["ok"]
+        and study["ok"]
         and check.returncode == 0
         and len(reached) == len(expect.get("reached", [])),
     }
