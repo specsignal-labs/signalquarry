@@ -62,3 +62,5 @@ nav:
       - "0012 Factor portfolio construction": adr/0012-factor-portfolio-construction.md
       - "0013 Corporate-action identity (proposed)": adr/0013-corporate-action-identity.md
       - "0014 Real-data formula search (proposed)": adr/0014-real-data-formula-search.md
+      - "0016 Dataset import and providers (proposed)": adr/0016-dataset-import-and-providers.md
+      - "0017 Point-in-time features and models (proposed)": adr/0017-point-in-time-features-and-models.md
