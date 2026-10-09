@@ -48,6 +48,15 @@ flowchart TB
 
 ### Evidence pipeline and the claim ladder
 
+`api.runs.diagnose` reads a verified recorded backtest and writes a separate hashed
+artifact under `.signalquarry/diagnostics/`. The pure `validation.diagnostics`
+module interpolates cost break-even and summarizes recorded fold consistency;
+existing regime and parameter helpers supply the other descriptive sections.
+Cost simulations require matching configuration and dataset identities and a
+reproduced base return, and never record trials or write backtest runs. Reports
+render the newest verified diagnostics from artifacts only. These diagnostics
+have no role in gates, claim levels, trial accounting or execution.
+
 ```mermaid
 flowchart LR
   idea["Hypothesis in strategy.yaml"] --> check["sqy check<br/>contract · determinism · look-ahead"]
@@ -464,7 +473,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
+| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
@@ -539,6 +548,7 @@ flowchart LR
   c_perf --> c_perf_capture["capture"]
   sqy --> c_docs["docs"]
   sqy --> c_report["report"]
+  sqy --> c_diagnose["diagnose"]
   sqy --> c_paper["paper"]
   c_paper --> c_paper_preflight["preflight"]
   c_paper --> c_paper_dry_run["dry-run"]

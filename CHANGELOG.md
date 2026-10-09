@@ -7,6 +7,10 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy diagnose --strategy ID [--run RUN_ID]` writes descriptive regime and calendar-year
+  performance, cost sensitivity with an interpolated break-even, recorded fold consistency,
+  and recorded parameter sensitivity. `sqy report` includes the newest verified diagnostics
+  when present. Diagnostics never change runs, trial counts, gates or claims.
 - Agent surface for research: new projects' `AGENTS.md` gains a "Research method" block
   (baseline first, one variant at a time, compare rather than eyeball, write a study, report
   the verdict as it is); `sqy init --upgrade-agents-md` adds it to existing projects. The MCP
