@@ -38,6 +38,10 @@ change provisional surfaces after deprecation).
   evidence grade), dotted-path differences between two runs' parameters and specifications,
   return correlation, and a paired moving-block bootstrap interval for the difference in
   Sharpe ratio. Runs that are not comparable are not differenced. No command uses it yet.
+- ADR 0015 (proposed): research studies as declared, comparable sets of runs, with the
+  trial rule for each kind of arm, refusal before spending, resume and a rule-bound verdict.
+  The strict `study.yaml` contract (`signalquarry.study/v1`) is in place; no command reads it
+  yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and
