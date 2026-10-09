@@ -7,6 +7,12 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy runs ls | show | compare`: list recent runs, show one run's verified result document,
+  and compare runs against a reference (configuration differences, return correlation and a
+  paired bootstrap interval for the Sharpe difference), written as `comparison.json`,
+  `comparison.md` and an overlay chart. Runs that are not comparable are listed but not
+  differenced (`RUNS_NOT_COMPARABLE`). New reason codes `RUN_NOT_FOUND` and
+  `RUN_ARTIFACT_INVALID`.
 - `sqy backtest --param NAME=VALUE` (repeatable) runs a one-off variant without editing
   `strategy.yaml`, and `--label` names the run. A variant has its own configuration hash; on
   real data it is a trial and is refused beforehand when it would exceed the family's budget.
@@ -156,6 +162,9 @@ change provisional surfaces after deprecation).
   identical values, read-only arrays and ledger hashes.
 
 ### Fixed
+- `sqy report` and run listings order runs by their recorded creation time. Run ids carry a
+  timestamp to the second, so runs made within one second were ordered by configuration hash
+  and "the latest run" could be the wrong one.
 - Alpaca data fetch now requests all corporate-action types and blocks unsupported events or splits with a new symbol before building a dataset, so those events cannot silently become ordinary price gaps.
 - Evidence verification now reports non-object JSONL records as `EVIDENCE_LOG_CORRUPT`
   instead of an internal error.
