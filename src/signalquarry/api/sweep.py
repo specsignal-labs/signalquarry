@@ -5,8 +5,7 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import replace
-from datetime import timedelta
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,23 +15,23 @@ from pydantic import ValidationError
 
 from signalquarry._internal.contracts import progress
 from signalquarry._internal.engine.backtest import EngineError
-from signalquarry._internal.engine.run import simulate
-from signalquarry._internal.project.project import LoadedStrategy
-from signalquarry._internal.validation import ledger
-from signalquarry._internal.validation.evaluate import equity_returns
-from signalquarry._internal.validation.metrics import summarize
-from signalquarry._internal.validation.stats import moments, pbo_cscv
-from signalquarry.api.envelope import Envelope
-from signalquarry.api.evidence import (
-    budget_warnings,
-    family_seal,
-    record_run_trial,
-    trial_budget,
-    trial_evidence,
+from signalquarry._internal.evidence.runs import (
+    csv_text,
+    new_run_id,
+    result_document,
+    unique_run_id,
+    write_run,
 )
+from signalquarry._internal.project.project import LoadedStrategy
+from signalquarry._internal.validation.benchmark import BenchmarkCurve
+from signalquarry._internal.validation.stats import pbo_cscv
+from signalquarry.api.envelope import Envelope
+from signalquarry.api.evidence import budget_shortfall, budget_warnings, family_seal, trial_evidence
 from signalquarry.api.resolve import resolve
+from signalquarry.api.runs import execute_run
 
 MAX_POINTS = 200
+SWEEP_SCHEMA = "signalquarry.sweep/v1"
 
 
 def _grid(assignments: list[str]) -> list[dict[str, Any]] | str:
@@ -49,7 +48,19 @@ def _grid(assignments: list[str]) -> list[dict[str, Any]] | str:
     return points
 
 
-def sweep(strategy_id: str, assignments: list[str], *, project: Path | None = None) -> Envelope:
+def sweep(
+    strategy_id: str,
+    assignments: list[str],
+    *,
+    summary_only: bool = False,
+    project: Path | None = None,
+) -> Envelope:
+    """Backtest every grid point as its own run and record the sweep.
+
+    Each point is written under ``.signalquarry/runs/`` like a backtest (``summary_only``
+    leaves out its fills and decisions); the grid, the run ids and the PBO go to
+    ``.signalquarry/sweeps/<sweep_id>/``.
+    """
     envelope = Envelope(command="sweep")
     grid = _grid(assignments)
     if isinstance(grid, str) or not grid:
@@ -78,30 +89,27 @@ def sweep(strategy_id: str, assignments: list[str], *, project: Path | None = No
             return envelope
         variants.append((point, replace(strategy, params=params)))
     if resolved.grade != "synthetic":
-        known = {
-            e["configuration_hash"]
-            for e in ledger.trials(root, spec.family).entries()
-            if e.get("kind") == "trial"
-        }
-        new = {v.configuration_hash for _, v in variants} - known
-        used = ledger.trial_summary(root, spec.family)["family_count"]
-        budget = trial_budget(root, spec.evaluation.trial_budget, spec.family)
-        if used + len(new) > budget:
+        shortfall = budget_shortfall(root, spec, {v.configuration_hash for _, v in variants})
+        if shortfall is not None:
             envelope.status, envelope.reason_codes = "blocked", ["TRIAL_BUDGET_EXHAUSTED"]
-            envelope.summary = (
-                f"{len(new)} new trials would exceed family {spec.family}'s budget ({used}/{budget} used)"
-            )
+            envelope.summary = shortfall
             return envelope
     seal = family_seal(root, spec.family)
     end = seal - timedelta(days=1) if seal is not None else None
     rows: list[dict[str, Any]] = []
     series: list[np.ndarray] = []
-    chains = resolved.recorded_chains()
+    benchmarks: dict[Any, BenchmarkCurve | None] = {}
+    warnings: set[str] = set()
+    dataset_identity = ""
     for number, (point, variant) in enumerate(variants):
         progress.emit("sweep", point=point, done=number, total=len(variants))
         try:
-            result = simulate(
-                spec, variant.definition, variant.params, resolved.dataset, end=end, recorded_chains=chains
+            run = execute_run(
+                replace(resolved, strategy=variant),
+                command="sweep",
+                end=end,
+                detail="summary" if summary_only else "full",
+                benchmarks=benchmarks,
             )
         except EngineError as exc:
             envelope.status, envelope.reason_codes, envelope.summary = (
@@ -110,36 +118,29 @@ def sweep(strategy_id: str, assignments: list[str], *, project: Path | None = No
                 str(exc),
             )
             return envelope
-        returns = equity_returns(result, spec.account.initial_cash)
-        m = moments(returns)
-        record_run_trial(
-            replace(resolved, strategy=variant),
-            command="sweep",
-            returns=returns,
-            moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
-            window=(result.sessions[0], result.sessions[-1]),
-        )
-        metrics = summarize(
-            result.sessions,
-            result.equity,
-            spec.account.initial_cash,
-            fills=len(result.fills),
-            fees=Decimal(0),
-        )
+        warnings.update(run.warnings)
+        dataset_identity = run.dataset_identity
+        block: dict[str, Any] = run.context.get("benchmark") or {}
+        relative: dict[str, Any] = block.get("relative", {})
         rows.append(
             {
                 "params": point,
                 "configuration_hash": variant.configuration_hash,
-                "total_return": metrics.get("total_return"),
-                "sharpe": metrics.get("sharpe"),
-                "max_drawdown": metrics.get("max_drawdown"),
-                "fills": len(result.fills),
+                "run_id": run.run_id,
+                "total_return": run.metrics.get("total_return"),
+                "sharpe": run.metrics.get("sharpe"),
+                "max_drawdown": run.metrics.get("max_drawdown"),
+                "fills": run.fill_count,
+                **(
+                    {"excess_total_return": relative["excess_total_return"]}
+                    if "excess_total_return" in relative
+                    else {}
+                ),
             }
         )
-        series.append(returns)
+        series.append(run.returns)
     length = min(len(s) for s in series)
     pbo = pbo_cscv(np.column_stack([s[-length:] for s in series])) if len(series) >= 2 else None
-    envelope.data = {"points": rows, "pbo": pbo, "holdout_clipped": seal is not None}
     envelope.evidence = {
         "grade": resolved.evidence_grade,
         "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
@@ -147,6 +148,64 @@ def sweep(strategy_id: str, assignments: list[str], *, project: Path | None = No
         if resolved.grade == "synthetic"
         else trial_evidence(root, spec.family, strategy.configuration_hash),
     }
+    axes = list(grid[0])
+    sweep_id = unique_run_id(
+        root, new_run_id(strategy.configuration_hash, datetime.now(UTC)) + "-sweep", kind="sweeps"
+    )
+    envelope.artifacts = write_run(
+        root,
+        sweep_id,
+        {
+            "sweep.json": result_document(
+                schema=SWEEP_SCHEMA,
+                sweep_id=sweep_id,
+                strategy_id=spec.id,
+                family=spec.family,
+                base_configuration_hash=strategy.configuration_hash,
+                dataset_id=resolved.dataset_id,
+                dataset_identity=dataset_identity,
+                grid={axis: list(dict.fromkeys(point[axis] for point in grid)) for axis in axes},
+                points=rows,
+                pbo=pbo,
+                holdout_clipped=seal is not None,
+                summary_only=summary_only,
+                evidence=envelope.evidence,
+            ),
+            "sweep.csv": csv_text(
+                [
+                    *axes,
+                    "configuration_hash",
+                    "run_id",
+                    "total_return",
+                    "sharpe",
+                    "max_drawdown",
+                    "fills",
+                    "excess_total_return",
+                ],
+                [
+                    [
+                        *(str(row["params"][axis]) for axis in axes),
+                        row["configuration_hash"],
+                        row["run_id"],
+                        *(
+                            "" if row.get(key) is None else str(row[key])
+                            for key in (
+                                "total_return",
+                                "sharpe",
+                                "max_drawdown",
+                                "fills",
+                                "excess_total_return",
+                            )
+                        ),
+                    ]
+                    for row in rows
+                ],
+            ),
+        },
+        kind="sweeps",
+    )
+    envelope.data = {"sweep_id": sweep_id, "points": rows, "pbo": pbo, "holdout_clipped": seal is not None}
+    envelope.warnings += sorted(warnings)
     if resolved.grade != "synthetic":
         envelope.warnings += budget_warnings(root, spec.evaluation.trial_budget, spec.family)
     envelope.summary = (

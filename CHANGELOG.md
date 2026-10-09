@@ -7,6 +7,11 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Sweep points are persisted: `sqy sweep` writes each grid point as an ordinary run directory
+  and records the sweep in `.signalquarry/sweeps/<sweep_id>/` (`sweep.json`, `sweep.csv`);
+  `--summary-only` leaves out per-point fills and decisions. `result.json` now carries the
+  `command`, `params` and hashed `spec` that produced a run. Backtests and sweeps share one run
+  writer, which also corrects the fees reported for sweep points (they were always zero).
 - Benchmark comparison for the declared `benchmark`: `sqy backtest` writes `benchmark.csv`, a
   `benchmark` block in `result.json` (benchmark metrics and relative statistics), drawdown
   episodes and trading activity, and headline benchmark numbers in the envelope's `metrics`;

@@ -156,3 +156,13 @@ def test_a_caller_field_may_not_silently_change_the_schema_label() -> None:
     document = json.loads(result_document(schema="signalquarry.result/v9"))
     assert document["schema"] == "signalquarry.result/v9"
     assert document["result_hash"] == canonical_hash({"schema": "signalquarry.result/v9"})
+
+
+def test_other_kinds_of_run_directory_are_separate(tmp_path: Path) -> None:
+    artifacts = write_run(tmp_path, "s1", {"sweep.json": "{}"}, kind="sweeps")
+    assert artifacts[0]["path"] == ".signalquarry/sweeps/s1/sweep.json"
+    assert not (tmp_path / ".signalquarry" / "runs").exists()
+    assert unique_run_id(tmp_path, "s1") == "s1"  # no run of that name
+    assert unique_run_id(tmp_path, "s1", kind="sweeps") == "s1-2"
+    with pytest.raises(FileExistsError):
+        write_run(tmp_path, "s1", {"sweep.json": "{}"}, kind="sweeps")
