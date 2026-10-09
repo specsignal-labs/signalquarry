@@ -9,6 +9,8 @@
 * ``freezes.jsonl`` — ``sqy spec freeze`` records (hypothesis, gates, holdout seal) and
   ``sqy holdout seal`` records (``kind: seal``: a family's seal without a freeze).
 * ``holdouts.jsonl`` — the single permitted opening of each family's holdout.
+* ``studies.jsonl`` — what each research study set out to run and what became of every arm
+  (started, arm completed or failed, completed), under the subject strategy's family.
 
 Layouts (``signalquarry.toml`` → ``[evidence] layout``):
 
@@ -93,12 +95,13 @@ class ChainedLog:
         return entry
 
 
-KINDS = ("trials", "factor_trials", "freezes", "holdouts")
+KINDS = ("trials", "factor_trials", "freezes", "holdouts", "studies")
 SCHEMAS = {
     "trials": "signalquarry.trial/v1",
     "factor_trials": "signalquarry.factor-trial/v1",
     "freezes": "signalquarry.freeze/v1",
     "holdouts": "signalquarry.holdout-opening/v1",
+    "studies": "signalquarry.study-log/v1",
 }
 
 
@@ -166,6 +169,10 @@ def freezes(root: Path, family: str | None = None) -> ChainedLog:
 
 def holdouts(root: Path, family: str | None = None) -> ChainedLog:
     return _log(root, "holdouts", family)
+
+
+def studies(root: Path, family: str | None = None) -> ChainedLog:
+    return _log(root, "studies", family)
 
 
 def append(root: Path, kind: str, family: str, record: dict[str, Any]) -> dict[str, Any]:

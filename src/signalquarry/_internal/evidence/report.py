@@ -448,3 +448,147 @@ def render_comparison(comparison: dict[str, Any], *, labels: dict[str, str], cha
         )
     lines += ["", "---", "", f"*{DISCLAIMER}*", ""]
     return "\n".join(lines)
+
+
+_VERDICT_WORDING = {
+    "supported": "Supported",
+    "not_supported": "Not supported",
+    "insufficient": "Insufficient evidence",
+}
+_PERCENT_METRICS = ("total_return", "cagr", "max_drawdown", "annual_volatility")
+
+
+def _metric_text(metric: str, value: Any, *, signed: bool = False) -> str:
+    if value is None:
+        return "–"
+    if metric in _PERCENT_METRICS:
+        return f"{float(value):+.2%}" if signed else f"{float(value):.2%}"
+    return f"{float(value):+.2f}" if signed else f"{float(value):.2f}"
+
+
+def render_study(result: dict[str, Any], *, chart: bool) -> str:
+    """``comparison.md`` for one run of a study (``signalquarry.study-result/v1``)."""
+    study, outcome, comparison = result["study"], result["verdict"], result["comparison"]
+    rule = study["compare"]
+    grade = result["evidence"]["grade"]
+    lines = [
+        f"# Study {result['study_id']}",
+        "",
+        f"> **Evidence:** grade `{grade}`, claim level `{result['evidence']['claim_level']}`. A study compares "
+        "in-sample backtests by a rule declared beforehand. It does not raise a claim level.",
+    ]
+    if grade == "synthetic":
+        lines.append("> Synthetic data: these numbers say nothing about real markets.")
+    lines += [
+        "",
+        "## Hypothesis",
+        "",
+        study["hypothesis"]["statement"],
+        "",
+        f"*Falsified if:* {study['hypothesis']['falsification']}",
+        "",
+        "## Verdict",
+        "",
+        f"**{_VERDICT_WORDING.get(outcome['outcome'], outcome['outcome'])}.** Declared rule: `{rule['metric']}` "
+        f"of the subject `{result['base']}` is {rule['direction']} than that of `{rule['versus']}`.",
+        "",
+        f"- Subject {_metric_text(rule['metric'], outcome.get('subject'))}, baseline "
+        f"{_metric_text(rule['metric'], outcome.get('baseline'))}, difference "
+        f"{_metric_text(rule['metric'], outcome.get('difference'), signed=True)}.",
+    ]
+    interval = outcome.get("interval_90")
+    lines.append(
+        "- Paired 90% interval of the difference: "
+        + (
+            "not available."
+            if interval is None
+            else f"{_metric_text(rule['metric'], interval[0], signed=True)} to "
+            f"{_metric_text(rule['metric'], interval[1], signed=True)}."
+        )
+    )
+    lines.append(f"- Why: {outcome['reason']}.")
+    if not comparison["comparable"]:
+        lines.append(f"- The arms are not all comparable ({', '.join(comparison['reasons'])}).")
+    lines += [
+        "",
+        f"## Arms over {result['sessions']} sessions",
+        "",
+        "| Arm | Role | Trial | Total return | CAGR | Annual volatility | Sharpe | Max drawdown |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for arm in result["arms"]:
+        m = arm["metrics"]
+        lines.append(
+            f"| {arm['id']} | {arm['role']} | {'yes' if arm['counts'] else 'no'} | "
+            f"{_percent(m.get('total_return'))} | {_percent(m.get('cagr'))} | "
+            f"{_percent(m.get('annual_volatility'))} | {_number(m.get('sharpe'))} | "
+            f"{_percent(m.get('max_drawdown'))} |"
+        )
+    lines.append("")
+    if chart:
+        lines += ["![Growth of 1](equity.svg)", ""]
+    changed = [arm for arm in result["arms"] if "changes" in arm]
+    if changed:
+        lines += ["## What each variant changes", ""]
+        for arm in changed:
+            parts = [
+                f"parameter `{path}`: {_change(values)}" for path, values in arm["changes"]["params"].items()
+            ]
+            parts += [f"`{path}`: {_change(values)}" for path, values in arm["changes"]["spec"].items()]
+            note = f" ({arm['note']})" if arm.get("note") else ""
+            lines.append(
+                f"- **{arm['id']}**, {arm['role']}{note}: " + ("; ".join(parts) or "no recorded difference")
+            )
+        lines.append("")
+    if comparison["pairs"]:
+        lines += [
+            f"## Against `{rule['versus']}`",
+            "",
+            "| Arm | Return correlation | Sharpe difference | 90% interval | Total return | Max drawdown |",
+            "|---|---|---|---|---|---|",
+        ]
+        for arm_id, pair in comparison["pairs"].items():
+            band = pair.get("sharpe_difference_90")
+            lines.append(
+                f"| {arm_id} | {_number(pair.get('correlation'))} | "
+                f"{'–' if pair.get('sharpe_difference') is None else format(pair['sharpe_difference'], '+.2f')} | "
+                f"{'–' if band is None else f'{band[0]:+.2f} to {band[1]:+.2f}'} | "
+                f"{pair['total_return_difference']:+.2%} | {pair['max_drawdown_difference']:+.2%} |"
+            )
+        lines += [
+            "",
+            "Differences are the arm minus the baseline. Variants are shown beside the subject, not as a "
+            "ranking to pick from: choosing the best row afterwards is what the trial count prices.",
+            "",
+        ]
+    pbo = result.get("pbo")
+    if pbo and pbo.get("splits"):
+        lines += [
+            "## Overfitting",
+            "",
+            f"Probability of backtest overfitting across the {pbo['configurations']} candidate "
+            f"configurations: {pbo['pbo']:.2f} over {pbo['splits']} splits. Near 0.5, the best of them is "
+            "mostly luck.",
+            "",
+        ]
+    if result.get("trials"):
+        lines += ["## Trials", ""]
+        for family, row in result["trials"].items():
+            lines.append(
+                f"- Family `{family}`: this study added {row['new']} new configuration(s); "
+                f"{row['used']} of {row['budget']} were already used before it."
+            )
+        lines.append("")
+    lines += [
+        "## Identity",
+        "",
+        f"- Study: `{result['study_hash']}`",
+        f"- Dataset: `{result['dataset_identity']}` (`{result['dataset_id']}`)",
+        f"- Window: {result['window']['start'] or 'first session'} to {result['window']['end'] or 'last session'}"
+        + (" (clipped at the sealed holdout)" if result.get("holdout_clipped") else ""),
+    ]
+    for arm in result["arms"]:
+        if arm.get("run_id"):
+            lines.append(f"- {arm['id']}: run `{arm['run_id']}`, configuration `{arm['configuration_hash']}`")
+    lines += ["", "---", "", f"*{DISCLAIMER}*", ""]
+    return "\n".join(lines)

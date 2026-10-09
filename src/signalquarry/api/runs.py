@@ -61,6 +61,7 @@ class RunOutcome:
     dataset_identity: str
     fill_count: int
     engine_warnings: list[str]
+    result_hash: str = ""
     warnings: list[str] = field(default_factory=list[str])
     next_actions: list[dict[str, str]] = field(default_factory=list[dict[str, str]])
 
@@ -91,12 +92,15 @@ def execute_run(
     label: str | None = None,
     detail: Detail = "full",
     benchmarks: dict[tuple[date, date, int], BenchmarkCurve | None] | None = None,
+    record: bool = True,
 ) -> RunOutcome:
     """Simulate ``resolved.strategy``, record its trial and write its run directory.
 
     Raises :class:`EngineError` before anything is written when the simulation fails.
     ``detail="summary"`` keeps ``result.json`` and the equity curves and leaves out fills and
     decisions. ``benchmarks`` lets a caller that runs many variants share benchmark curves.
+    ``record=False`` is for a run that is not a candidate (a study's sensitivity arm): it
+    writes the run and appends no trial.
     """
     root, strategy = resolved.root, resolved.strategy
     spec = strategy.spec
@@ -152,13 +156,14 @@ def execute_run(
     try:
         returns = equity_returns(result, initial)
         m = moments(returns)
-        record_run_trial(
-            resolved,
-            command=command,
-            returns=returns,
-            moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
-            window=(result.sessions[0], result.sessions[-1]),
-        )
+        if record:
+            record_run_trial(
+                resolved,
+                command=command,
+                returns=returns,
+                moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
+                window=(result.sessions[0], result.sessions[-1]),
+            )
         metrics = summarize(result.sessions, result.equity, initial, fills=fill_count, fees=fees)
         # Descriptive context for the same run: none of it enters a gate or the claim level.
         context: dict[str, Any] = {"drawdowns": drawdown_episodes(result.sessions, result.equity, initial)}
@@ -188,27 +193,34 @@ def execute_run(
             if resolved.grade == "synthetic"
             else trial_evidence(root, spec.family, strategy.configuration_hash),
         }
+        document = result_document(
+            run_id=run_id,
+            strategy_id=spec.id,
+            strategy_version=spec.version,
+            configuration_hash=strategy.configuration_hash,
+            code_tree_hash=strategy.code_tree_hash,
+            dataset_id=resolved.dataset_id,
+            dataset_identity=result.dataset_identity,
+            ledger_hash=result.ledger_hash,
+            evidence=evidence,
+            metrics=metrics,
+            warnings=result.warnings,
+            # What produced the run, so that two runs can be told apart without the project.
+            command=command,
+            params=strategy.params.model_dump(mode="json"),
+            # The declared parameters stay out of `spec`: `params` holds the ones used.
+            spec={key: value for key, value in spec.outcome_document().items() if key != "params"},
+            # The window that was asked for (after any holdout clip), not the sessions found.
+            window={
+                "start": None if start is None else start.isoformat(),
+                "end": None if end is None else end.isoformat(),
+            },
+            trial_recorded=record and resolved.grade != "synthetic",
+            **({} if label is None else {"label": label}),
+            **context,
+        )
         files: dict[str, str | bytes | Iterable[str | bytes]] = {
-            "result.json": result_document(
-                run_id=run_id,
-                strategy_id=spec.id,
-                strategy_version=spec.version,
-                configuration_hash=strategy.configuration_hash,
-                code_tree_hash=strategy.code_tree_hash,
-                dataset_id=resolved.dataset_id,
-                dataset_identity=result.dataset_identity,
-                ledger_hash=result.ledger_hash,
-                evidence=evidence,
-                metrics=metrics,
-                warnings=result.warnings,
-                # What produced the run, so that two runs can be told apart without the project.
-                command=command,
-                params=strategy.params.model_dump(mode="json"),
-                # The declared parameters stay out of `spec`: `params` holds the ones used.
-                spec={key: value for key, value in spec.outcome_document().items() if key != "params"},
-                **({} if label is None else {"label": label}),
-                **context,
-            ),
+            "result.json": document,
             "equity.csv": csv_chunks(
                 ["session", "equity", "settled_cash"],
                 [
@@ -243,6 +255,7 @@ def execute_run(
         dataset_identity=result.dataset_identity,
         fill_count=fill_count,
         engine_warnings=result.warnings,
+        result_hash=str(json.loads(document)["result_hash"]),
         warnings=warnings,
         next_actions=next_actions,
     )

@@ -37,6 +37,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy holdout`: Seal a family's holdout early, or show seals and openings.
 - `sqy sweep`: Backtest a parameter grid (each point on real data is a trial); reports PBO.
 - `sqy runs`: List, show and compare backtest runs.
+- `sqy study`: Declared comparisons: a subject, baselines and bounded variants under one rule.
 - `sqy backtest`: Backtest a strategy and write run artifacts.
 - `sqy evidence`: Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
 - `sqy commit`: Salted commitments to frozen strategies and journal heads (OpenTimestamps).
@@ -381,6 +382,62 @@ the evidence grade. Otherwise the command still lists them, warns
 (`RUN_ARTIFACT_INVALID`). Comparisons are in-sample and never raise a claim level:
 picking the best row is exactly what the trial ledger and the deflated Sharpe ratio
 are there to price.
+
+## Studies: a declared comparison
+
+A study answers "does this idea add something over a baseline?" with the rule written
+down first. It is a file, `studies/<id>/study.yaml`:
+
+```yaml
+schema: signalquarry.study/v1
+id: trend-vs-hold
+hypothesis:
+  statement: Holding SPY only above its 200-session average lowers drawdown versus buy-and-hold.
+  falsification: Max drawdown over the same sessions is not lower than buy-and-hold.
+base: sma-trend                       # the subject strategy
+baselines:
+  - {id: buy-and-hold, kind: benchmark}        # engine buy-and-hold of the benchmark
+  - {id: vol-matched, kind: benchmark_scaled}  # the same, scaled to the subject's volatility
+variants:
+  - {id: half-weight, params: {weight: "0.5"}, role: ablation}
+  - {id: costs-x2, execution: {costs: {bps: "10"}}, role: sensitivity}
+grid: {period: [100, 150]}            # optional; each point is a candidate
+compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
+```
+
+```bash
+sqy study init --strategy sma-trend --id trend-vs-hold   # scaffold the file
+sqy study check --study trend-vs-hold    # arms, and the trials it would record; runs nothing
+sqy study run --study trend-vs-hold      # run every arm and compare
+sqy study show --study trend-vs-hold     # the latest result
+sqy study ls
+```
+
+What a study guarantees:
+
+- **Comparable arms.** Every arm runs on the subject's dataset over the same window, clipped
+  at the sealed holdout. A study has no way to open a holdout.
+- **Counted arms.** On real data the subject, every `candidate` and `ablation` variant and
+  every `strategy` baseline is a trial in its family. Benchmark baselines are not trials.
+  A `sensitivity` variant changes execution or cost assumptions only, cannot be selected, and
+  is not a trial. `study check` shows the count against each budget, and a study that would
+  exceed a budget is refused before anything runs.
+- **A rule-bound verdict.** `supported` needs the subject to be better than the `versus`
+  baseline on the declared metric, with a paired 90% bootstrap interval of the difference
+  wholly on that side. Better with an interval that contains zero is `insufficient`. Not
+  better is `not_supported`. The verdict is descriptive: it never raises a claim level, and
+  only `sqy evaluate` on a frozen configuration does.
+- **A history.** Each arm is an ordinary run, so a second `study run` reuses finished arms
+  and an interrupted study picks up where it stopped without counting anything twice.
+  `--rerun` recomputes every arm and requires the ledger hash recorded before. On real data
+  `evidence/studies.jsonl` records what each study set out to run and what became of every
+  arm, including failures; `sqy evidence verify` checks it.
+
+The result is written to `.signalquarry/studies/<run>/` as `study.json`, `comparison.md`
+and a chart. Variants appear beside the subject with the probability of backtest
+overfitting across them, not as a ranking: each configuration a study tries raises the
+deflated-Sharpe bar the strategy must later clear. Editing `study.yaml` makes a different
+study with its own identity.
 
 ## Freeze and holdout
 
@@ -1286,6 +1343,56 @@ Compare two or more runs against the first; writes comparison.md.
 | `runs` | run ids; the first is the reference |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+## `sqy study`
+
+Declared comparisons: a subject, baselines and bounded variants under one rule.
+
+### `sqy study init`
+
+Scaffold studies/ID/study.yaml for a strategy.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | the subject strategy id (required) |
+| `--id` | id of the new study (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study check`
+
+Validate a study, list its arms and the trials it would record; runs nothing.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study run`
+
+Run every arm on one dataset and window and compare them by the declared rule.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--rerun` | recompute arms that already have a run and require the same ledger hash |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study ls`
+
+List studies and the verdict of each one's latest run.
+
+| Option | Meaning |
+|---|---|
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy study show`
+
+Show the latest recorded result of a study.
+
+| Option | Meaning |
+|---|---|
+| `--study` | study id (required) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
 ## `sqy backtest`
 
 Backtest a strategy and write run artifacts.
@@ -1744,6 +1851,15 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `STRATEGY_SPEC_MISSING` | signal | strategy.yaml is missing next to the strategy module. | Add strategy.yaml next to strategy.py. |
 | `STRATEGY_STATE_NOT_SERIALIZABLE` | signal | Strategy state must be canonical JSON (string keys, finite numbers, aware datetimes). | Store plain JSON values in state. |
 | `STRATEGY_STATE_TOO_LARGE` | signal | Strategy state exceeds 16 KB of canonical JSON. | Keep state small; recompute from bars instead. |
+| `STUDY_ARM_INVALID` | usage | An arm of the study cannot be built: invalid parameters or execution settings, a variant that changes nothing, or a baseline the dataset does not cover. | Correct the arm named in the summary. |
+| `STUDY_BENCHMARK_UNDECLARED` | usage | The strategy declares no benchmark, so the scaffolded benchmark baseline has no symbol yet. | Give the baseline a `symbol`, or declare `benchmark` in strategy.yaml. |
+| `STUDY_DATASET_MISMATCH` | data | The study pins a dataset other than the one its subject strategy resolves to. | Fetch or select the pinned dataset, or update `dataset` in the study file (that makes a new study). |
+| `STUDY_DETERMINISM_FAILED` | evidence | Recomputing an arm gave a different ledger than the run recorded earlier for the same configuration, dataset and window. | Do not use either result. Check that the strategy is pure (`sqy check`) and that the cached data verifies (`sqy data verify`). |
+| `STUDY_EXISTS` | usage | A study file with that id already exists. | Choose another id or edit the existing file. |
+| `STUDY_FILE_CHANGED` | evidence | The study file was edited after the result shown was produced, so the result belongs to a different study. | Run the study again to get a result for the current file. |
+| `STUDY_NOT_FOUND` | usage | The project has no `studies/<id>/study.yaml` with that id. | Run `sqy study ls`, or create one with `sqy study init --strategy <id> --id <study>`. |
+| `STUDY_NO_RESULT` | usage | The study has not been run yet. | Run `sqy study run --study <id>`. |
+| `STUDY_SPEC_INVALID` | usage | The study file does not satisfy the `signalquarry.study/v1` contract. | Fix the field named in the summary; the id must match the directory name. |
 | `SWEEP_RESULTS_ARE_IN_SAMPLE` | evidence | Sweep results are in-sample and raise the trial count. | Pick a configuration by reasoning, freeze it, then evaluate. |
 | `SWEEP_TOO_LARGE` | usage | The parameter grid has too many points. | Sweep fewer, better-reasoned values; each point on real data is a trial. |
 | `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |
