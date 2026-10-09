@@ -36,12 +36,18 @@ worked from start to finish, including the part where the hypothesis is rejected
 | How does the result move across a grid, and is the best row luck? | `sqy sweep --strategy ID --param name=a,b,c` (reports PBO) |
 | Are two runs actually different? | `sqy runs compare RUN_A RUN_B` |
 | Does the idea beat the baseline, by a rule fixed beforehand? | `sqy study run --study ID` |
+| Where does the result come from: which regimes, how cost-sensitive, how stable? | `sqy diagnose --strategy ID` |
 | Does it hold up out of sample? | `sqy spec freeze`, then `sqy evaluate` |
 | What may I say about it? | `sqy report --strategy ID` |
 
 `sqy runs compare` and `sqy study run` report a paired 90% bootstrap interval for a
 difference. When that interval contains zero, the sample cannot tell the two apart, and
 the honest summary is "no detectable difference", whatever the point estimates say.
+
+`sqy diagnose` is for understanding a run, not for improving it. A regime in which a
+strategy did badly is a question for the next hypothesis. Adding a rule that avoids
+that regime and backtesting again on the same data is fitting to the past, and the
+trial ledger will count it.
 
 ## A worked study
 
