@@ -39,7 +39,12 @@ def project(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch) -> 
 
 
 def _files(root: Path) -> dict[str, bytes]:
-    return {str(path.relative_to(root)): path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    """Every file except Python's own bytecode caches, which importing the factor may write."""
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
 
 
 def test_factor_report_cli_and_api_are_descriptive_and_isolated(project, capsys) -> None:

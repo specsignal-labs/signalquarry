@@ -267,7 +267,15 @@ def test_existing_directory_is_refused_and_preserved(tmp_path, monkeypatch) -> N
     monkeypatch.setattr(factor_api, "datetime", FixedTime)
     first = factor_api.factor_report("sample", "D", project=tmp_path)
     assert first.status == "ok"
-    files = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    def snapshot() -> dict[Path, bytes]:
+        return {
+            path: path.read_bytes()
+            for path in tmp_path.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts
+        }
+
+    files = snapshot()
     second = factor_api.factor_report("sample", "D", project=tmp_path)
     assert second.status == "error" and second.reason_codes == ["FACTOR_REPORT_WRITE_FAILED"]
-    assert files == {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+    assert files == snapshot()
