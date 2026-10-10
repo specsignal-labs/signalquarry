@@ -191,6 +191,23 @@ signalquarry.api.universe_snapshot(*, project: 'Path | None' = None, source: 'As
 signalquarry.api.universe_verify(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.upgrade_agents_md(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.version() -> 'Envelope'
+signalquarry.research.PANEL_FIELDS: tuple
+signalquarry.research.Panel: class(object)
+signalquarry.research.Panel.strategy_id: field str
+signalquarry.research.Panel.family: field str
+signalquarry.research.Panel.dataset_id: field str
+signalquarry.research.Panel.dataset_identity: field str
+signalquarry.research.Panel.grade: field str
+signalquarry.research.Panel.sealed_from: field date | None
+signalquarry.research.Panel.split_adjusted: field bool
+signalquarry.research.Panel.sessions: field tuple[date, ...]
+signalquarry.research.Panel.symbols: field tuple[str, ...]
+signalquarry.research.Panel.present: field NDArray[np.bool_]
+signalquarry.research.Panel.values: field Mapping[str, NDArray[np.float64]]
+signalquarry.research.Panel.field(self, name: 'str') -> 'NDArray[np.float64]'
+signalquarry.research.Panel.fields: property
+signalquarry.research.Panel.to_arrow(self) -> 'pa.Table'
+signalquarry.research.Panel.to_pandas(self) -> 'Any'
 signalquarry.research.ResearchError: class(Exception)
 signalquarry.research.Run: class(object)
 signalquarry.research.Run.run_id: field str
@@ -225,6 +242,7 @@ signalquarry.research.list_runs(project: 'Path | str | None' = None, *, strategy
 signalquarry.research.list_studies(project: 'Path | str | None' = None) -> 'tuple[Mapping[str, Any], ...]'
 signalquarry.research.list_sweeps(project: 'Path | str | None' = None) -> 'tuple[Mapping[str, Any], ...]'
 signalquarry.research.load_comparison(comparison_id: 'str', project: 'Path | str | None' = None) -> 'Mapping[str, Any]'
+signalquarry.research.load_panel(strategy: 'str', *, fields: 'tuple[str, ...]' = ('open', 'high', 'low', 'close', 'volume'), split_adjusted: 'bool' = True, project: 'Path | str | None' = None) -> 'Panel'
 signalquarry.research.load_run(run_id: 'str', project: 'Path | str | None' = None) -> 'Run'
 signalquarry.research.load_study(study_run_id: 'str', project: 'Path | str | None' = None) -> 'Mapping[str, Any]'
 signalquarry.research.load_sweep(sweep_id: 'str', project: 'Path | str | None' = None) -> 'Sweep'
