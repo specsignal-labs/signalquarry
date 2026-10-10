@@ -70,6 +70,9 @@ A backtest number on its own answers nothing. Before reporting a result:
   the trials they cost; `sqy study run` returns `supported`, `not_supported` or
   `insufficient`. Report that verdict as it is. Do not change the rule, the metric or the
   baseline after seeing a result: an edited file is a different study.
+- **Explain a result before believing it.** `sqy diagnose --strategy <id>` shows performance
+  by regime and year, cost sensitivity, fold consistency and parameter sensitivity. These are
+  descriptive. Do not add a rule to avoid a bad regime and re-test on the same data.
 - **Comparisons and studies are in-sample.** They never raise the claim level; only
   `sqy evaluate` on a frozen configuration does. Every configuration a study tries makes the
   deflated Sharpe bar higher for the strategy.
