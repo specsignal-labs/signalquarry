@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Optional `sqy diagnose --exposure SYMBOL` references describe passive return exposure
+  with betas, annual contributions, alpha, Newey–West uncertainty and rolling beta ranges;
+  reports and MCP support the same descriptive diagnostics without changing runs or evidence.
 - `sqy study run --jobs N` and `sqy sweep --jobs N` simulate arms and grid points in worker
   processes. Trials, runs and the study log are still written by one process in the declared
   order, so the record is the one a single process writes; a worker that rebuilds a different

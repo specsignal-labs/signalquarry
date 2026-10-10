@@ -683,6 +683,47 @@ def diagnostic_lines(document: dict[str, Any]) -> list[str]:
         ]
     else:
         unavailable.append(f"parameters: {parameters['reason']}")
+    exposure = document.get("exposure")
+    if exposure is not None:
+        if exposure["status"] == "ok":
+            regression = exposure["regression"]
+            lines += [
+                "## Exposure to reference series",
+                "",
+                "| Reference | Beta | t | Annual contribution |",
+                "|---|---|---|---|",
+            ]
+            for reference in regression["references"]:
+                lines.append(
+                    f"| {reference['name']} | {_number(reference.get('beta'), 6)} | "
+                    f"{_number(reference.get('t'))} | {_percent(reference.get('contribution_annual'))} |"
+                )
+            lines += [
+                "",
+                f"Annual alpha {_percent(regression.get('alpha_annual'))} "
+                f"(t {_number(regression.get('alpha_t'))}); R² {_number(regression.get('r_squared'), 6)}; "
+                f"residual volatility {_percent(regression.get('residual_volatility'))}.",
+                "",
+            ]
+            rolling = exposure.get("rolling", {}).get("rows", [])
+            for reference in regression["references"]:
+                name = reference["name"]
+                betas = [
+                    row["betas"][name]
+                    for row in rolling
+                    if row["status"] == "ok" and row.get("betas", {}).get(name) is not None
+                ]
+                lines.append(
+                    f"Rolling beta {name}: {_number(min(betas) if betas else None, 6)} "
+                    f"to {_number(max(betas) if betas else None, 6)}."
+                )
+            lines += ["", exposure.get("note") or "–", ""]
+        else:
+            reason = exposure.get("reason") or {
+                "insufficient": "Too few sessions.",
+                "collinear": "The references move together too closely to separate.",
+            }.get(exposure["status"], "–")
+            unavailable.append(f"exposure: {reason}")
     if unavailable:
         lines += ["Unavailable diagnostics: " + " ".join(unavailable), ""]
     return lines
