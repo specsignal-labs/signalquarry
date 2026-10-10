@@ -1288,6 +1288,12 @@ _CODES += (
         "The factor configuration changed between evaluation and report rendering.",
         "Rerun `sqy factor report` with the factor configuration held fixed.",
     ),
+    ReasonCode(
+        "FACTOR_SEARCH_NONDETERMINISTIC",
+        Category.EVIDENCE,
+        "Recomputed formula-search trials or artifacts differ from the recorded results.",
+        "Keep the input identities, grammar, comparison factors and trial history fixed; investigate the mismatch before retrying.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
