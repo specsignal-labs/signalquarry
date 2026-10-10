@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.evidence.report import equity_svg, render_report
-from signalquarry._internal.evidence.runs import iter_runs
+from signalquarry._internal.evidence.runs import iter_runs, result_hash_ok
 from signalquarry._internal.project.project import ProjectError, find_root, load_config, load_strategies
 from signalquarry._internal.validation.ledger import LedgerError, trial_summary
 from signalquarry.api.envelope import Envelope
@@ -101,6 +101,17 @@ def report(strategy_id: str, *, run_id: str | None = None, project: Path | None 
         evaluation=evaluation,
         trials=trials,
         chart=chart,
+        diagnostics=next(
+            (
+                document
+                for _, document in reversed(iter_runs(root, "diagnostics.json", kind="diagnostics"))
+                if result is not None
+                and document.get("schema") == "signalquarry.diagnostics/v1"
+                and document.get("run_id") == result["run_id"]
+                and result_hash_ok(document)
+            ),
+            None,
+        ),
     )
     text += _plugin_sections(
         strategy.spec.model_dump(mode="json", by_alias=True), result, evaluation, envelope

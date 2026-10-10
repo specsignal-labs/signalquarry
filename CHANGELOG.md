@@ -7,6 +7,10 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy diagnose --strategy ID [--run RUN_ID]` writes descriptive regime and calendar-year
+  performance, cost sensitivity with an interpolated break-even, recorded fold consistency,
+  and recorded parameter sensitivity. `sqy report` includes the newest verified diagnostics
+  when present. Diagnostics never change runs, trial counts, gates or claims.
 - Agent surface for research: new projects' `AGENTS.md` gains a "Research method" block
   (baseline first, one variant at a time, compare rather than eyeball, write a study, report
   the verdict as it is); `sqy init --upgrade-agents-md` adds it to existing projects. The MCP
@@ -57,6 +61,10 @@ change provisional surfaces after deprecation).
   trial rule for each kind of arm, refusal before spending, resume and a rule-bound verdict.
   The strict `study.yaml` contract (`signalquarry.study/v1`) is in place; no command reads it
   yet.
+- Pure regime slices (trend, trailing-volatility thirds and calendar year, each labelled from
+  information through the previous session only) with a per-regime performance table, and a
+  parameter-sensitivity summary (the best grid point, its adjacent points, a plateau ratio and
+  per-axis medians). No command uses them yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and

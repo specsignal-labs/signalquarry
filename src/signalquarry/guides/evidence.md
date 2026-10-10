@@ -240,6 +240,37 @@ envelope's `gates`, and are add-only: a failing or broken plugin gate caps the c
 
 ## Reports
 
+### Descriptive diagnostics
+
+`sqy diagnose --strategy ID [--run RUN_ID]` describes a recorded backtest (the latest
+for the strategy by default). It writes a separate hashed `diagnostics.json` under
+`.signalquarry/diagnostics/`; repeating it creates a new directory. `sqy report`
+includes the newest verified diagnostics for its run when available.
+
+- **Regimes and years:** performance by calendar year and by benchmark trend and
+  volatility, using only previous-session information for the market labels.
+  Trend and volatility require the recorded benchmark curve. Regimes looked at
+  after the fact are hypothesis generation, not evidence: they were not declared
+  before the run.
+- **Costs:** returns, Sharpe and drawdown at 0, 1, 2 and 4 times execution cost bps,
+  with the first zero-return crossing interpolated between neighbouring points.
+  Other fees stay as declared. No break-even is reported if returns start
+  non-positive or remain positive throughout the sampled range. The project must
+  still reproduce the run's configuration, dataset and base total return. Options
+  strategies have a different cost model and this section is unavailable.
+- **Folds:** positive-return share, count ahead of the benchmark, best and worst
+  returns and sample dispersion from the newest matching recorded evaluation.
+  Fewer than three folds is marked insufficient.
+- **Parameters:** best point, neighbour median and plateau (neighbour median divided
+  by the best score) from the newest recorded sweep containing the configuration.
+  Neighbours are those of the sweep's best point, using the declared grid order.
+
+All four diagnostics are descriptive and never change a claim, gate or trial count.
+Cost reruns write no runs or trials; the original run directory is never modified.
+Unavailable sections are explained and omitted from the report's tables.
+
+### Rendering reports
+
 `sqy report --strategy <id>` renders `report.md` and `equity.svg` from run
 artifacts. The claim level and its permitted wording come first; every report
 ends with a hypothetical-results disclaimer. With a benchmark, the report adds a
