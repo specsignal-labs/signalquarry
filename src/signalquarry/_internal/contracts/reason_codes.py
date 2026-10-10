@@ -1067,6 +1067,20 @@ _CODES += (
         "Correct the versioned synthetic or normalized manifest; do not infer missing aliases, events or marks.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "FACTOR_REPORT_WRITE_FAILED",
+        Category.ENVIRONMENT,
+        "The descriptive factor report could not be written to a new directory.",
+        "Check project permissions and available disk space, then rerun `sqy factor report`.",
+    ),
+    ReasonCode(
+        "FACTOR_REPORT_CONFIGURATION_CHANGED",
+        Category.EVIDENCE,
+        "The factor configuration changed between evaluation and report rendering.",
+        "Rerun `sqy factor report` with the factor configuration held fixed.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 

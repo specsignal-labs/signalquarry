@@ -50,6 +50,15 @@ and at most 16 KB.
 factor. Evaluate it offline with `sqy factor evaluate --factor volume-shock --synthetic`;
 synthetic diagnostics provide no evidence about real markets.
 
+Use `sqy factor report --factor volume-shock --synthetic` to run the same evaluation
+and write a readable `report.md`, `ic.svg` and `quintiles.svg` in a new directory
+under `.signalquarry/factor_reports/`. It accepts the same options as `factor evaluate`,
+including `--symbols`, `--seed`, `--planted-ic`, or a recorded `--dataset-id` with
+dated `--universe-manifest` paths. The report includes the factor's hypothesis,
+diagnostics by horizon, chronological-block IC and input identities. Recorded-data
+diagnostics remain unverified; neither mode records a trial, assigns an evidence
+grade or accesses a holdout. Long-short spreads are statistics, not executable portfolios.
+
 Import registered factor functions into a normal `@strategy` and return the
 composite through `factor_portfolio`. It reads only the completed bars in
 `Ctx`, standardizes each factor cross-sectionally, and creates an ordinary

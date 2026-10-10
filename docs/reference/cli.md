@@ -86,6 +86,21 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | `--planted-ic` | synthetic signal loading (default: 0.05) |
 | `--project` | project directory (default: search upwards) |
 
+### `sqy factor report`
+
+Evaluate a factor and write a descriptive Markdown report with SVG charts.
+
+| Option | Meaning |
+|---|---|
+| `--factor` | registered factor ID (required) |
+| `--dataset-id` | locally recorded dataset manifest ID |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session |
+| `--synthetic` | use an offline synthetic panel without manifests |
+| `--symbols` | synthetic panel symbol count (default: 200) |
+| `--seed` | synthetic panel random seed (default: 7) |
+| `--planted-ic` | synthetic signal loading (default: 0.05) |
+| `--project` | project directory (default: search upwards) |
+
 ## `sqy data`
 
 Fetch, verify and list recorded market data.

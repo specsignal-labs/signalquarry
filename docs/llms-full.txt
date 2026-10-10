@@ -173,6 +173,15 @@ and at most 16 KB.
 factor. Evaluate it offline with `sqy factor evaluate --factor volume-shock --synthetic`;
 synthetic diagnostics provide no evidence about real markets.
 
+Use `sqy factor report --factor volume-shock --synthetic` to run the same evaluation
+and write a readable `report.md`, `ic.svg` and `quintiles.svg` in a new directory
+under `.signalquarry/factor_reports/`. It accepts the same options as `factor evaluate`,
+including `--symbols`, `--seed`, `--planted-ic`, or a recorded `--dataset-id` with
+dated `--universe-manifest` paths. The report includes the factor's hypothesis,
+diagnostics by horizon, chronological-block IC and input identities. Recorded-data
+diagnostics remain unverified; neither mode records a trial, assigns an evidence
+grade or accesses a holdout. Long-short spreads are statistics, not executable portfolios.
+
 Import registered factor functions into a normal `@strategy` and return the
 composite through `factor_portfolio`. It reads only the completed bars in
 `Ctx`, standardizes each factor cross-sectionally, and creates an ordinary
@@ -1013,6 +1022,21 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | `--planted-ic` | synthetic signal loading (default: 0.05) |
 | `--project` | project directory (default: search upwards) |
 
+### `sqy factor report`
+
+Evaluate a factor and write a descriptive Markdown report with SVG charts.
+
+| Option | Meaning |
+|---|---|
+| `--factor` | registered factor ID (required) |
+| `--dataset-id` | locally recorded dataset manifest ID |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session |
+| `--synthetic` | use an offline synthetic panel without manifests |
+| `--symbols` | synthetic panel symbol count (default: 200) |
+| `--seed` | synthetic panel random seed (default: 7) |
+| `--planted-ic` | synthetic signal loading (default: 0.05) |
+| `--project` | project directory (default: search upwards) |
+
 ## `sqy data`
 
 Fetch, verify and list recorded market data.
@@ -1558,6 +1582,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
 | `FACTOR_PORTFOLIO_UNAVAILABLE` | data | No eligible factor scores or prior-only factor weights are available for this decision. | Provide completed factor history and a prior-cutoff weight row, or use equal weights. |
 | `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_REPORT_CONFIGURATION_CHANGED` | evidence | The factor configuration changed between evaluation and report rendering. | Rerun `sqy factor report` with the factor configuration held fixed. |
+| `FACTOR_REPORT_WRITE_FAILED` | environment | The descriptive factor report could not be written to a new directory. | Check project permissions and available disk space, then rerun `sqy factor report`. |
 | `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
