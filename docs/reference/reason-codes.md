@@ -70,6 +70,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
 | `FACTOR_SEARCH_INPUT_UNVERIFIED` | evidence | Formula-search inputs have not passed the required identity, provenance or significance checks. | Verify input manifests, bind normalized formula identity and grammar, and provide a finite p-value in [0, 1]. |
+| `FACTOR_SEARCH_NONDETERMINISTIC` | evidence | Recomputed formula-search trials or artifacts differ from the recorded results. | Keep the input identities, grammar, comparison factors and trial history fixed; investigate the mismatch before retrying. |
 | `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
 | `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
 | `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |

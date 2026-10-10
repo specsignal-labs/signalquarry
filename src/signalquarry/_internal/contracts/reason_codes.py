@@ -1111,6 +1111,14 @@ _CODES += (
         "Wait for that writer to finish, then retry; keep the project configuration fixed while writing.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "FACTOR_SEARCH_NONDETERMINISTIC",
+        Category.EVIDENCE,
+        "Recomputed formula-search trials or artifacts differ from the recorded results.",
+        "Keep the input identities, grammar, comparison factors and trial history fixed; investigate the mismatch before retrying.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 

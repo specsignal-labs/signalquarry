@@ -78,6 +78,18 @@ identities within the sealed budget. The explicit human seal and read-only statu
 commands grant no search, opening, publication or trading authority; strategy
 accounting remains separate.
 
+T1 `api.factor_search` orchestrates both sibling layers without cross-imports.
+`factors/training.py` copies bars strictly before the requested cutoff, removes
+future ex-date actions, applies the latest verified dated membership and aligns
+next-decision forward returns to completed-bar formula rows. Search code and
+accepted-factor code receive only that copy. `validation/factor_search.py` serializes
+searches using a nonblocking lock on the existing project directory, derives
+pre-search accounting by removing only this search's recorded rows, and compares
+recomputed trials before resuming any append. The API records all formulas through
+`record_formula_trial`, then writes proposals under `.signalquarry/factor_searches/`.
+These artifacts carry exploratory scope, grade none and no holdout access; they
+are separate from publishable run results and are never exported.
+
 ### Paper `run-once` (equities)
 
 ```mermaid
@@ -110,7 +122,7 @@ sequenceDiagram
 - **One obvious way.** A small public surface, a reason code for every error, one JSON envelope per command.
 - **Fail closed.**
 - **Local-first.** Users bring their own keys. No data redistribution, no telemetry, no hosted component.
-- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. The internal formula interpreter converts a bounded AST whitelist to immutable nodes; operators use only same-row or trailing values, receive an explicit dated-membership mask, and never execute Python source (ADR 0011). Its deterministic formula-search core is limited to synthetic training labels, checks a caller-supplied family budget, and reports multiple-testing diagnostics without writing evidence or opening holdouts. Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. `sqy factor evaluate` replays selected cached dataset and universe manifests, then reports descriptive metrics from action-aware labels with scope `unverified`; it writes no trial, assigns no grade, and cannot access a holdout. Historical universe, corporate-action, source-completeness, and instrument-lifecycle provenance are still required before point-in-time factor claims (ADR 0010).
+- **Derived research data.** Content-addressed raw pages and dataset manifests remain the source of truth. A per-field Parquet panel keyed by dataset identity supports read-only, session-truncated research access. Prospective Alpaca asset-list captures have separate hash-only manifests and verified as-of cutoffs. A pure factor SDK receives only completed-bar, universe-column windows and emits checked scores. The internal formula interpreter converts a bounded AST whitelist to immutable nodes; operators use only same-row or trailing values, receive an explicit dated-membership mask, and never execute Python source (ADR 0011). Its deterministic formula-search core supports synthetic and calculated training labels and reports multiple-testing diagnostics without writing evidence or opening holdouts. Synthetic callers retain their supplied accounting; the T1 real-data API enforces ledger-derived accounting and replay verification. Projects register research factors with strict `factor.yaml` metadata; `sqy factor ls` reports configuration identities, and `sqy check --factor-id` probes synthetic conformance. `sqy factor evaluate` replays selected cached dataset and universe manifests, then reports descriptive metrics from action-aware labels with scope `unverified`; it writes no trial, assigns no grade, and cannot access a holdout. Historical universe, corporate-action, source-completeness, and instrument-lifecycle provenance are still required before point-in-time factor claims (ADR 0010).
 - **Solo-maintainable.** Four runtime dependencies, a stdlib CLI, and about 300 lines of in-house statistics.
 
 **Non-goals (up to 1.0)**
@@ -466,8 +478,8 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_holdouts`, `factor_trials`, `ledger`, `metrics`, `stats` |
-| `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
+| `validation` | `(package)`, `conformance`, `evaluate`, `factor_conformance`, `factor_holdouts`, `factor_search`, `factor_trials`, `ledger`, `metrics`, `stats` |
+| `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search`, `training` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
@@ -495,6 +507,7 @@ flowchart LR
   sqy --> c_factor["factor"]
   c_factor --> c_factor_ls["ls"]
   c_factor --> c_factor_evaluate["evaluate"]
+  c_factor --> c_factor_search["search"]
   c_factor --> c_factor_holdout_seal["holdout seal"]
   c_factor --> c_factor_holdout_status["holdout status"]
   sqy --> c_data["data"]

@@ -131,7 +131,17 @@ Four independently reviewable changes: (a) reason codes plus `factor holdout sea
 Rollout steps (a) and (b) exist: explicit human `factor holdout seal|status`, the
 `factor_holdouts` chained log, ledger-derived factor trial accounting, budget
 preflight, formula-aware idempotent trial append, and session-based training-window
-validation. Search, emission and holdout opening remain outside these steps.
+validation. Step (c) adds the T1 search API/CLI, structurally copied training
+inputs, calculated forward labels, whole-budget preflight, checked deterministic
+resume, formula trials and separate exploratory artifacts. Grade remains none;
+emission, budget extension, T2 and holdout opening remain unimplemented.
+
+Step (c) acceptance remains incomplete in this checkout: the existing universe
+builder requires the selected dataset to end before its decision session. Builds
+matching that dataset therefore provide no memberships before its sealed holdout.
+Successful search orchestration is tested with substituted replay; actual cached
+input tests exercise fail-closed replay and empty training membership. Resolving
+the universe verification constraint requires a separately authorized change.
 
 ## Decisions
 
