@@ -447,8 +447,46 @@ def test_init_ls_and_show(tmp_path: Path, capsys: pytest.CaptureFixture[str]) ->
     code, missing = sqy("study", "run", "--study", "first")
     assert (code, missing["reason_codes"]) == (65, ["STUDY_NOT_FOUND"])
 
-    code, created = sqy("study", "init", "--strategy", "sma-trend", "--id", "first")
+    # Without a rule the scaffold is not a study yet: nothing picks the metric for the researcher.
+    code, bare = sqy("study", "init", "--strategy", "sma-trend", "--id", "bare")
+    assert code == 0 and "write its hypothesis and comparison rule" in bare["summary"]
+    code, refused = sqy("study", "check", "--study", "bare")
+    assert (code, refused["reason_codes"]) == (65, ["STUDY_SPEC_INVALID"]) and "compare" in refused["summary"]
+    bare_path = project / "studies" / "bare" / "study.yaml"
+    bare_path.write_text(
+        bare_path.read_text().replace("metric: TODO, direction: TODO", "metric: sharpe, direction: higher")
+    )
+    code, refused = sqy("study", "run", "--study", "bare")
+    assert (code, refused["reason_codes"]) == (65, ["STUDY_SPEC_INVALID"])
+    assert "hypothesis.statement: write it before running the study" in refused["summary"]
+    assert not (project / ".signalquarry").exists()
+    shutil.rmtree(project / "studies" / "bare")
+    for extra in (
+        ["--metric", "sharpe"],
+        ["--direction", "lower"],
+        ["--metric", "alpha", "--direction", "higher"],
+        ["--metric", "sharpe", "--direction", "up"],
+    ):
+        code, bad = sqy("study", "init", "--strategy", "sma-trend", "--id", "half", *extra)
+        assert (code, bad["reason_codes"]) == (64, ["USAGE_INVALID"]), extra
+    assert not (project / "studies" / "half").exists()
+
+    code, created = sqy(
+        "study",
+        "init",
+        "--strategy",
+        "sma-trend",
+        "--id",
+        "first",
+        "--metric",
+        "sharpe",
+        "--direction",
+        "higher",
+    )
     assert code == 0 and created["data"]["path"] == "studies/first/study.yaml"
+    assert (
+        "has a higher sharpe than buy-and-hold" in (project / "studies" / "first" / "study.yaml").read_text()
+    )
     text = (project / "studies" / "first" / "study.yaml").read_text()
     assert "base: sma-trend" in text and "versus: buy-and-hold" in text
     code, again = sqy("study", "init", "--strategy", "sma-trend", "--id", "first")

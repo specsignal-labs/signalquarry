@@ -65,8 +65,12 @@ nothing about markets. The method is the point.
 
 ```bash
 sqy init trend-lab --demo && cd trend-lab
-sqy study init --strategy sma-trend --id trend-vs-hold
+sqy study init --strategy sma-trend --id trend-vs-hold --metric max_drawdown --direction lower
 ```
+
+`--metric` and `--direction` write the rule and a hypothesis that matches it. Without them
+the scaffold leaves both as `TODO` and the study is refused until you write them: the tool
+never picks the rule for you.
 
 Edit `studies/trend-vs-hold/study.yaml` so that it asks exactly the question in the
 hypothesis:

@@ -1151,6 +1151,12 @@ _CODES += (
         "Leave the project's files alone while `--jobs` is in use, then run the command again; a study reuses the arms that completed.",
     ),
     ReasonCode(
+        "STRATEGY_RAISED",
+        Category.SIGNAL,
+        "The strategy's decide function raised an exception during a backtest; the detail names the session, the exception type and its message.",
+        "Fix the strategy code. `SYMBOL_NOT_DECLARED` means it read a symbol that `data.symbols` in strategy.yaml does not list. `sqy check` runs the same function under conformance checks.",
+    ),
+    ReasonCode(
         "EXPOSURE_DATA_MISSING",
         Category.DATA,
         "One or more requested exposure references have no usable passive return curve over the run's sessions.",

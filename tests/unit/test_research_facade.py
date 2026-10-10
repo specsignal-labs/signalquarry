@@ -422,7 +422,9 @@ def test_study_results_are_listed_loaded_and_verified(tmp_path: Path) -> None:
         research.latest_study("first", project)
     assert missing.value.code == "RUN_NOT_FOUND"
 
-    assert study_init("sma-trend", "first", project=project).status == "ok"
+    assert (
+        study_init("sma-trend", "first", metric="sharpe", direction="higher", project=project).status == "ok"
+    )
     ran = study_run("first", project=project)
     again = study_run("first", project=project)
     rows = research.list_studies(project)

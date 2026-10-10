@@ -359,6 +359,8 @@ Scaffold studies/ID/study.yaml for a strategy.
 |---|---|
 | `--strategy` | the subject strategy id (required) |
 | `--id` | id of the new study (required) |
+| `--metric` | the comparison metric, e.g. max_drawdown (with --direction) |
+| `--direction` | higher or lower (with --metric) |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ### `sqy study check`

@@ -434,6 +434,8 @@ def _configure_study(parser: argparse.ArgumentParser) -> None:
     create = actions.add_parser("init", help="Scaffold studies/ID/study.yaml for a strategy.")
     create.add_argument("--strategy", required=True, help="the subject strategy id")
     create.add_argument("--id", required=True, dest="study", help="id of the new study")
+    create.add_argument("--metric", help="the comparison metric, e.g. max_drawdown (with --direction)")
+    create.add_argument("--direction", help="higher or lower (with --metric)")
     check = actions.add_parser(
         "check", help="Validate a study, list its arms and the trials it would record; runs nothing."
     )
@@ -464,7 +466,9 @@ def _configure_study(parser: argparse.ArgumentParser) -> None:
 
 def _study(args: argparse.Namespace) -> Envelope:
     if args.action == "init":
-        return api.study_init(args.strategy, args.study, project=args.project)
+        return api.study_init(
+            args.strategy, args.study, metric=args.metric, direction=args.direction, project=args.project
+        )
     if args.action == "check":
         return api.study_check(args.study, project=args.project)
     if args.action == "run":

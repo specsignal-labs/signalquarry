@@ -170,9 +170,17 @@ def sqy_runs_compare(run_ids: list[str], project: str | None = None) -> dict[str
 
 
 @mcp.tool()
-def sqy_study_init(strategy_id: str, study_id: str, project: str | None = None) -> dict[str, Any]:
+def sqy_study_init(
+    strategy_id: str,
+    study_id: str,
+    project: str | None = None,
+    metric: str | None = None,
+    direction: str | None = None,
+) -> dict[str, Any]:
     """Scaffold studies/ID/study.yaml for a strategy; nothing is run."""
-    return _result(api.study_init(strategy_id, study_id, project=_path(project)))
+    return _result(
+        api.study_init(strategy_id, study_id, metric=metric, direction=direction, project=_path(project))
+    )
 
 
 @mcp.tool()

@@ -44,6 +44,7 @@ from signalquarry._internal.project.project import ProjectError, find_root, load
 from signalquarry._internal.validation import ledger
 from signalquarry._internal.validation.benchmark import BenchmarkCurve, benchmark_curve
 from signalquarry._internal.validation.compare import (
+    STUDY_METRICS,
     RunSeries,
     comparability,
     compare_runs,
@@ -165,6 +166,11 @@ def _read_study(root: Path, study_id: str) -> tuple[Path, StudySpecV1]:
             "STUDY_SPEC_INVALID",
             f"{study_id}: the id in study.yaml is {study.id}; it must match the directory",
         )
+    for name in ("statement", "falsification"):
+        if getattr(study.hypothesis, name).startswith("TODO"):
+            raise _StudyError(
+                "STUDY_SPEC_INVALID", f"{study_id}: hypothesis.{name}: write it before running the study"
+            )
     return path, study
 
 
@@ -942,13 +948,39 @@ variants:
   - {{id: costs-x2, execution: {{costs: {{bps: "{double_bps}"}}}}, role: sensitivity}}
 # grid: {{period: [100, 150, 200]}}
 # Decide the rule before running: one metric, one direction, one baseline.
-compare: {{metric: sharpe, direction: higher, versus: buy-and-hold}}
+# metric: total_return | cagr | sharpe | sortino | calmar | max_drawdown | annual_volatility
+# direction: higher | lower
+compare: {{metric: {metric}, direction: {direction}, versus: buy-and-hold}}
 """
+_UNDECIDED = "TODO"
 
 
-def study_init(strategy_id: str, study_id: str, *, project: Path | None = None) -> Envelope:
-    """Scaffold ``studies/<id>/study.yaml`` for a strategy. Nothing is run."""
+def study_init(
+    strategy_id: str,
+    study_id: str,
+    *,
+    metric: str | None = None,
+    direction: str | None = None,
+    project: Path | None = None,
+) -> Envelope:
+    """Scaffold ``studies/<id>/study.yaml`` for a strategy. Nothing is run.
+
+    With ``metric`` and ``direction`` the scaffold states that rule and a hypothesis that
+    matches it, and can be run as it is. Without them the rule and the hypothesis are left to
+    be written, and the study is refused until they are: the scaffold never picks a rule.
+    """
     command = "study init"
+    if (metric is None) != (direction is None) or (
+        metric is not None and (metric not in STUDY_METRICS or direction not in ("higher", "lower"))
+    ):
+        return Envelope(
+            command=command,
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="give --metric and --direction together: metric one of "
+            + ", ".join(STUDY_METRICS)
+            + "; direction higher or lower",
+        )
     resolved_root: Path
     try:
         resolved_root = find_root(project)
@@ -987,21 +1019,35 @@ def study_init(strategy_id: str, study_id: str, *, project: Path | None = None) 
             summary=str(path.relative_to(resolved_root)),
         )
     spec = strategy.spec
+    if metric is None:
+        statement = f"{_UNDECIDED}: what you expect of {strategy_id} against the baseline, and why."
+        falsification = f"{_UNDECIDED}: the result over the same sessions that would count against it."
+    else:
+        name = metric.replace("_", " ")
+        statement = f"{strategy_id} has a {direction} {name} than buy-and-hold over the same sessions."
+        falsification = (
+            f"Over the same sessions its {name} is not {direction} than buy-and-hold's, "
+            "or the paired 90% interval of the difference includes zero."
+        )
     path.parent.mkdir(parents=True)
     path.write_text(
         _TEMPLATE.format(
             study_id=study_id,
             strategy_id=strategy_id,
-            statement=json.dumps(spec.hypothesis.statement, ensure_ascii=False),
-            falsification=json.dumps(spec.hypothesis.falsification, ensure_ascii=False),
+            statement=json.dumps(statement, ensure_ascii=False),
+            falsification=json.dumps(falsification, ensure_ascii=False),
             double_bps=spec.execution.costs.bps * 2,
+            metric=metric or _UNDECIDED,
+            direction=direction or _UNDECIDED,
         ),
         encoding="utf-8",
     )
-    load_study(path)  # the scaffold must be a valid study
+    if metric is not None:
+        load_study(path)  # a scaffold with a rule must be a valid study
     return Envelope(
         command=command,
-        summary=f"created {path.relative_to(resolved_root)}",
+        summary=f"created {path.relative_to(resolved_root)}"
+        + ("" if metric is not None else "; write its hypothesis and comparison rule before running it"),
         data={"study_id": study_id, "path": str(path.relative_to(resolved_root))},
         warnings=[] if spec.benchmark else ["STUDY_BENCHMARK_UNDECLARED"],
         next_actions=[
