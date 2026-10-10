@@ -263,6 +263,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **One run writer:** `api.runs.execute_run` simulates one resolved strategy, records its trial, computes the descriptive context (benchmark, drawdowns, activity) and writes the run directory. `backtest` and `sweep` both use it, so a sweep point is an ordinary run with the same artifacts and the same ledger hash a backtest of that configuration has. `result.json` records the command, the parameters and the hashed specification. A sweep additionally writes `.signalquarry/sweeps/<id>/` (`sweep.json`, `sweep.csv`).
 - **Comparing runs:** `validation.compare` works on parsed result documents and aligned return series only. Runs are compared against a reference only when they share dataset identity, sessions, account and evidence grade; otherwise the reasons are reported and nothing is differenced or ranked. The uncertainty of a Sharpe difference comes from a moving-block bootstrap that draws the same blocks from both series, so the pairing is kept. `sqy runs compare` loads run directories, refuses a result document that no longer matches its recorded hash, and writes `.signalquarry/comparisons/<id>/`. Runs are ordered by recorded creation time, not by run id.
 - **Studies (ADR 0015):** `api.study` plans the arms of a `study.yaml` (subject, variants, baselines), checks the trial budgets of every family involved before anything runs, executes strategy arms through `execute_run` (reusing a verified run of the same configuration, dataset and window), builds benchmark arms from the engine reference curve, and derives the verdict with `validation.compare`. Trial counting stays in the existing ledger; the new chained log `studies` records what was attempted. A study clips at the earliest holdout seal and has no code path that opens one.
+- **Research results:** `signalquarry.research` is a public, provisional, read-only loader for recorded runs, sweeps, comparisons and study results, for notebooks and scripts. Documents and arrays are immutable, result documents are checked against their recorded hash, tables are Arrow and pandas is optional. It sits beside `api` in the layer order, reads artifacts through the evidence helpers, and never runs a backtest, records a trial or writes a file.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -402,7 +403,7 @@ may import only from layers below it. Components on one layer cannot import each
 ```mermaid
 flowchart TB
   L0["<b>cli</b>"]
-  L1["<b>api</b>"]
+  L1["<b>api · research</b>"]
   L0 --> L1
   L2["<b>paper · evidence · publish</b>"]
   L1 --> L2
@@ -434,6 +435,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 |---|---|
 | `cli` | `api`, `data`, `contracts` |
 | `api` | `paper`, `evidence`, `publish`, `validation`, `factors`, `engine`, `data`, `project`, `sdk`, `plugins`, `contracts`, `canonical` |
+| `research` | `evidence`, `project` |
 | `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
 | `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
@@ -457,6 +459,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 |---|---|
 | `cli` | `(package)`, `main` |
 | `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `runs`, `study`, `sweep`, `universe` |
+| `research` | `(package)` |
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
