@@ -140,6 +140,28 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
         "evaluate",
         help="Compute descriptive, unverified diagnostics from selected local manifests.",
     )
+    report = actions.add_parser(
+        "report", help="Evaluate a factor and write a descriptive Markdown report with SVG charts."
+    )
+    _configure_factor_diagnostics(evaluate)
+    _configure_factor_diagnostics(report)
+    holdout = actions.add_parser("holdout", help="Inspect factor seals or explicitly seal as a human.")
+    holdout_actions = holdout.add_subparsers(dest="holdout_action", required=True, parser_class=_Parser)
+    seal = holdout_actions.add_parser(
+        "seal",
+        help="Explicit human command: fix a family's factor holdout once; never open it.",
+        description="Explicit human command to seal a factor family's holdout once. Never opens the holdout; not an MCP tool.",
+    )
+    seal.add_argument("--family", required=True, help="registered factor family")
+    seal.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    status = holdout_actions.add_parser("status", help="Read factor seals and ledger-derived trial usage.")
+    status.add_argument("--family", help="show only this factor family")
+    for subparser in (seal, status):
+        subparser.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+        subparser.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _configure_factor_diagnostics(evaluate: argparse.ArgumentParser) -> None:
     evaluate.add_argument("--factor", required=True, help="registered factor ID")
     evaluate.add_argument("--dataset-id", help="locally recorded dataset manifest ID")
     evaluate.add_argument(
@@ -160,20 +182,6 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
     )
     evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
     evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
-    holdout = actions.add_parser("holdout", help="Inspect factor seals or explicitly seal as a human.")
-    holdout_actions = holdout.add_subparsers(dest="holdout_action", required=True, parser_class=_Parser)
-    seal = holdout_actions.add_parser(
-        "seal",
-        help="Explicit human command: fix a family's factor holdout once; never open it.",
-        description="Explicit human command to seal a factor family's holdout once. Never opens the holdout; not an MCP tool.",
-    )
-    seal.add_argument("--family", required=True, help="registered factor family")
-    seal.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
-    status = holdout_actions.add_parser("status", help="Read factor seals and ledger-derived trial usage.")
-    status.add_argument("--family", help="show only this factor family")
-    for subparser in (seal, status):
-        subparser.add_argument("--project", type=Path, help="project directory (default: search upwards)")
-        subparser.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
 
 def _factor(args: argparse.Namespace) -> Envelope:
@@ -183,7 +191,8 @@ def _factor(args: argparse.Namespace) -> Envelope:
         if args.holdout_action == "seal":
             return api.factor_holdout_seal(args.family, args.dataset_id, project=args.project)
         return api.factor_holdout_status(family=args.family, project=args.project)
-    return api.factor_evaluate(
+    handler = api.factor_report if args.action == "report" else api.factor_evaluate
+    return handler(
         args.factor,
         args.dataset_id,
         universe_manifests=args.universe_manifest or (),
