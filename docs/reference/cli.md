@@ -488,6 +488,7 @@ Write descriptive diagnostics for a recorded backtest run.
 |---|---|
 | `--strategy` | strategy id of the recorded run (required) |
 | `--run` | backtest run id (default: the latest for this strategy) |
+| `--exposure` | passive reference symbol (repeatable, up to eight) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy paper`

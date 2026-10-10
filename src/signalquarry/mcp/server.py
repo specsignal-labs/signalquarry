@@ -134,12 +134,19 @@ def sqy_backtest(
 
 
 @mcp.tool()
-def sqy_diagnose(strategy_id: str, project: str | None = None, run_id: str | None = None) -> dict[str, Any]:
-    """Write descriptive diagnostics for a recorded run: regimes, costs, folds, parameters.
+def sqy_diagnose(
+    strategy_id: str,
+    project: str | None = None,
+    run_id: str | None = None,
+    exposures: list[str] | None = None,
+) -> dict[str, Any]:
+    """Write run diagnostics: regimes, costs, folds, parameters and optional passive exposures.
 
     Descriptive only: no trial is recorded and no gate or claim level changes.
     """
-    return _result(api.diagnose(strategy_id, run_id=run_id, project=_path(project)))
+    return _result(
+        api.diagnose(strategy_id, run_id=run_id, exposures=exposures or (), project=_path(project))
+    )
 
 
 @mcp.tool()

@@ -52,6 +52,12 @@ flowchart TB
 artifact under `.signalquarry/diagnostics/`. The pure `validation.diagnostics`
 module interpolates cost break-even and summarizes recorded fold consistency;
 existing regime and parameter helpers supply the other descriptive sections.
+The numpy-only `validation.exposure` module fits returns-based OLS exposures and
+rolling betas, with Bartlett Newey–West standard errors. Optional references are
+resolved by the API and simulated as passive curves on the recorded run's sessions
+only after its configuration and dataset identities match; the exposure section
+is absent when none are requested. Reports render the stored regression and rolling
+beta ranges, and these post-run fits remain in-sample hypothesis generation.
 Cost simulations require matching configuration and dataset identities and a
 reproduced base return, and never record trials or write backtest runs. Reports
 render the newest verified diagnostics from artifacts only. These diagnostics
@@ -473,7 +479,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
+| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `exposure`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |

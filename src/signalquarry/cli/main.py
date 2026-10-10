@@ -187,6 +187,9 @@ def _configure_report(parser: argparse.ArgumentParser) -> None:
 def _configure_diagnose(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strategy", required=True, help="strategy id of the recorded run")
     parser.add_argument("--run", help="backtest run id (default: the latest for this strategy)")
+    parser.add_argument(
+        "--exposure", action="append", default=[], help="passive reference symbol (repeatable, up to eight)"
+    )
     parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
 
 
@@ -776,7 +779,9 @@ COMMANDS: tuple[Command, ...] = (
     Command(
         "diagnose",
         "Write descriptive diagnostics for a recorded backtest run.",
-        lambda args: api.diagnose(args.strategy, run_id=args.run, project=args.project),
+        lambda args: api.diagnose(
+            args.strategy, run_id=args.run, exposures=args.exposure, project=args.project
+        ),
         _configure_diagnose,
     ),
     Command(
