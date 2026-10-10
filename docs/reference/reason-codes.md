@@ -133,6 +133,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `PERF_FEED_INVALID` | evidence | The existing feed file is not a performance snapshot, so the new one cannot chain to it. | Move the file aside (a new chain starts) or restore the published snapshot. |
 | `PERF_PUBLISH_DENIED` | evidence | The family's publication policy does not allow a live performance feed. | Set live_feed: allow for a non-commercial family; commercial families publish lagged exports only. |
 | `PRICE_MISSING` | data | No price for a symbol on the execution session; the order waits. | Check data coverage for the symbol. |
+| `PROJECT_CHANGED_DURING_RUN` | evidence | A worker process rebuilt a configuration from the project's files and did not arrive at the configuration or dataset that was checked: the project changed while the command was running. | Leave the project's files alone while `--jobs` is in use, then run the command again; a study reuses the arms that completed. |
 | `PROJECT_CONFIG_INVALID` | usage | signalquarry.toml could not be parsed or has invalid values. | Fix the reported field in signalquarry.toml. |
 | `PROJECT_DIR_NOT_EMPTY` | usage | `sqy init` only creates projects in a new or empty directory. | Choose a new directory name. |
 | `PROJECT_NOT_FOUND` | usage | No signalquarry.toml in this directory or its parents. | Run `sqy init <dir>` or pass --project. |
