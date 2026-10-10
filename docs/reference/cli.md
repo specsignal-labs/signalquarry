@@ -278,6 +278,7 @@ Backtest a parameter grid (each point on real data is a trial); reports PBO.
 |---|---|
 | `--strategy` | strategy id from strategy.yaml (required) |
 | `--param` | NAME=V1,V2,… (repeatable) (required) |
+| `--summary-only` | keep result.json and equity curves per point; leave out fills and decisions |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ## `sqy backtest`

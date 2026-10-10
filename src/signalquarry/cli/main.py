@@ -613,10 +613,17 @@ COMMANDS: tuple[Command, ...] = (
     Command(
         "sweep",
         "Backtest a parameter grid (each point on real data is a trial); reports PBO.",
-        lambda args: api.sweep(args.strategy, args.param, project=args.project),
+        lambda args: api.sweep(
+            args.strategy, args.param, summary_only=args.summary_only, project=args.project
+        ),
         lambda parser: (
             parser.add_argument("--strategy", required=True),
             parser.add_argument("--param", action="append", required=True, help="NAME=V1,V2,… (repeatable)"),
+            parser.add_argument(
+                "--summary-only",
+                action="store_true",
+                help="keep result.json and equity curves per point; leave out fills and decisions",
+            ),
             parser.add_argument("--project", type=Path),
         ),
     ),

@@ -87,6 +87,24 @@ def budget_warnings(root: Path, spec_budget: int, family: str) -> list[str]:
     return [f"TRIAL_BUDGET_NEARLY_USED:{used}/{budget}"] if used < budget and used * 5 >= budget * 4 else []
 
 
+def budget_shortfall(root: Path, spec: StrategySpecV1, configurations: set[str]) -> str | None:
+    """Why these configurations cannot all be recorded within the family's budget, else ``None``.
+
+    Checked before anything runs, so a refusal leaves no trial behind.
+    """
+    known = {
+        entry["configuration_hash"]
+        for entry in ledger.trials(root, spec.family).entries()
+        if entry.get("kind") == "trial"
+    }
+    new = configurations - known
+    used = ledger.trial_summary(root, spec.family)["family_count"]
+    budget = trial_budget(root, spec.evaluation.trial_budget, spec.family)
+    if used + len(new) > budget:
+        return f"{len(new)} new trials would exceed family {spec.family}'s budget ({used}/{budget} used)"
+    return None
+
+
 def trial_evidence(root: Path, family: str, configuration_hash: str) -> dict[str, Any]:
     entries = [e for e in ledger.trials(root, family).entries() if e.get("kind") == "trial"]
     family_configs = list(dict.fromkeys(e["configuration_hash"] for e in entries if e["family"] == family))
