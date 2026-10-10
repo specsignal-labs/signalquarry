@@ -110,7 +110,8 @@ Everything that affects results lives here and is hashed into the
 (symbols, feed, staleness), `account` (cash or margin, initial cash),
 `execution` (next open, sizing, costs, minimum order), `params`, `reason_codes`,
 `limits`, `evaluation` (holdout months, walk-forward windows, trial budget) and
-`benchmark`. Run `sqy schema` for the bundled schemas.
+`benchmark` (a symbol every run is compared with as buy-and-hold; see
+[Evidence](evidence.md)). Run `sqy schema` for the bundled schemas.
 
 ## Execution model
 

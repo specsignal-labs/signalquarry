@@ -47,6 +47,31 @@ class Resolved:
 
         return load_recorded_chains(self.root) or None
 
+    def benchmark_source(self) -> tuple[Dataset, str] | None:
+        """The dataset holding the declared benchmark's bars, or ``None`` when none covers it.
+
+        The strategy's own dataset is never widened for this: its identity, and so every
+        ledger hash, stays what it was before benchmarks were compared.
+        """
+        symbol = self.strategy.spec.benchmark
+        if symbol is None:
+            return None
+        if symbol in self.dataset.series:
+            return self.dataset, symbol
+        if self.grade == "synthetic":
+            return synthetic_dataset(SYNTHETIC_START, SYNTHETIC_END, symbols=(symbol,)), symbol
+        library = library_for(self.root)
+        manifest = select_manifest(library, (symbol,), self.strategy.spec.data.feed)
+        if manifest is None:
+            return None
+        try:
+            other = dataset_from_manifest(library, manifest)
+        except LibraryError:
+            return None
+        if not set(self.dataset.sessions) <= set(other.sessions):
+            return None
+        return other, symbol
+
     @property
     def evidence_grade(self) -> str:
         """What results on this data may be called: options prices are modelled, so never better

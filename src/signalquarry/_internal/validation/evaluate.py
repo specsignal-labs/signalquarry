@@ -28,6 +28,8 @@ from signalquarry._internal.contracts.spec import StrategySpecV1
 from signalquarry._internal.data.dataset import Dataset
 from signalquarry._internal.engine.backtest import BacktestResult
 from signalquarry._internal.engine.run import is_options, simulate
+from signalquarry._internal.validation.benchmark import benchmark_curve
+from signalquarry._internal.validation.metrics import relative
 from signalquarry._internal.validation.stats import (
     block_bootstrap_sharpe,
     deflated_sharpe,
@@ -118,6 +120,7 @@ def evaluate(
     stress: bool = True,
     open_holdout: bool = False,
     recorded_chains: Mapping[tuple[str, date], Mapping[str, tuple[Decimal, Decimal]]] | None = None,
+    benchmark: tuple[Dataset, str] | None = None,
 ) -> Evaluation:
     evaluation = Evaluation()
     pre_end = (holdout_start - timedelta(days=1)) if holdout_start else dataset.sessions[-1]
@@ -127,19 +130,31 @@ def evaluate(
     returns = equity_returns(base, spec.account.initial_cash)
     first = base.sessions[0]
     oos_start = add_months(first, spec.evaluation.walk_forward.train_months)
+    # The declared benchmark over the same sessions. Descriptive: no gate below reads it.
+    reference = (
+        None
+        if benchmark is None
+        else benchmark_curve(spec, benchmark[0], benchmark[1], base.sessions).returns(
+            spec.account.initial_cash
+        )
+    )
     folds: list[dict[str, Any]] = []
     cursor = oos_start
     while True:
         fold_end = add_months(cursor, spec.evaluation.walk_forward.test_months) - timedelta(days=1)
         if fold_end > pre_end:
             break
-        folds.append(
-            {
-                "start": cursor.isoformat(),
-                "end": fold_end.isoformat(),
-                **_stats(_window(base, returns, cursor, fold_end)),
-            }
-        )
+        fold = {
+            "start": cursor.isoformat(),
+            "end": fold_end.isoformat(),
+            **_stats(_window(base, returns, cursor, fold_end)),
+        }
+        if reference is not None:
+            against = _stats(_window(base, reference, cursor, fold_end))
+            fold["benchmark_total_return"] = against["total_return"]
+            fold["benchmark_max_drawdown"] = against["max_drawdown"]
+            fold["excess_return"] = fold["total_return"] - against["total_return"]
+        folds.append(fold)
         cursor = fold_end + timedelta(days=1)
     evaluation.folds = folds
     oos_returns = _window(base, returns, oos_start, pre_end)
@@ -159,6 +174,11 @@ def evaluate(
         # Moving-block bootstrap (20-session blocks, fixed seed): how uncertain the Sharpe is.
         "sharpe_annual_90": _annual_interval(block_bootstrap_sharpe(oos_returns)),
     }
+    if reference is not None and benchmark is not None:
+        oos_reference = _window(base, reference, oos_start, pre_end)
+        evaluation.oos["benchmark"] = {"symbol": benchmark[1], **_stats(oos_reference)}
+        evaluation.oos["relative"] = relative(oos_returns, oos_reference)
+        evaluation.oos["folds_ahead_of_benchmark"] = sum(1 for fold in folds if fold["excess_return"] > 0)
 
     years = (pre_end - first).days / 365.25
     rebalances = len({fill.session for fill in base.fills})
