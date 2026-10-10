@@ -83,7 +83,7 @@ jobs:
           /tmp/smoke/bin/sqy --json init /tmp/flow --demo > /dev/null
           cd /tmp/flow
           /tmp/smoke/bin/sqy --json check | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok', d"
-          /tmp/smoke/bin/sqy --json backtest --strategy sma-trend | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and len(d['artifacts'])==4, d"
+          /tmp/smoke/bin/sqy --json backtest --strategy sma-trend | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='ok' and {a['kind'] for a in d['artifacts']}=={'result','equity','benchmark','fills','decisions'}, d"
           set +e; /tmp/smoke/bin/sqy --json evaluate --strategy sma-trend > /tmp/evaluate.json; code=$?; set -e
           test "$code" = 0 -o "$code" = 2
           python3 -c "import json; d=json.load(open('/tmp/evaluate.json')); assert d['evidence']['claim_level']=='none' and d['data']['run_id'], d"
