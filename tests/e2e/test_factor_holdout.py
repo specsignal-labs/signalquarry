@@ -412,7 +412,7 @@ def test_factor_holdout_cli_help_marks_sealing_as_human_only(capsys: pytest.Capt
 def test_factor_holdout_command_catalog_includes_both_nested_commands() -> None:
     factor = next(command for command in command_catalog() if command["name"] == "factor")
     subcommands = {command["name"]: command for command in factor["subcommands"]}
-    assert set(subcommands) == {"ls", "evaluate", "holdout seal", "holdout status"}
+    assert set(subcommands) == {"ls", "evaluate", "search", "holdout seal", "holdout status"}
     assert "Explicit human command" in subcommands["holdout seal"]["help"]
     assert {tuple(option["flags"]) for option in subcommands["holdout seal"]["options"]} >= {
         ("--family",),

@@ -82,6 +82,22 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
 | `--project` | project directory (default: search upwards) |
 
+### `sqy factor search`
+
+Spend sealed trial budget on exploratory formula proposals; grade none.
+
+| Option | Meaning |
+|---|---|
+| `--family` | sealed factor family (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | verified dated universe build path; repeat for each build (required) |
+| `--training-cutoff` | exclusive training boundary (YYYY-MM-DD), before the sealed holdout (required) |
+| `--horizon` | forward-return horizon in sessions (required) |
+| `--seed` | deterministic search seed (required) |
+| `--budget` | candidate trials to spend; cannot widen family budget (required) |
+| `--accepted` | registered comparison factor ID; repeat for each factor |
+| `--project` | project directory (default: search upwards) |
+
 ### `sqy factor holdout seal`
 
 Explicit human command: fix a family's factor holdout once; never open it.

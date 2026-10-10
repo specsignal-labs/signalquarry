@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Deterministic, training-only formula search over the safe expression grammar.
 
-This pilot accepts only explicitly synthetic outcomes. It estimates a
+The core accepts synthetic or calculated, unverified outcomes. It estimates a
 multiple-testing-adjusted discovery score for candidate ordering, but writes no
 trial ledger, issues no evidence grade, and cannot open a holdout.
 """
@@ -34,6 +34,7 @@ from signalquarry._internal.factors.expr import (
     expression_complexity,
     parse_expression,
 )
+from signalquarry._internal.factors.labels import ForwardReturnLabels
 from signalquarry.sdk.factors import FactorCtx
 
 _IDENTITY_PREFIX = "sha256:"
@@ -50,13 +51,13 @@ _EULER_GAMMA = 0.5772156649015329
 
 @dataclass(frozen=True)
 class FormulaTrainingInput:
-    """One immutable, explicitly dated training panel and synthetic labels."""
+    """One immutable, explicitly dated training panel and aligned forward labels."""
 
     dataset_identity: str
     universe_identity: str
     context: FactorCtx
     eligible: np.ndarray
-    labels: SyntheticLabels
+    labels: SyntheticLabels | ForwardReturnLabels
 
 
 @dataclass(frozen=True)
@@ -96,7 +97,7 @@ class FormulaCandidate:
 
 @dataclass(frozen=True)
 class FormulaSearchReport:
-    scope: Literal["synthetic"]
+    scope: Literal["synthetic", "exploratory"]
     dataset_identity: str
     universe_identity: str
     training_label_identity: str
@@ -122,7 +123,7 @@ class _ValidatedInput:
     universe_identity: str
     context: FactorCtx
     eligible: np.ndarray
-    labels: SyntheticLabels
+    labels: SyntheticLabels | ForwardReturnLabels
 
 
 @dataclass(frozen=True)
@@ -208,7 +209,7 @@ def _validate_input(data: FormulaTrainingInput, config: FormulaSearchConfig) -> 
         not _identity(data.dataset_identity)
         or not _identity(data.universe_identity)
         or not isinstance(context, FactorCtx)
-        or not isinstance(labels, SyntheticLabels)
+        or not isinstance(labels, (SyntheticLabels, ForwardReturnLabels))
         or not _identity(labels.dataset_identity)
         or not _identity(labels.label_identity)
         or data.dataset_identity != labels.dataset_identity
@@ -224,7 +225,11 @@ def _validate_input(data: FormulaTrainingInput, config: FormulaSearchConfig) -> 
         or not sessions
         or sessions != tuple(sorted(set(sessions)))
         or any(session >= context.decision_session for session in sessions)
-        or sessions[-1] != config.training_cutoff
+        or (
+            sessions[-1] != config.training_cutoff
+            if isinstance(labels, SyntheticLabels)
+            else sessions[-1] >= config.training_cutoff
+        )
         or not symbols
         or any(not isinstance(symbol, str) or not symbol for symbol in symbols)
         or len(symbols) != len(set(symbols))
@@ -289,7 +294,11 @@ def _validate_input(data: FormulaTrainingInput, config: FormulaSearchConfig) -> 
 
     training_label_identity = canonical_hash(
         {
-            "schema": "signalquarry.synthetic-factor-training-labels/v1",
+            "schema": (
+                "signalquarry.synthetic-factor-training-labels/v1"
+                if isinstance(labels, SyntheticLabels)
+                else "signalquarry.calculated-factor-training-labels/v1"
+            ),
             "dataset_identity": data.dataset_identity,
             "universe_identity": data.universe_identity,
             "horizon": config.horizon,
@@ -657,7 +666,7 @@ def search_expressions(
     candidates.sort(key=lambda item: (-item.fitness, item.identity))
     discoveries = tuple(item.identity for item in candidates if item.discovery)
     return FormulaSearchReport(
-        scope="synthetic",
+        scope="synthetic" if isinstance(data.labels, SyntheticLabels) else "exploratory",
         dataset_identity=validated.dataset_identity,
         universe_identity=validated.universe_identity,
         training_label_identity=validated.labels.label_identity,

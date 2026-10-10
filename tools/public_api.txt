@@ -148,6 +148,7 @@ signalquarry.api.factor_evaluate(factor_id: 'str', dataset_id: 'str', *, univers
 signalquarry.api.factor_holdout_seal(family: 'str', dataset_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.factor_holdout_status(*, family: 'str | None' = None, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.factor_ls(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.factor_search(family: 'str', dataset_id: 'str', *, universe_manifests: 'Sequence[Path]', training_cutoff: 'date', horizon: 'int', seed: 'int', budget: 'int', accepted: 'Sequence[str]' = (), project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_seal(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_status(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.init(path: 'Path', *, demo: 'bool' = False, package: 'str | None' = None, lab: 'bool' = False, kind: 'str' = 'equity') -> 'Envelope'

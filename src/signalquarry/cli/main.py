@@ -151,6 +151,39 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
     )
     evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
     evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    search = actions.add_parser(
+        "search",
+        help="Spend sealed trial budget on exploratory formula proposals; grade none.",
+        description="T1 exploratory search: replay verified inputs, ledger-derived budget, holdout untouched. Never registers a factor or publishes evidence.",
+    )
+    search.add_argument("--family", required=True, help="sealed factor family")
+    search.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    search.add_argument(
+        "--universe-manifest",
+        type=Path,
+        action="append",
+        required=True,
+        help="verified dated universe build path; repeat for each build",
+    )
+    search.add_argument(
+        "--training-cutoff",
+        type=date.fromisoformat,
+        required=True,
+        help="exclusive training boundary (YYYY-MM-DD), before the sealed holdout",
+    )
+    search.add_argument("--horizon", type=int, required=True, help="forward-return horizon in sessions")
+    search.add_argument("--seed", type=int, required=True, help="deterministic search seed")
+    search.add_argument(
+        "--budget", type=int, required=True, help="candidate trials to spend; cannot widen family budget"
+    )
+    search.add_argument(
+        "--accepted",
+        action="append",
+        default=[],
+        help="registered comparison factor ID; repeat for each factor",
+    )
+    search.add_argument("--project", type=Path, help="project directory (default: search upwards)")
+    search.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     holdout = actions.add_parser("holdout", help="Inspect factor seals or explicitly seal as a human.")
     holdout_actions = holdout.add_subparsers(dest="holdout_action", required=True, parser_class=_Parser)
     seal = holdout_actions.add_parser(
@@ -168,6 +201,18 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
 
 
 def _factor(args: argparse.Namespace) -> Envelope:
+    if args.action == "search":
+        return api.factor_search(
+            args.family,
+            args.dataset_id,
+            universe_manifests=args.universe_manifest,
+            training_cutoff=args.training_cutoff,
+            horizon=args.horizon,
+            seed=args.seed,
+            budget=args.budget,
+            accepted=args.accepted,
+            project=args.project,
+        )
     if args.action == "ls":
         return api.factor_ls(project=args.project)
     if args.action == "holdout":

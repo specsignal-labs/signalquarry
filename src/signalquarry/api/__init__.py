@@ -205,6 +205,7 @@ from signalquarry.api.factor import (  # noqa: E402
     factor_holdout_seal,
     factor_holdout_status,
     factor_ls,
+    factor_search,
 )
 from signalquarry.api.paper import (  # noqa: E402
     paper_arm,
@@ -261,6 +262,7 @@ __all__ = [
     "factor_holdout_seal",
     "factor_holdout_status",
     "factor_ls",
+    "factor_search",
     "evidence_export",
     "evidence_verify",
     "holdout_seal",

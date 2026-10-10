@@ -405,6 +405,28 @@ ends with a hypothetical-results disclaimer.
 Report-section plugins (`signalquarry.report_sections`) append their own headed
 sections to `report.md`.
 
+## Exploratory factor search
+
+After a human seals the factor family, `sqy factor search --family F --dataset-id D
+--universe-manifest PATH --training-cutoff YYYY-MM-DD --horizon 1 --seed 7 --budget 20`
+replays the selected dataset and dated universe builds. Repeat `--universe-manifest`
+for additional builds and `--accepted FACTOR_ID` for registered comparison factors.
+Any unavailable or unreplayable input refuses the search before recording trials.
+The current universe builder requires the matching dataset to end before its
+decision session. Such builds leave no eligible training rows; replay-verified
+search success remains blocked pending a change to that verification contract.
+
+Training bars and forward outcomes are strictly before the cutoff and the sealed
+holdout. Counts, prior p-values and the fixed family budget come from the ledger;
+the whole requested candidate budget must fit. Each evaluated expression is
+recorded before returning. Identical retries check recorded results and append
+only missing trials after an interrupted search.
+
+The compact envelope links to `.signalquarry/factor_searches/ID/search.json` with
+all candidates and accounting. These are T1 proposals, with scope `exploratory`,
+grade `none` and no holdout access. They register no factors, write no project
+code, have no MCP tool, and never enter evidence exports, including NDA bundles.
+
 ## Publishing evidence
 
 Nothing is published by default. A family publishes only what its
@@ -1009,6 +1031,22 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
 | `--project` | project directory (default: search upwards) |
 
+### `sqy factor search`
+
+Spend sealed trial budget on exploratory formula proposals; grade none.
+
+| Option | Meaning |
+|---|---|
+| `--family` | sealed factor family (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | verified dated universe build path; repeat for each build (required) |
+| `--training-cutoff` | exclusive training boundary (YYYY-MM-DD), before the sealed holdout (required) |
+| `--horizon` | forward-return horizon in sessions (required) |
+| `--seed` | deterministic search seed (required) |
+| `--budget` | candidate trials to spend; cannot widen family budget (required) |
+| `--accepted` | registered comparison factor ID; repeat for each factor |
+| `--project` | project directory (default: search upwards) |
+
 ### `sqy factor holdout seal`
 
 Explicit human command: fix a family's factor holdout once; never open it.
@@ -1582,6 +1620,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
 | `FACTOR_SEARCH_INPUT_UNVERIFIED` | evidence | Formula-search inputs have not passed the required identity, provenance or significance checks. | Verify input manifests, bind normalized formula identity and grammar, and provide a finite p-value in [0, 1]. |
+| `FACTOR_SEARCH_NONDETERMINISTIC` | evidence | Recomputed formula-search trials or artifacts differ from the recorded results. | Keep the input identities, grammar, comparison factors and trial history fixed; investigate the mismatch before retrying. |
 | `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
 | `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
 | `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |

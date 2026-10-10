@@ -127,6 +127,28 @@ ends with a hypothetical-results disclaimer.
 Report-section plugins (`signalquarry.report_sections`) append their own headed
 sections to `report.md`.
 
+## Exploratory factor search
+
+After a human seals the factor family, `sqy factor search --family F --dataset-id D
+--universe-manifest PATH --training-cutoff YYYY-MM-DD --horizon 1 --seed 7 --budget 20`
+replays the selected dataset and dated universe builds. Repeat `--universe-manifest`
+for additional builds and `--accepted FACTOR_ID` for registered comparison factors.
+Any unavailable or unreplayable input refuses the search before recording trials.
+The current universe builder requires the matching dataset to end before its
+decision session. Such builds leave no eligible training rows; replay-verified
+search success remains blocked pending a change to that verification contract.
+
+Training bars and forward outcomes are strictly before the cutoff and the sealed
+holdout. Counts, prior p-values and the fixed family budget come from the ledger;
+the whole requested candidate budget must fit. Each evaluated expression is
+recorded before returning. Identical retries check recorded results and append
+only missing trials after an interrupted search.
+
+The compact envelope links to `.signalquarry/factor_searches/ID/search.json` with
+all candidates and accounting. These are T1 proposals, with scope `exploratory`,
+grade `none` and no holdout access. They register no factors, write no project
+code, have no MCP tool, and never enter evidence exports, including NDA bundles.
+
 ## Publishing evidence
 
 Nothing is published by default. A family publishes only what its
