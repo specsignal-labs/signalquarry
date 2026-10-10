@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `signalquarry.research.load_panel`: the bars a strategy runs on, for exploration, as read-only
+  arrays or an Arrow table. On recorded data it requires the family's holdout seal and stops on
+  the last session before it; prices are split-adjusted from splits inside the panel only.
 - `sqy diagnose` is in the research guide, the project `AGENTS.md` research block and the MCP
   adapter (`sqy_diagnose`).
 - A "Research method" guide: five working rules, the commands by question, and one study

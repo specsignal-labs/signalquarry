@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import importlib
 import json
+import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -20,8 +21,17 @@ import numpy as np
 import pyarrow as pa
 from numpy.typing import NDArray
 
+from signalquarry._internal.data.dataset import FIELDS, MICRO, Dataset
+from signalquarry._internal.data.library import Library, LibraryError, dataset_from_manifest, select_manifest
+from signalquarry._internal.data.synthetic import synthetic_dataset
 from signalquarry._internal.evidence.runs import iter_runs, read_curve, result_hash_ok
-from signalquarry._internal.project.project import ProjectError, find_root
+from signalquarry._internal.project.project import (
+    ProjectError,
+    find_root,
+    load_config,
+    load_strategies,
+)
+from signalquarry._internal.validation import ledger
 
 
 class ResearchError(Exception):
@@ -332,6 +342,168 @@ def load_comparison(comparison_id: str, project: Path | str | None = None) -> Ma
     return _freeze(document)
 
 
+PANEL_FIELDS = (*FIELDS, "volume")
+
+
+@dataclass(frozen=True)
+class Panel:
+    """Daily bars of one strategy's symbols for exploration, ending before any sealed holdout.
+
+    Arrays are ``[sessions, symbols]``, read-only, NaN where a bar is absent. With
+    ``split_adjusted`` (the default) prices and volumes are on the share basis of the panel's
+    last session, using only splits dated within the panel; dividends are not adjusted.
+    """
+
+    strategy_id: str
+    family: str
+    dataset_id: str
+    dataset_identity: str
+    grade: str  # "synthetic" or "historical"
+    sealed_from: date | None  # the family's holdout start; the panel ends before it
+    split_adjusted: bool
+    sessions: tuple[date, ...]
+    symbols: tuple[str, ...]
+    present: NDArray[np.bool_]
+    values: Mapping[str, NDArray[np.float64]]
+
+    @property
+    def fields(self) -> tuple[str, ...]:
+        return tuple(self.values)
+
+    def field(self, name: str) -> NDArray[np.float64]:
+        """One field as a ``[sessions, symbols]`` array."""
+        try:
+            return self.values[name]
+        except KeyError:
+            raise ResearchError("PANEL_FIELD_UNKNOWN", name) from None
+
+    def to_arrow(self) -> pa.Table:
+        """Long format: one row per session and symbol, with every loaded field and ``present``."""
+        count = len(self.symbols)
+        columns: dict[str, Any] = {
+            "session": pa.array(np.repeat(np.array(self.sessions, dtype=object), count), type=pa.date32()),
+            "symbol": pa.array(list(self.symbols) * len(self.sessions), type=pa.string()),
+        }
+        for name, values in self.values.items():
+            columns[name] = pa.array(values.reshape(-1), type=pa.float64(), from_pandas=True)
+        columns["present"] = pa.array(self.present.reshape(-1), type=pa.bool_())
+        return pa.table(columns)
+
+    def to_pandas(self) -> Any:
+        """The long table as a pandas DataFrame indexed by session and symbol (pandas is optional)."""
+        try:
+            pandas = importlib.import_module("pandas")
+        except ImportError as exc:
+            raise ResearchError("PANDAS_NOT_INSTALLED", "Install pandas to use Panel.to_pandas()") from exc
+        return pandas.DataFrame(self.to_arrow().to_pydict()).set_index(["session", "symbol"])
+
+
+def _family_seal(root: Path, family: str) -> date | None:
+    for entry in ledger.freezes(root, family).entries():
+        if entry.get("family") == family and entry.get("holdout_start"):
+            return date.fromisoformat(str(entry["holdout_start"]))
+    return None
+
+
+def _read_only(values: NDArray[Any]) -> NDArray[Any]:
+    values.setflags(write=False)
+    return values
+
+
+def load_panel(
+    strategy: str,
+    *,
+    fields: tuple[str, ...] = PANEL_FIELDS,
+    split_adjusted: bool = True,
+    project: Path | str | None = None,
+) -> Panel:
+    """Load the bars a strategy runs on, for exploration, without reaching a sealed holdout.
+
+    The dataset is the one the strategy's commands use; the symbols are the strategy's and,
+    when the dataset has it, its benchmark. On recorded data the strategy's family must be
+    sealed first (``sqy holdout seal --strategy ID``), and the panel ends on the last session
+    before the seal: what you look at while exploring cannot include the data the holdout gate
+    is later judged on. Synthetic data needs no seal. Nothing is recorded or written.
+    """
+    unknown = [name for name in fields if name not in PANEL_FIELDS]
+    if not fields or unknown or len(set(fields)) != len(fields):
+        raise ResearchError("PANEL_FIELD_UNKNOWN", ", ".join(unknown) or "no or repeated fields")
+    root = _root(project)
+    try:
+        config = load_config(root)
+        strategies = load_strategies(config)
+    except ProjectError as exc:
+        raise ResearchError(exc.code, exc.detail) from exc
+    loaded = strategies.get(strategy)
+    if loaded is None:
+        raise ResearchError("STRATEGY_NOT_FOUND", strategy)
+    spec = loaded.spec
+    dataset: Dataset
+    if config.provider == "synthetic":
+        wanted = spec.data.symbols + (
+            (spec.benchmark,) if spec.benchmark and spec.benchmark not in spec.data.symbols else ()
+        )
+        dataset, dataset_id, grade = synthetic_dataset(symbols=wanted), "synthetic", "synthetic"
+    else:
+        cache = Path(os.environ.get("SIGNALQUARRY_CACHE_DIR") or Path.home() / ".cache" / "signalquarry")
+        library = Library(cache_dir=cache.expanduser(), manifest_dir=root / "data" / "manifests")
+        manifest = select_manifest(library, spec.data.symbols, spec.data.feed)
+        if manifest is None:
+            raise ResearchError(
+                "PROVIDER_UNAVAILABLE", f"no recorded {spec.data.feed} dataset covers {strategy}"
+            )
+        try:
+            dataset = dataset_from_manifest(library, manifest)
+        except LibraryError as exc:
+            raise ResearchError(exc.code, str(exc)) from exc
+        dataset_id, grade = str(manifest["dataset_id"]), "historical"
+    seal = _family_seal(root, spec.family)
+    if grade != "synthetic" and seal is None:
+        raise ResearchError(
+            "PANEL_HOLDOUT_UNSEALED",
+            f"seal family {spec.family} before exploring recorded data: sqy holdout seal --strategy {strategy}",
+        )
+    stop = len(dataset.sessions)
+    if seal is not None:
+        stop = sum(session < seal for session in dataset.sessions)
+    if stop == 0:
+        raise ResearchError("PANEL_EMPTY", "no session before the sealed holdout")
+    symbols = tuple(
+        symbol
+        for symbol in (*spec.data.symbols, *((spec.benchmark,) if spec.benchmark else ()))
+        if symbol in dataset.series
+    )
+    symbols = tuple(dict.fromkeys(symbols))
+    present = np.column_stack([dataset.series[symbol].present[:stop] for symbol in symbols])
+    values: dict[str, NDArray[np.float64]] = {}
+    for name in fields:
+        columns: list[NDArray[np.float64]] = []
+        for symbol in symbols:
+            item = dataset.series[symbol]
+            raw = (
+                item.volume[:stop].astype(np.float64) if name == "volume" else item.micro[name][:stop] / MICRO
+            )
+            if split_adjusted:
+                factor = dataset.cumulative_split(symbol)[:stop]
+                # Onto the share basis of the panel's last session, from splits dated inside it.
+                raw = raw * factor[-1] / factor if name == "volume" else raw * factor / factor[-1]
+            columns.append(np.where(item.present[:stop], raw, np.nan))
+        values[name] = _read_only(np.column_stack(columns))
+    return Panel(
+        strategy_id=strategy,
+        family=spec.family,
+        dataset_id=dataset_id,
+        dataset_identity=dataset.identity(),
+        grade=grade,
+        sealed_from=seal,
+        split_adjusted=split_adjusted,
+        sessions=tuple(dataset.sessions[:stop]),
+        symbols=symbols,
+        present=_read_only(present),
+        values=MappingProxyType(values),
+    )
+
+
 def list_studies(project: Path | str | None = None) -> tuple[Mapping[str, Any], ...]:
     """Recorded study results, newest first: the run id, the study, its verdict and identity."""
     rows: list[Mapping[str, Any]] = []
@@ -373,6 +545,8 @@ def latest_study(study_id: str, project: Path | str | None = None) -> Mapping[st
 
 
 __all__ = [
+    "PANEL_FIELDS",
+    "Panel",
     "ResearchError",
     "Run",
     "Sweep",
@@ -382,6 +556,7 @@ __all__ = [
     "list_studies",
     "list_sweeps",
     "load_comparison",
+    "load_panel",
     "load_run",
     "load_study",
     "load_sweep",

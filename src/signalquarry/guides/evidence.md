@@ -124,6 +124,21 @@ A result document that no longer matches its recorded hash is refused. The modul
 provisional in 0.x. Looking at results this way does not count as a trial; running
 another configuration does.
 
+To look at the bars themselves, load the panel a strategy runs on:
+
+```python
+panel = research.load_panel("sma-trend")  # the strategy's symbols and its benchmark
+panel.field("close")  # [sessions, symbols], NaN where a bar is absent
+panel.to_arrow()  # long format, one row per session and symbol
+```
+
+On recorded data the strategy's family must be sealed first
+(`sqy holdout seal --strategy <id>`), and the panel stops on the last session before
+the seal: what you explore cannot include the data the holdout gate is later judged
+on. Synthetic data needs no seal. Prices and volumes are split-adjusted to the
+panel's last session using only splits dated inside the panel
+(`split_adjusted=False` gives the raw values); dividends are not adjusted.
+
 ## Studies: a declared comparison
 
 A study answers "does this idea add something over a baseline?" with the rule written
