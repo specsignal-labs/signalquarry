@@ -402,6 +402,13 @@ def _configure_study(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="recompute arms that already have a run and require the same ledger hash",
     )
+    run.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        metavar="N",
+        help="simulate arms in N worker processes (default 1); what is recorded does not depend on N",
+    )
     actions.add_parser("ls", help="List studies and the verdict of each one's latest run.")
     show = actions.add_parser("show", help="Show the latest recorded result of a study.")
     show.add_argument("--study", required=True, help="study id")
@@ -416,7 +423,7 @@ def _study(args: argparse.Namespace) -> Envelope:
     if args.action == "check":
         return api.study_check(args.study, project=args.project)
     if args.action == "run":
-        return api.study_run(args.study, rerun=args.rerun, project=args.project)
+        return api.study_run(args.study, rerun=args.rerun, jobs=args.jobs, project=args.project)
     if args.action == "show":
         return api.study_show(args.study, project=args.project)
     return api.study_ls(project=args.project)
@@ -689,7 +696,7 @@ COMMANDS: tuple[Command, ...] = (
         "sweep",
         "Backtest a parameter grid (each point on real data is a trial); reports PBO.",
         lambda args: api.sweep(
-            args.strategy, args.param, summary_only=args.summary_only, project=args.project
+            args.strategy, args.param, summary_only=args.summary_only, jobs=args.jobs, project=args.project
         ),
         lambda parser: (
             parser.add_argument("--strategy", required=True),
@@ -698,6 +705,13 @@ COMMANDS: tuple[Command, ...] = (
                 "--summary-only",
                 action="store_true",
                 help="keep result.json and equity curves per point; leave out fills and decisions",
+            ),
+            parser.add_argument(
+                "--jobs",
+                type=int,
+                default=1,
+                metavar="N",
+                help="simulate points in N worker processes (default 1); what is recorded does not depend on N",
             ),
             parser.add_argument("--project", type=Path),
         ),

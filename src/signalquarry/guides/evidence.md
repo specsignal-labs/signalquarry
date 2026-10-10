@@ -188,6 +188,15 @@ What a study guarantees:
   `--rerun` recomputes every arm and requires the ledger hash recorded before. On real data
   `evidence/studies.jsonl` records what each study set out to run and what became of every
   arm, including failures; `sqy evidence verify` checks it.
+- **Worker processes, one record.** `sqy study run --jobs N` (and `sqy sweep --jobs N`)
+  simulates in N worker processes. Each worker rebuilds its configuration from the project's
+  files and must arrive at the hashes that were checked; the one parent process then records
+  every trial and writes every run in the declared order. What is recorded therefore does not
+  depend on N, a failing arm stops the study at the same place, and the budget is still
+  checked for the whole study before anything starts. It pays when one backtest takes
+  seconds: starting a worker costs about as much as a small backtest. Do not edit the
+  project while it runs; a worker that finds a different project stops the command with
+  `PROJECT_CHANGED_DURING_RUN`.
 
 The result is written to `.signalquarry/studies/<run>/` as `study.json`, `comparison.md`
 and a chart. Variants appear beside the subject with the probability of backtest

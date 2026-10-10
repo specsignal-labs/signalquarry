@@ -471,6 +471,15 @@ What a study guarantees:
   `--rerun` recomputes every arm and requires the ledger hash recorded before. On real data
   `evidence/studies.jsonl` records what each study set out to run and what became of every
   arm, including failures; `sqy evidence verify` checks it.
+- **Worker processes, one record.** `sqy study run --jobs N` (and `sqy sweep --jobs N`)
+  simulates in N worker processes. Each worker rebuilds its configuration from the project's
+  files and must arrive at the hashes that were checked; the one parent process then records
+  every trial and writes every run in the declared order. What is recorded therefore does not
+  depend on N, a failing arm stops the study at the same place, and the budget is still
+  checked for the whole study before anything starts. It pays when one backtest takes
+  seconds: starting a worker costs about as much as a small backtest. Do not edit the
+  project while it runs; a worker that finds a different project stops the command with
+  `PROJECT_CHANGED_DURING_RUN`.
 
 The result is written to `.signalquarry/studies/<run>/` as `study.json`, `comparison.md`
 and a chart. Variants appear beside the subject with the probability of backtest
@@ -1541,6 +1550,7 @@ Backtest a parameter grid (each point on real data is a trial); reports PBO.
 | `--strategy` | strategy id from strategy.yaml (required) |
 | `--param` | NAME=V1,V2,… (repeatable) (required) |
 | `--summary-only` | keep result.json and equity curves per point; leave out fills and decisions |
+| `--jobs` | simulate points in N worker processes (default 1); what is recorded does not depend on N |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ## `sqy runs`
@@ -1606,6 +1616,7 @@ Run every arm on one dataset and window and compare them by the declared rule.
 |---|---|
 | `--study` | study id (required) |
 | `--rerun` | recompute arms that already have a run and require the same ledger hash |
+| `--jobs` | simulate arms in N worker processes (default 1); what is recorded does not depend on N |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ### `sqy study ls`
@@ -2056,6 +2067,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `PERF_FEED_INVALID` | evidence | The existing feed file is not a performance snapshot, so the new one cannot chain to it. | Move the file aside (a new chain starts) or restore the published snapshot. |
 | `PERF_PUBLISH_DENIED` | evidence | The family's publication policy does not allow a live performance feed. | Set live_feed: allow for a non-commercial family; commercial families publish lagged exports only. |
 | `PRICE_MISSING` | data | No price for a symbol on the execution session; the order waits. | Check data coverage for the symbol. |
+| `PROJECT_CHANGED_DURING_RUN` | evidence | A worker process rebuilt a configuration from the project's files and did not arrive at the configuration or dataset that was checked: the project changed while the command was running. | Leave the project's files alone while `--jobs` is in use, then run the command again; a study reuses the arms that completed. |
 | `PROJECT_CONFIG_INVALID` | usage | signalquarry.toml could not be parsed or has invalid values. | Fix the reported field in signalquarry.toml. |
 | `PROJECT_DIR_NOT_EMPTY` | usage | `sqy init` only creates projects in a new or empty directory. | Choose a new directory name. |
 | `PROJECT_NOT_FOUND` | usage | No signalquarry.toml in this directory or its parents. | Run `sqy init <dir>` or pass --project. |

@@ -14,6 +14,8 @@ import json
 import math
 import re
 from collections.abc import Mapping
+from concurrent.futures import Future
+from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -59,7 +61,7 @@ from signalquarry.api.evidence import (
     trial_budget,
 )
 from signalquarry.api.resolve import Resolved, resolve
-from signalquarry.api.runs import execute_run
+from signalquarry.api.runs import Simulated, commit_run, execute_run, simulate_run, simulation_pool
 
 STUDY_RESULT_SCHEMA = "signalquarry.study-result/v1"
 _STRATEGY_KINDS = ("subject", "variant", "strategy")
@@ -112,6 +114,21 @@ class _Done:
     run_id: str | None
     result_hash: str | None
     resumed: bool
+
+
+@dataclass(frozen=True)
+class _Job:
+    """What a worker process needs to rebuild one arm from the project and simulate it."""
+
+    study_id: str
+    root: Path
+    study_hash: str
+    arm: str
+    configuration_hash: str
+    dataset_identity: str
+    start: date | None
+    end: date | None
+    scratch: Path
 
 
 class _StudyError(Exception):
@@ -354,6 +371,56 @@ def _strategy_document(arm: _Arm, document: Mapping[str, Any]) -> dict[str, Any]
     }
 
 
+_worker_plans: dict[tuple[Path, str], tuple[_Plan, str] | None] = {}  # one per worker process
+
+
+def _simulate_arm(job: _Job) -> Simulated | str:
+    """Simulate one arm in a worker process; what changed, when the project is not the parent's.
+
+    The worker rebuilds the study from the files, so it must arrive at the hashes the parent
+    planned with. It appends nothing to the evidence and writes only into ``job.scratch``: the
+    parent records and writes every arm, in the declared order.
+    """
+    key = (job.root, job.study_id)
+    if key not in _worker_plans:
+        plan = _plan("study run", job.study_id, job.root)
+        _worker_plans[key] = None if isinstance(plan, Envelope) else (plan, plan.subject.dataset.identity())
+    found = _worker_plans[key]
+    if found is None or found[0].study_hash != job.study_hash:
+        return "the study no longer resolves to the plan that was checked"
+    plan, dataset_identity = found
+    arm = next((arm for arm in plan.arms if arm.id == job.arm), None)
+    if arm is None or arm.resolved is None or arm.configuration_hash != job.configuration_hash:
+        return "its configuration is not the one that was checked"
+    if dataset_identity != job.dataset_identity:
+        return "the dataset is not the one that was checked"
+    job.scratch.mkdir()
+    return simulate_run(arm.resolved, start=job.start, end=job.end, scratch=job.scratch)
+
+
+def _submit(
+    stack: ExitStack, plan: _Plan, arms: list[_Arm], jobs: int, dataset_identity: str
+) -> dict[str, Future[Simulated | str]]:
+    """Start the simulations of ``arms`` in at most ``jobs`` worker processes."""
+    pool, scratch = simulation_pool(stack, min(jobs, len(arms)))
+    futures: dict[str, Future[Simulated | str]] = {}
+    for number, arm in enumerate(arms):
+        assert arm.configuration_hash is not None
+        job = _Job(
+            study_id=plan.study.id,
+            root=plan.root,
+            study_hash=plan.study_hash,
+            arm=arm.id,
+            configuration_hash=arm.configuration_hash,
+            dataset_identity=dataset_identity,
+            start=plan.start,
+            end=plan.end,
+            scratch=scratch / str(number),
+        )
+        futures[arm.id] = pool.submit(_simulate_arm, job)
+    return futures
+
+
 def _run_strategy_arm(
     plan: _Plan,
     arm: _Arm,
@@ -361,6 +428,7 @@ def _run_strategy_arm(
     *,
     rerun: bool,
     benchmarks: dict[tuple[date, date, int], BenchmarkCurve | None],
+    simulation: Future[Simulated | str] | None = None,
 ) -> _Done:
     assert arm.resolved is not None
     resolved = arm.resolved
@@ -388,15 +456,34 @@ def _run_strategy_arm(
             str(document.get("result_hash")),
             resumed=True,
         )
-    run = execute_run(
-        resolved,
-        command="study",
-        start=plan.start,
-        end=plan.end,
-        label=arm.id,
-        benchmarks=benchmarks,
-        record=arm.counts,
-    )
+    if simulation is None:
+        run = execute_run(
+            resolved,
+            command="study",
+            start=plan.start,
+            end=plan.end,
+            label=arm.id,
+            benchmarks=benchmarks,
+            record=arm.counts,
+        )
+    else:
+        simulated = simulation.result()  # an EngineError in the worker is raised here
+        if isinstance(simulated, str):
+            raise _StudyError(
+                "PROJECT_CHANGED_DURING_RUN",
+                f"{arm.id}: {simulated}; the project changed while the study ran",
+                status="blocked",
+            )
+        run = commit_run(
+            resolved,
+            simulated,
+            command="study",
+            start=plan.start,
+            end=plan.end,
+            label=arm.id,
+            benchmarks=benchmarks,
+            record=arm.counts,
+        )
     if found is not None and found[1].get("ledger_hash") != run.ledger_hash:
         raise _StudyError(
             "STUDY_DETERMINISM_FAILED",
@@ -543,14 +630,23 @@ def study_check(study_id: str, *, project: Path | None = None) -> Envelope:
     return envelope
 
 
-def study_run(study_id: str, *, rerun: bool = False, project: Path | None = None) -> Envelope:
+def study_run(study_id: str, *, rerun: bool = False, jobs: int = 1, project: Path | None = None) -> Envelope:
     """Run every arm of a study, compare them by its declared rule and record the result.
 
     Arms whose run already exists for the same configuration, dataset and window are reused;
     ``rerun`` recomputes them and requires the ledger hash they had. A study that would exceed
-    a family's trial budget is refused with nothing written.
+    a family's trial budget is refused with nothing written. ``jobs`` above 1 simulates the
+    arms in that many worker processes; trials, runs and the study log are still written by
+    this process in the declared order, so what is recorded does not depend on ``jobs``.
     """
     command = "study run"
+    if jobs < 1:
+        return Envelope(
+            command=command,
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="--jobs must be at least 1",
+        )
     plan = _plan(command, study_id, project)
     if isinstance(plan, Envelope):
         return plan
@@ -596,33 +692,49 @@ def study_run(study_id: str, *, rerun: bool = False, project: Path | None = None
     ordered = [arm for arm in plan.arms if arm.kind in _STRATEGY_KINDS] + [
         arm for arm in plan.arms if arm.kind not in _STRATEGY_KINDS
     ]
-    for number, arm in enumerate(ordered):
-        progress.emit("study", arm=arm.id, done=number, total=len(ordered))
-        try:
-            if arm.kind in _STRATEGY_KINDS:
-                item = _run_strategy_arm(plan, arm, dataset_identity, rerun=rerun, benchmarks=benchmarks)
-            else:
-                item = _benchmark_arm(plan, arm, done[0], dataset_identity)
-        except EngineError as exc:
-            code = str(exc).split(":", 1)[0]
-            log("arm_failed", arm=arm.id, reason=code)
-            return Envelope(
-                command=command,
-                status="invalid",
-                reason_codes=[code],
-                summary=f"{study_id}: arm {arm.id}: {exc}",
-            )
-        except _StudyError as exc:
-            log("arm_failed", arm=arm.id, reason=exc.code)
-            return _refusal(command, exc)
-        log(
-            "arm_completed",
-            arm=arm.id,
-            run_id=item.run_id,
-            result_hash=item.result_hash,
-            resumed=item.resumed,
+    with ExitStack() as stack:
+        pending = [
+            arm
+            for arm in ordered
+            if arm.kind in _STRATEGY_KINDS and (rerun or _existing(plan, arm, dataset_identity) is None)
+        ]
+        simulations = (
+            _submit(stack, plan, pending, jobs, dataset_identity) if jobs > 1 and len(pending) > 1 else {}
         )
-        done.append(item)
+        for number, arm in enumerate(ordered):
+            progress.emit("study", arm=arm.id, done=number, total=len(ordered))
+            try:
+                if arm.kind in _STRATEGY_KINDS:
+                    item = _run_strategy_arm(
+                        plan,
+                        arm,
+                        dataset_identity,
+                        rerun=rerun,
+                        benchmarks=benchmarks,
+                        simulation=simulations.get(arm.id),
+                    )
+                else:
+                    item = _benchmark_arm(plan, arm, done[0], dataset_identity)
+            except EngineError as exc:
+                code = str(exc).split(":", 1)[0]
+                log("arm_failed", arm=arm.id, reason=code)
+                return Envelope(
+                    command=command,
+                    status="invalid",
+                    reason_codes=[code],
+                    summary=f"{study_id}: arm {arm.id}: {exc}",
+                )
+            except _StudyError as exc:
+                log("arm_failed", arm=arm.id, reason=exc.code)
+                return _refusal(command, exc)
+            log(
+                "arm_completed",
+                arm=arm.id,
+                run_id=item.run_id,
+                result_hash=item.result_hash,
+                resumed=item.resumed,
+            )
+            done.append(item)
 
     by_id = {item.arm.id: item for item in done}
     subject, versus = by_id["base"], by_id[study.compare.versus]

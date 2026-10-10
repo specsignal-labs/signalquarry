@@ -175,13 +175,16 @@ def sqy_study_check(study_id: str, project: str | None = None) -> dict[str, Any]
 
 
 @mcp.tool()
-def sqy_study_run(study_id: str, project: str | None = None, rerun: bool = False) -> dict[str, Any]:
+def sqy_study_run(
+    study_id: str, project: str | None = None, rerun: bool = False, jobs: int = 1
+) -> dict[str, Any]:
     """Run every arm of a study and judge it by its declared rule.
 
     Spends trial budget on real data and is refused beforehand when a budget would be
-    exceeded. It never opens a holdout and never raises a claim level.
+    exceeded. It never opens a holdout and never raises a claim level. `jobs` above 1
+    simulates arms in worker processes; what is recorded does not depend on it.
     """
-    return _result(api.study_run(study_id, rerun=rerun, project=_path(project)))
+    return _result(api.study_run(study_id, rerun=rerun, jobs=jobs, project=_path(project)))
 
 
 @mcp.tool()

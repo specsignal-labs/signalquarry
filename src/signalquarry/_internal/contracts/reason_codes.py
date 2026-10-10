@@ -1144,6 +1144,12 @@ _CODES += (
         "The strategy declares no benchmark, so the scaffolded benchmark baseline has no symbol yet.",
         "Give the baseline a `symbol`, or declare `benchmark` in strategy.yaml.",
     ),
+    ReasonCode(
+        "PROJECT_CHANGED_DURING_RUN",
+        Category.EVIDENCE,
+        "A worker process rebuilt a configuration from the project's files and did not arrive at the configuration or dataset that was checked: the project changed while the command was running.",
+        "Leave the project's files alone while `--jobs` is in use, then run the command again; a study reuses the arms that completed.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

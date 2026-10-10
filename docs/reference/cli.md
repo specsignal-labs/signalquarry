@@ -279,6 +279,7 @@ Backtest a parameter grid (each point on real data is a trial); reports PBO.
 | `--strategy` | strategy id from strategy.yaml (required) |
 | `--param` | NAME=V1,V2,… (repeatable) (required) |
 | `--summary-only` | keep result.json and equity curves per point; leave out fills and decisions |
+| `--jobs` | simulate points in N worker processes (default 1); what is recorded does not depend on N |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ## `sqy runs`
@@ -344,6 +345,7 @@ Run every arm on one dataset and window and compare them by the declared rule.
 |---|---|
 | `--study` | study id (required) |
 | `--rerun` | recompute arms that already have a run and require the same ledger hash |
+| `--jobs` | simulate arms in N worker processes (default 1); what is recorded does not depend on N |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ### `sqy study ls`
