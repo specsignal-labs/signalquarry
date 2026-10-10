@@ -36,6 +36,7 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy trials`: List trials or (humans only) extend a family's budget.
 - `sqy holdout`: Seal a family's holdout early, or show seals and openings.
 - `sqy sweep`: Backtest a parameter grid (each point on real data is a trial); reports PBO.
+- `sqy runs`: List, show and compare backtest runs.
 - `sqy backtest`: Backtest a strategy and write run artifacts.
 - `sqy evidence`: Verify evidence ledgers, journals and bundles; export a family's evidence bundle.
 - `sqy commit`: Salted commitments to frozen strategies and journal heads (OpenTimestamps).
@@ -357,6 +358,29 @@ and leaves out fills and decisions). The sweep itself is recorded in
 `.signalquarry/sweeps/<sweep_id>/` as `sweep.json` (grid, run ids, metrics, PBO) and
 `sweep.csv`. Each run's `result.json` carries the `params` and the hashed `spec`
 that produced it, so runs can be compared later.
+
+### Listing and comparing runs
+
+```bash
+sqy runs ls --strategy sma-trend          # recent runs, newest first (sweep points included)
+sqy runs show RUN_ID                      # one run's result document and artifacts
+sqy runs compare RUN_A RUN_B [RUN_C …]    # every run against the first
+```
+
+`runs compare` lists the runs side by side, reports how each differs from the
+reference in parameters and specification, and, for comparable runs, gives the
+correlation of daily returns and the difference in annualized Sharpe with a paired
+moving-block bootstrap 90% interval. An interval that contains zero means this
+sample cannot tell the two runs apart. It writes `comparison.json`, `comparison.md`
+and an overlay chart under `.signalquarry/comparisons/`.
+
+Runs are differenced only when they share the dataset, the sessions, the account and
+the evidence grade. Otherwise the command still lists them, warns
+`RUNS_NOT_COMPARABLE` with the reasons, and differences nothing. A run whose
+`result.json` no longer matches its recorded hash is refused
+(`RUN_ARTIFACT_INVALID`). Comparisons are in-sample and never raise a claim level:
+picking the best row is exactly what the trial ledger and the deflated Sharpe ratio
+are there to price.
 
 ## Freeze and holdout
 
@@ -1230,6 +1254,38 @@ Backtest a parameter grid (each point on real data is a trial); reports PBO.
 | `--summary-only` | keep result.json and equity curves per point; leave out fills and decisions |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+## `sqy runs`
+
+List, show and compare backtest runs.
+
+### `sqy runs ls`
+
+List recent backtest runs, newest first.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | only runs of this strategy id |
+| `--limit` | how many runs to list (default 20) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy runs show`
+
+Show one run's result document and artifacts.
+
+| Option | Meaning |
+|---|---|
+| `run` | run id |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy runs compare`
+
+Compare two or more runs against the first; writes comparison.md.
+
+| Option | Meaning |
+|---|---|
+| `runs` | run ids; the first is the reference |
+| `--project` | project directory (default: search upwards from the current directory) |
+
 ## `sqy backtest`
 
 Backtest a strategy and write run artifacts.
@@ -1669,7 +1725,10 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `REASON_CODE_UNKNOWN` | usage | The code is not a framework or declared strategy reason code. | Check spelling; codes are UPPER_SNAKE_CASE. |
 | `REPORT_CONFIGURATION_CHANGED` | evidence | The reported runs used a different configuration than the current code and spec. | Rerun the backtest and evaluation for the current configuration. |
 | `REPORT_NO_RUNS` | usage | There is no backtest or evaluation run to report on. | Run `sqy backtest --strategy <id>` (and `sqy evaluate`) first. |
+| `RUNS_NOT_COMPARABLE` | evidence | The runs differ in dataset, sessions, account or evidence grade, so nothing was differenced or ranked. | Compare runs produced on the same dataset and window with the same account; see data.reasons. |
+| `RUN_ARTIFACT_INVALID` | evidence | A run's result document or equity curve is missing, unreadable or no longer matches its recorded hash. | Do not edit `.signalquarry/runs/`; repeat the backtest to produce the run again. |
 | `RUN_LEASE_BUSY` | execution | Another run holds the deployment lease. | Retry after the running command finishes. |
+| `RUN_NOT_FOUND` | usage | No run directory has that id. | Run `sqy runs ls` to list run ids. |
 | `SCHEDULE_GITHUB_ACTIONS_DEMO_ONLY` | execution | GitHub Actions schedules are delayed and best-effort; use them for demos only. | Use systemd on a small VM (or launchd/cron on an always-on host) for forward tests. |
 | `SCHEMA_UNKNOWN` | usage | No bundled schema has that name. | Run `sqy schema` to list schema names. |
 | `STALE_OBSERVATIONS` | data | The latest completed bar is older than the declared staleness limit. | Refresh data with `sqy data fetch`. |

@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import csv
-import json
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
 from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.evidence.report import equity_svg, render_report
+from signalquarry._internal.evidence.runs import iter_runs
 from signalquarry._internal.project.project import ProjectError, find_root, load_config, load_strategies
 from signalquarry._internal.validation.ledger import LedgerError, trial_summary
 from signalquarry.api.envelope import Envelope
@@ -18,15 +18,7 @@ from signalquarry.plugins import ReportContext, discover
 
 
 def _runs(root: Path, name: str, strategy_id: str) -> list[tuple[Path, dict[str, Any]]]:
-    found: list[tuple[Path, dict[str, Any]]] = []
-    for path in sorted((root / ".signalquarry" / "runs").glob(f"*/{name}")):
-        try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except ValueError:
-            continue
-        if document.get("strategy_id") == strategy_id:
-            found.append((path.parent, document))
-    return found
+    return iter_runs(root, name, strategy_id=strategy_id)
 
 
 def _benchmark_symbol(result: dict[str, Any] | None) -> str:

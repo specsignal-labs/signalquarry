@@ -261,6 +261,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Outputs:** each run writes `result.json` (the single source of numbers), `report.md` rendered from it, and in-house SVGs (no matplotlib). `evidence export --tier public|nda` produces an `EvidenceBundleV1` `.tar.gz` with a stdlib verifier.
 - **Reference curve:** `engine.reference.buy_and_hold` simulates holding one symbol at full weight with the strategy's own account, execution and cost settings, through the same session loop as the strategy. Benchmark comparisons therefore share the engine's treatment of splits, dividends, settlement and fees. The reference is a yardstick: it records no trial and carries no claim. `validation.benchmark` aligns that curve to a run's sessions for the declared `benchmark`; `backtest` and `evaluate` write the comparison into `result.json` and `evaluation.json` (with `benchmark.csv`), and the report renders it from those artifacts. The strategy's dataset is never widened for the benchmark, so dataset identities and ledger hashes are unchanged, and no gate reads the comparison.
 - **One run writer:** `api.runs.execute_run` simulates one resolved strategy, records its trial, computes the descriptive context (benchmark, drawdowns, activity) and writes the run directory. `backtest` and `sweep` both use it, so a sweep point is an ordinary run with the same artifacts and the same ledger hash a backtest of that configuration has. `result.json` records the command, the parameters and the hashed specification. A sweep additionally writes `.signalquarry/sweeps/<id>/` (`sweep.json`, `sweep.csv`).
+- **Comparing runs:** `validation.compare` works on parsed result documents and aligned return series only. Runs are compared against a reference only when they share dataset identity, sessions, account and evidence grade; otherwise the reasons are reported and nothing is differenced or ranked. The uncertainty of a Sharpe difference comes from a moving-block bootstrap that draws the same blocks from both series, so the pairing is kept. `sqy runs compare` loads run directories, refuses a result document that no longer matches its recorded hash, and writes `.signalquarry/comparisons/<id>/`. Runs are ordered by recorded creation time, not by run id.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -458,7 +459,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `benchmark`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
+| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `evaluate`, `factor_conformance`, `factor_trials`, `ledger`, `metrics`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `synthetic`, `universe`, `universe_build` |
@@ -510,6 +511,10 @@ flowchart LR
   c_holdout --> c_holdout_status["status"]
   c_holdout --> c_holdout_seal["seal"]
   sqy --> c_sweep["sweep"]
+  sqy --> c_runs["runs"]
+  c_runs --> c_runs_ls["ls"]
+  c_runs --> c_runs_show["show"]
+  c_runs --> c_runs_compare["compare"]
   sqy --> c_backtest["backtest"]
   sqy --> c_evidence["evidence"]
   c_evidence --> c_evidence_verify["verify"]

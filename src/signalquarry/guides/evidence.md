@@ -79,6 +79,29 @@ and leaves out fills and decisions). The sweep itself is recorded in
 `sweep.csv`. Each run's `result.json` carries the `params` and the hashed `spec`
 that produced it, so runs can be compared later.
 
+### Listing and comparing runs
+
+```bash
+sqy runs ls --strategy sma-trend          # recent runs, newest first (sweep points included)
+sqy runs show RUN_ID                      # one run's result document and artifacts
+sqy runs compare RUN_A RUN_B [RUN_C …]    # every run against the first
+```
+
+`runs compare` lists the runs side by side, reports how each differs from the
+reference in parameters and specification, and, for comparable runs, gives the
+correlation of daily returns and the difference in annualized Sharpe with a paired
+moving-block bootstrap 90% interval. An interval that contains zero means this
+sample cannot tell the two runs apart. It writes `comparison.json`, `comparison.md`
+and an overlay chart under `.signalquarry/comparisons/`.
+
+Runs are differenced only when they share the dataset, the sessions, the account and
+the evidence grade. Otherwise the command still lists them, warns
+`RUNS_NOT_COMPARABLE` with the reasons, and differences nothing. A run whose
+`result.json` no longer matches its recorded hash is refused
+(`RUN_ARTIFACT_INVALID`). Comparisons are in-sample and never raise a claim level:
+picking the best row is exactly what the trial ledger and the deflated Sharpe ratio
+are there to price.
+
 ## Freeze and holdout
 
 `sqy spec freeze --strategy <id>` records the configuration hash, hypothesis and

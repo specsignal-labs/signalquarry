@@ -1072,6 +1072,24 @@ _CODES += (
         "No recorded dataset covers the declared benchmark for the run's sessions; results are shown without a comparison.",
         "Run `sqy data fetch --strategy <id>` (it fetches the benchmark too) and repeat the command.",
     ),
+    ReasonCode(
+        "RUN_NOT_FOUND",
+        Category.USAGE,
+        "No run directory has that id.",
+        "Run `sqy runs ls` to list run ids.",
+    ),
+    ReasonCode(
+        "RUN_ARTIFACT_INVALID",
+        Category.EVIDENCE,
+        "A run's result document or equity curve is missing, unreadable or no longer matches its recorded hash.",
+        "Do not edit `.signalquarry/runs/`; repeat the backtest to produce the run again.",
+    ),
+    ReasonCode(
+        "RUNS_NOT_COMPARABLE",
+        Category.EVIDENCE,
+        "The runs differ in dataset, sessions, account or evidence grade, so nothing was differenced or ranked.",
+        "Compare runs produced on the same dataset and window with the same account; see data.reasons.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

@@ -354,6 +354,30 @@ def _configure_trials(parser: argparse.ArgumentParser) -> None:
         child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
 
 
+def _configure_runs(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    listing = actions.add_parser("ls", help="List recent backtest runs, newest first.")
+    listing.add_argument("--strategy", help="only runs of this strategy id")
+    listing.add_argument("--limit", type=int, default=20, help="how many runs to list (default 20)")
+    show = actions.add_parser("show", help="Show one run's result document and artifacts.")
+    show.add_argument("run", help="run id")
+    compare = actions.add_parser(
+        "compare", help="Compare two or more runs against the first; writes comparison.md."
+    )
+    compare.add_argument("runs", nargs="+", help="run ids; the first is the reference")
+    for child in actions.choices.values():
+        child.add_argument("--project", type=Path)
+        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _runs(args: argparse.Namespace) -> Envelope:
+    if args.action == "compare":
+        return api.runs_compare(args.runs, project=args.project)
+    if args.action == "show":
+        return api.runs_show(args.run, project=args.project)
+    return api.runs_ls(strategy_id=args.strategy, limit=args.limit, project=args.project)
+
+
 def _configure_holdout(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
     status = actions.add_parser("status", help="Show each family's holdout seal and opening.")
@@ -634,6 +658,7 @@ COMMANDS: tuple[Command, ...] = (
             parser.add_argument("--project", type=Path),
         ),
     ),
+    Command("runs", "List, show and compare backtest runs.", _runs, _configure_runs),
     Command(
         "backtest",
         "Backtest a strategy and write run artifacts.",

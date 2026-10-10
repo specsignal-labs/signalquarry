@@ -313,3 +313,138 @@ def render_report(
             lines.append(f"- {label}: `{source[key]}`")
     lines += ["", "---", "", f"*{DISCLAIMER}*", ""]
     return "\n".join(lines)
+
+
+_SERIES_COLORS = ("#1f5fa8", "#c4572f", "#3f8f4f", "#8a4fb0", "#a8891f", "#4f9aa8", "#b04f7d", "#6b6b6b")
+
+
+def growth_svg(
+    series: list[tuple[str, list[tuple[str, Decimal]]]], *, width: int = 720, height: int = 260
+) -> str:
+    """Several equity curves on one chart, each as growth of 1 from its first point.
+
+    Only curves that have one point per point of the first curve are drawn.
+    """
+    drawn = [
+        (label, [float(value) for _, value in points])
+        for label, points in series
+        if len(points) >= 2 and len(points) == len(series[0][1]) and float(points[0][1]) > 0
+    ]
+    if not drawn:
+        return ""
+    curves = [(label, [value / values[0] for value in values]) for label, values in drawn]
+    low = min(min(values) for _, values in curves)
+    high = max(max(values) for _, values in curves)
+    span = (high - low) or 1.0
+    pad = 32
+    count = len(curves[0][1])
+    step = (width - 2 * pad) / (count - 1)
+    first, last = escape(series[0][1][0][0]), escape(series[0][1][-1][0])
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img" '
+        f'aria-label="Growth of 1 from {first} to {last} for {len(curves)} runs">'
+        f'<rect width="{width}" height="{height}" fill="white"/>'
+    ]
+    for index, (label, values) in enumerate(curves):
+        color = _SERIES_COLORS[index % len(_SERIES_COLORS)]
+        points = " ".join(
+            f"{pad + i * step:.1f},{height - pad - (v - low) / span * (height - 2 * pad):.1f}"
+            for i, v in enumerate(values)
+        )
+        parts.append(f'<polyline fill="none" stroke="{color}" stroke-width="1.4" points="{points}"/>')
+        parts.append(
+            f'<text x="{width - pad}" y="{14 + 13 * index}" font-size="11" font-family="sans-serif" '
+            f'text-anchor="end" fill="{color}">{escape(label)}</text>'
+        )
+    parts.append(
+        f'<text x="{pad}" y="{height - 8}" font-size="11" font-family="sans-serif">{first}</text>'
+        f'<text x="{width - pad}" y="{height - 8}" font-size="11" font-family="sans-serif" '
+        f'text-anchor="end">{last}</text>'
+        f'<text x="4" y="{pad}" font-size="11" font-family="sans-serif">{high:.2f}</text>'
+        f'<text x="4" y="{height - pad}" font-size="11" font-family="sans-serif">{low:.2f}</text>'
+        "</svg>\n"
+    )
+    return "".join(parts)
+
+
+def _change(values: list[Any]) -> str:
+    return f"`{values[0]}` → `{values[1]}`"
+
+
+def render_comparison(comparison: dict[str, Any], *, labels: dict[str, str], chart: bool) -> str:
+    """``comparison.md`` for a result of ``validation.compare.compare_runs``.
+
+    ``labels`` gives each run id the short name used in the tables.
+    """
+    runs = comparison["runs"]
+    reference = comparison["reference"]
+    grades = sorted({str(run["grade"]) for run in runs})
+    lines = [
+        f"# Comparison of {len(runs)} runs",
+        "",
+        f"> **Evidence:** grade `{'`, `'.join(grades)}`. In-sample backtests compared with each other; "
+        "nothing here raises a claim level.",
+    ]
+    if "synthetic" in grades:
+        lines.append("> Synthetic data: these numbers say nothing about real markets.")
+    if not comparison["comparable"]:
+        lines += [
+            ">",
+            f"> **Not comparable** ({', '.join(comparison['reasons'])}). The runs are listed side by side, "
+            "but nothing is differenced or ranked.",
+        ]
+    lines += [
+        "",
+        "| Run | Strategy | Total return | CAGR | Annual volatility | Sharpe | Max drawdown | Fills |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for run in runs:
+        m = run["metrics"]
+        name = labels.get(run["run_id"], run["run_id"])
+        lines.append(
+            f"| {name}{' (reference)' if run['run_id'] == reference else ''} | {run['strategy_id']} | "
+            f"{_percent(m.get('total_return'))} | {_percent(m.get('cagr'))} | "
+            f"{_percent(m.get('annual_volatility'))} | {_number(m.get('sharpe'))} | "
+            f"{_percent(m.get('max_drawdown'))} | {m.get('fills', '–')} |"
+        )
+    lines.append("")
+    if chart:
+        lines += ["![Growth of 1](equity.svg)", ""]
+    lines += [f"## Differences from the reference `{labels.get(reference, reference)}`", ""]
+    for run_id, parts in comparison["differences"].items():
+        changes = [f"parameter `{path}`: {_change(values)}" for path, values in parts["params"].items()]
+        changes += [f"`{path}`: {_change(values)}" for path, values in parts["spec"].items()]
+        lines.append(
+            f"- **{labels.get(run_id, run_id)}**: " + ("; ".join(changes) or "no recorded difference")
+        )
+    lines.append("")
+    if comparison["pairs"]:
+        lines += [
+            "## Against the reference",
+            "",
+            "| Run | Return correlation | Sharpe difference | 90% interval | Total return | Max drawdown |",
+            "|---|---|---|---|---|---|",
+        ]
+        for run_id, pair in comparison["pairs"].items():
+            interval = pair.get("sharpe_difference_90")
+            lines.append(
+                f"| {labels.get(run_id, run_id)} | {_number(pair.get('correlation'))} | "
+                f"{'–' if pair.get('sharpe_difference') is None else format(pair['sharpe_difference'], '+.2f')} | "
+                f"{'–' if interval is None else f'{interval[0]:+.2f} to {interval[1]:+.2f}'} | "
+                f"{pair['total_return_difference']:+.2%} | {pair['max_drawdown_difference']:+.2%} |"
+            )
+        lines += [
+            "",
+            "Differences are the run minus the reference. The interval is a paired moving-block "
+            "bootstrap of the annualized Sharpe difference; when it contains zero, this sample cannot "
+            "tell the two runs apart.",
+            "",
+        ]
+    lines += ["## Identity", ""]
+    for run in runs:
+        lines.append(
+            f"- {labels.get(run['run_id'], run['run_id'])}: run `{run['run_id']}`, configuration "
+            f"`{run['configuration_hash']}`, dataset `{run['dataset_identity']}`"
+        )
+    lines += ["", "---", "", f"*{DISCLAIMER}*", ""]
+    return "\n".join(lines)
