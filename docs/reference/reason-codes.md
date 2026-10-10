@@ -61,6 +61,8 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_PARAMS_INVALID` | usage | Declared factor parameters do not validate against its Params model. | Fix factor.yaml params or the factor's Params declaration. |
 | `FACTOR_PORTFOLIO_UNAVAILABLE` | data | No eligible factor scores or prior-only factor weights are available for this decision. | Provide completed factor history and a prior-cutoff weight row, or use equal weights. |
 | `FACTOR_REDUNDANCY_ALIGNMENT_INVALID` | data | Factor scores cannot be compared across different datasets, dates, or universes. | Compare factors scored on identical panel and membership identities. |
+| `FACTOR_REPORT_CONFIGURATION_CHANGED` | evidence | The factor configuration changed between evaluation and report rendering. | Rerun `sqy factor report` with the factor configuration held fixed. |
+| `FACTOR_REPORT_WRITE_FAILED` | environment | The descriptive factor report could not be written to a new directory. | Check project permissions and available disk space, then rerun `sqy factor report`. |
 | `FACTOR_SEARCH_BUDGET_EXHAUSTED` | evidence | The requested formula search exceeds the remaining family trial budget. | Reduce the search budget or have a human extend the family budget before searching. |
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |

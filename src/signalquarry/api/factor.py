@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Sequence
 from contextlib import ExitStack
 from datetime import UTC, date, datetime, time, timedelta
@@ -11,12 +12,17 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, cast
 
-from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.canonical import canonical_hash, file_sha256
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
 from signalquarry._internal.data.library import LibraryError, dataset_from_manifest
 from signalquarry._internal.data.panel import PanelStore
 from signalquarry._internal.data.synthetic import synthetic_memberships, synthetic_panel
 from signalquarry._internal.data.universe_build import verify_universe_manifest
+from signalquarry._internal.evidence.report import (
+    factor_ic_svg,
+    factor_quintiles_svg,
+    render_factor_report,
+)
 from signalquarry._internal.factors.evaluate import UniverseAt, rank_ic, score_factor
 from signalquarry._internal.factors.labels import derive_forward_return_labels
 from signalquarry._internal.project.factors import LoadedFactor, load_factors
@@ -351,4 +357,92 @@ def factor_evaluate(
                 for horizon in report.horizons
             ],
         },
+    )
+
+
+def factor_report(
+    factor_id: str,
+    dataset_id: str | None = None,
+    *,
+    universe_manifests: Sequence[Path] = (),
+    synthetic: bool = False,
+    synthetic_symbols: int = 200,
+    synthetic_seed: int = 7,
+    synthetic_planted_ic: float = 0.05,
+    project: Path | None = None,
+) -> Envelope:
+    """Evaluate a factor and write descriptive Markdown/SVG artifacts, without a trial."""
+    evaluated = factor_evaluate(
+        factor_id,
+        dataset_id,
+        universe_manifests=universe_manifests,
+        synthetic=synthetic,
+        synthetic_symbols=synthetic_symbols,
+        synthetic_seed=synthetic_seed,
+        synthetic_planted_ic=synthetic_planted_ic,
+        project=project,
+    )
+    evaluated.command = "factor report"
+    if evaluated.status != "ok":
+        return evaluated
+    loaded = _load(project, evaluated.command)
+    if isinstance(loaded, Envelope):
+        loaded.evidence = evaluated.evidence
+        return loaded
+    factors, root = loaded
+    item = factors.get(factor_id)
+    if item is None or item.configuration_hash != evaluated.data["configuration_hash"]:
+        return Envelope(
+            command=evaluated.command,
+            status="invalid",
+            reason_codes=["FACTOR_REPORT_CONFIGURATION_CHANGED"],
+            summary="factor configuration changed during evaluation; rerun the report",
+            evidence=evaluated.evidence,
+        )
+    report_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + "-" + item.spec.id
+    out = root / ".signalquarry" / "factor_reports" / report_id
+    files = {
+        "report.md": render_factor_report(
+            spec=item.spec.model_dump(mode="json", by_alias=True), diagnostics=evaluated.data
+        ),
+        "ic.svg": factor_ic_svg(evaluated.data["horizons"]),
+        "quintiles.svg": factor_quintiles_svg(evaluated.data["horizons"]),
+    }
+    artifacts: list[dict[str, str]] = []
+    try:
+        out.mkdir(parents=True, exist_ok=False)
+        try:
+            for name, content in files.items():
+                path = out / name
+                path.write_text(content, encoding="utf-8")
+                artifacts.append(
+                    {
+                        "path": str(path.relative_to(root)),
+                        "sha256": file_sha256(path),
+                        "kind": name.split(".")[0],
+                    }
+                )
+        except Exception:
+            shutil.rmtree(out)
+            raise
+    except OSError as exc:
+        return Envelope(
+            command=evaluated.command,
+            status="error",
+            reason_codes=["FACTOR_REPORT_WRITE_FAILED"],
+            summary=str(exc)[:500],
+            evidence=evaluated.evidence,
+        )
+    return Envelope(
+        command=evaluated.command,
+        summary=f"descriptive factor report for {factor_id} at {out.relative_to(root)}/report.md",
+        evidence=evaluated.evidence,
+        data={
+            "report_id": report_id,
+            "scope": evaluated.data["scope"],
+            "horizons": [
+                {"horizon": row["horizon"], "mean_ic": row["mean_ic"]} for row in evaluated.data["horizons"]
+            ],
+        },
+        artifacts=artifacts,
     )

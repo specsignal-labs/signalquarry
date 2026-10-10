@@ -140,6 +140,14 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
         "evaluate",
         help="Compute descriptive, unverified diagnostics from selected local manifests.",
     )
+    report = actions.add_parser(
+        "report", help="Evaluate a factor and write a descriptive Markdown report with SVG charts."
+    )
+    _configure_factor_diagnostics(evaluate)
+    _configure_factor_diagnostics(report)
+
+
+def _configure_factor_diagnostics(evaluate: argparse.ArgumentParser) -> None:
     evaluate.add_argument("--factor", required=True, help="registered factor ID")
     evaluate.add_argument("--dataset-id", help="locally recorded dataset manifest ID")
     evaluate.add_argument(
@@ -159,13 +167,16 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
         "--planted-ic", type=float, default=0.05, help="synthetic signal loading (default: 0.05)"
     )
     evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
-    evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    evaluate.add_argument(
+        "--json", action="store_true", default=argparse.SUPPRESS, help="always print the JSON envelope"
+    )
 
 
 def _factor(args: argparse.Namespace) -> Envelope:
     if args.action == "ls":
         return api.factor_ls(project=args.project)
-    return api.factor_evaluate(
+    handler = api.factor_report if args.action == "report" else api.factor_evaluate
+    return handler(
         args.factor,
         args.dataset_id,
         universe_manifests=args.universe_manifest or (),

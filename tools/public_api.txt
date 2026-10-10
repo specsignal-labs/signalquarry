@@ -146,6 +146,7 @@ signalquarry.api.evidence_verify(*, base: 'str | None' = None, project: 'Path | 
 signalquarry.api.explain(code: 'str') -> 'Envelope'
 signalquarry.api.factor_evaluate(factor_id: 'str', dataset_id: 'str | None' = None, *, universe_manifests: 'Sequence[Path]' = (), synthetic: 'bool' = False, synthetic_symbols: 'int' = 200, synthetic_seed: 'int' = 7, synthetic_planted_ic: 'float' = 0.05, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.factor_ls(*, project: 'Path | None' = None) -> 'Envelope'
+signalquarry.api.factor_report(factor_id: 'str', dataset_id: 'str | None' = None, *, universe_manifests: 'Sequence[Path]' = (), synthetic: 'bool' = False, synthetic_symbols: 'int' = 200, synthetic_seed: 'int' = 7, synthetic_planted_ic: 'float' = 0.05, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_seal(strategy_id: 'str', *, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.holdout_status(*, project: 'Path | None' = None) -> 'Envelope'
 signalquarry.api.init(path: 'Path', *, demo: 'bool' = False, package: 'str | None' = None, lab: 'bool' = False, kind: 'str' = 'equity') -> 'Envelope'

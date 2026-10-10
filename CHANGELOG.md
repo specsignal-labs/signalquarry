@@ -7,6 +7,8 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy factor report` and `api.factor_report` write descriptive Markdown factor
+  diagnostics with IC and quintile SVG charts; no trial, evidence grade or holdout access.
 - Offline factor diagnostics via `sqy factor evaluate --synthetic` and a registered
   volume-shock starter via `sqy init NAME --demo --kind factor`; synthetic results
   make no real-market claims and record no trials or holdout access.
