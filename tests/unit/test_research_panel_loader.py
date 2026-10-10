@@ -33,7 +33,12 @@ def _demo(tmp_path: Path, name: str, symbol: str = "SYNA") -> Path:
 
 
 def _files(project: Path) -> set[str]:
-    return {str(path.relative_to(project)) for path in project.rglob("*") if path.is_file()}
+    """Every file of the project except Python's own bytecode caches, which an import may write."""
+    return {
+        str(path.relative_to(project))
+        for path in project.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
 
 
 def test_synthetic_panel_matches_the_dataset_and_is_read_only(tmp_path: Path) -> None:
