@@ -990,6 +990,15 @@ the agent must report the returned evidence grade and claim level, not infer
 market validity from a successful run. Freezing, evaluation, holdout access,
 and any paper workflow must follow the project's gates and human-only steps.
 
+When the request is a question rather than a single run ("does the filter help?",
+"is it better than just holding?"), have the agent answer it as a study: declare the
+benchmark in `strategy.yaml`, write the hypothesis, the baselines, a few bounded
+variants and one comparison rule in `studies/<id>/study.yaml`, run
+`sqy study check` and `sqy study run`, and report the verdict it returns
+(`supported`, `not_supported` or `insufficient`) with the benchmark numbers. The
+project's `AGENTS.md` has this under "Research method". A study is in-sample: it
+does not replace freezing and evaluation.
+
 The `evals/` harness serves a different purpose: it runs a selected coding-agent
 CLI against fresh demo projects and scores the artifacts the agent leaves
 behind. It is for repeatable agent-behavior evaluation, not required to author

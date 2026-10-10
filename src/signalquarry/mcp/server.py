@@ -108,16 +108,83 @@ def sqy_data_verify(project: str | None = None) -> dict[str, Any]:
 
 @mcp.tool()
 def sqy_backtest(
-    strategy_id: str, project: str | None = None, start: str | None = None, end: str | None = None
+    strategy_id: str,
+    project: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    params: list[str] | None = None,
+    label: str | None = None,
 ) -> dict[str, Any]:
-    """Run a strategy backtest with optional ISO session boundaries."""
+    """Run a strategy backtest with optional ISO session boundaries.
+
+    ``params`` are NAME=VALUE overrides for this run only (strategy.yaml is not changed; on
+    real data a new configuration is a trial). ``label`` is a short name stored with the run.
+    """
     first = _date(start, "backtest")
     last = _date(end, "backtest")
     if isinstance(first, Envelope):
         return _result(first)
     if isinstance(last, Envelope):
         return _result(last)
-    return _result(api.backtest(strategy_id, start=first, end=last, project=_path(project)))
+    return _result(
+        api.backtest(
+            strategy_id, start=first, end=last, params=params or (), label=label, project=_path(project)
+        )
+    )
+
+
+@mcp.tool()
+def sqy_runs_ls(
+    project: str | None = None, strategy_id: str | None = None, limit: int = 20
+) -> dict[str, Any]:
+    """List recent backtest runs (sweep points and study arms included), newest first."""
+    return _result(api.runs_ls(strategy_id=strategy_id, limit=limit, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_runs_show(run_id: str, project: str | None = None) -> dict[str, Any]:
+    """Show one run's verified result document and its artifacts."""
+    return _result(api.runs_show(run_id, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_runs_compare(run_ids: list[str], project: str | None = None) -> dict[str, Any]:
+    """Compare runs against the first one; runs that are not comparable are not differenced."""
+    return _result(api.runs_compare(run_ids, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_study_init(strategy_id: str, study_id: str, project: str | None = None) -> dict[str, Any]:
+    """Scaffold studies/ID/study.yaml for a strategy; nothing is run."""
+    return _result(api.study_init(strategy_id, study_id, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_study_check(study_id: str, project: str | None = None) -> dict[str, Any]:
+    """Validate a study and show its arms and the trials it would record; runs nothing."""
+    return _result(api.study_check(study_id, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_study_run(study_id: str, project: str | None = None, rerun: bool = False) -> dict[str, Any]:
+    """Run every arm of a study and judge it by its declared rule.
+
+    Spends trial budget on real data and is refused beforehand when a budget would be
+    exceeded. It never opens a holdout and never raises a claim level.
+    """
+    return _result(api.study_run(study_id, rerun=rerun, project=_path(project)))
+
+
+@mcp.tool()
+def sqy_study_ls(project: str | None = None) -> dict[str, Any]:
+    """List the project's studies and the verdict of each one's latest run."""
+    return _result(api.study_ls(project=_path(project)))
+
+
+@mcp.tool()
+def sqy_study_show(study_id: str, project: str | None = None) -> dict[str, Any]:
+    """Show the latest recorded result of a study."""
+    return _result(api.study_show(study_id, project=_path(project)))
 
 
 @mcp.tool()
