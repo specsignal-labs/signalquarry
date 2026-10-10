@@ -262,6 +262,7 @@ def decide(ctx: Ctx, p: P) -> Decision:
 - **Reference curve:** `engine.reference.buy_and_hold` simulates holding one symbol at full weight with the strategy's own account, execution and cost settings, through the same session loop as the strategy. Benchmark comparisons therefore share the engine's treatment of splits, dividends, settlement and fees. The reference is a yardstick: it records no trial and carries no claim. `validation.benchmark` aligns that curve to a run's sessions for the declared `benchmark`; `backtest` and `evaluate` write the comparison into `result.json` and `evaluation.json` (with `benchmark.csv`), and the report renders it from those artifacts. The strategy's dataset is never widened for the benchmark, so dataset identities and ledger hashes are unchanged, and no gate reads the comparison.
 - **One run writer:** `api.runs.execute_run` simulates one resolved strategy, records its trial, computes the descriptive context (benchmark, drawdowns, activity) and writes the run directory. `backtest` and `sweep` both use it, so a sweep point is an ordinary run with the same artifacts and the same ledger hash a backtest of that configuration has. `result.json` records the command, the parameters and the hashed specification. A sweep additionally writes `.signalquarry/sweeps/<id>/` (`sweep.json`, `sweep.csv`).
 - **Comparing runs:** `validation.compare` works on parsed result documents and aligned return series only. Runs are compared against a reference only when they share dataset identity, sessions, account and evidence grade; otherwise the reasons are reported and nothing is differenced or ranked. The uncertainty of a Sharpe difference comes from a moving-block bootstrap that draws the same blocks from both series, so the pairing is kept. `sqy runs compare` loads run directories, refuses a result document that no longer matches its recorded hash, and writes `.signalquarry/comparisons/<id>/`. Runs are ordered by recorded creation time, not by run id.
+- **Studies (ADR 0015):** `api.study` plans the arms of a `study.yaml` (subject, variants, baselines), checks the trial budgets of every family involved before anything runs, executes strategy arms through `execute_run` (reusing a verified run of the same configuration, dataset and window), builds benchmark arms from the engine reference curve, and derives the verdict with `validation.compare`. Trial counting stays in the existing ledger; the new chained log `studies` records what was attempted. A study clips at the earliest holdout seal and has no code path that opens one.
 - **Run artifacts:** the equity backtest engine exposes a pure per-session iterator. The API spools decisions and fills, hashes those rows against the unchanged canonical ledger format, and writes CSV/JSONL artifacts incrementally in the evidence layer. A failed stream removes its incomplete run directory. In-memory engine callers and the options simulator retain their existing result shape.
 
 **Paper kernel**
@@ -455,7 +456,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | Component | Modules |
 |---|---|
 | `cli` | `(package)`, `main` |
-| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `runs`, `sweep`, `universe` |
+| `api` | `(package)`, `commit`, `data`, `docs`, `envelope`, `evidence`, `factor`, `paper`, `perf`, `project`, `publish`, `report`, `resolve`, `runs`, `study`, `sweep`, `universe` |
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
@@ -467,7 +468,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
 | `plugins` | `(package)` |
-| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec` |
+| `contracts` | `(package)`, `factor_spec`, `paper`, `progress`, `publication`, `reason_codes`, `spec`, `study` |
 | `canonical` | `(package)` |
 | `calendar` | `(package)`, `nyse` |
 | `mcp` | `(package)`, `server` |
@@ -515,6 +516,12 @@ flowchart LR
   c_runs --> c_runs_ls["ls"]
   c_runs --> c_runs_show["show"]
   c_runs --> c_runs_compare["compare"]
+  sqy --> c_study["study"]
+  c_study --> c_study_init["init"]
+  c_study --> c_study_check["check"]
+  c_study --> c_study_run["run"]
+  c_study --> c_study_ls["ls"]
+  c_study --> c_study_show["show"]
   sqy --> c_backtest["backtest"]
   sqy --> c_evidence["evidence"]
   c_evidence --> c_evidence_verify["verify"]

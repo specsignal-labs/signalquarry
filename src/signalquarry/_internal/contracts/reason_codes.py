@@ -1090,6 +1090,60 @@ _CODES += (
         "The runs differ in dataset, sessions, account or evidence grade, so nothing was differenced or ranked.",
         "Compare runs produced on the same dataset and window with the same account; see data.reasons.",
     ),
+    ReasonCode(
+        "STUDY_NOT_FOUND",
+        Category.USAGE,
+        "The project has no `studies/<id>/study.yaml` with that id.",
+        "Run `sqy study ls`, or create one with `sqy study init --strategy <id> --id <study>`.",
+    ),
+    ReasonCode(
+        "STUDY_SPEC_INVALID",
+        Category.USAGE,
+        "The study file does not satisfy the `signalquarry.study/v1` contract.",
+        "Fix the field named in the summary; the id must match the directory name.",
+    ),
+    ReasonCode(
+        "STUDY_ARM_INVALID",
+        Category.USAGE,
+        "An arm of the study cannot be built: invalid parameters or execution settings, a variant that changes nothing, or a baseline the dataset does not cover.",
+        "Correct the arm named in the summary.",
+    ),
+    ReasonCode(
+        "STUDY_DATASET_MISMATCH",
+        Category.DATA,
+        "The study pins a dataset other than the one its subject strategy resolves to.",
+        "Fetch or select the pinned dataset, or update `dataset` in the study file (that makes a new study).",
+    ),
+    ReasonCode(
+        "STUDY_EXISTS",
+        Category.USAGE,
+        "A study file with that id already exists.",
+        "Choose another id or edit the existing file.",
+    ),
+    ReasonCode(
+        "STUDY_NO_RESULT",
+        Category.USAGE,
+        "The study has not been run yet.",
+        "Run `sqy study run --study <id>`.",
+    ),
+    ReasonCode(
+        "STUDY_DETERMINISM_FAILED",
+        Category.EVIDENCE,
+        "Recomputing an arm gave a different ledger than the run recorded earlier for the same configuration, dataset and window.",
+        "Do not use either result. Check that the strategy is pure (`sqy check`) and that the cached data verifies (`sqy data verify`).",
+    ),
+    ReasonCode(
+        "STUDY_FILE_CHANGED",
+        Category.EVIDENCE,
+        "The study file was edited after the result shown was produced, so the result belongs to a different study.",
+        "Run the study again to get a result for the current file.",
+    ),
+    ReasonCode(
+        "STUDY_BENCHMARK_UNDECLARED",
+        Category.USAGE,
+        "The strategy declares no benchmark, so the scaffolded benchmark baseline has no symbol yet.",
+        "Give the baseline a `symbol`, or declare `benchmark` in strategy.yaml.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
