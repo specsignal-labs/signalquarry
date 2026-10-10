@@ -50,6 +50,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
 | `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `EXPOSURE_DATA_MISSING` | data | One or more requested exposure references have no usable passive return curve over the run's sessions. | Fetch the named symbols on the strategy's feed over its sessions, or choose references with recorded data. |
 | `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
 | `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
 | `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |

@@ -1150,6 +1150,12 @@ _CODES += (
         "A worker process rebuilt a configuration from the project's files and did not arrive at the configuration or dataset that was checked: the project changed while the command was running.",
         "Leave the project's files alone while `--jobs` is in use, then run the command again; a study reuses the arms that completed.",
     ),
+    ReasonCode(
+        "EXPOSURE_DATA_MISSING",
+        Category.DATA,
+        "One or more requested exposure references have no usable passive return curve over the run's sessions.",
+        "Fetch the named symbols on the strategy's feed over its sessions, or choose references with recorded data.",
+    ),
 )
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 

@@ -291,7 +291,27 @@ includes the newest verified diagnostics for its run when available.
   by the best score) from the newest recorded sweep containing the configuration.
   Neighbours are those of the sweep's best point, using the declared grid order.
 
-All four diagnostics are descriptive and never change a claim, gate or trial count.
+- **Exposure (optional):** `sqy diagnose --strategy ID --exposure SPY --exposure TLT`
+  regresses daily run returns on an intercept and buy-and-hold daily returns for
+  up to eight different reference symbols, in the requested order. The passive
+  positions use the strategy's account, execution and costs, including splits and
+  dividends; the project must still reproduce the run's configuration and dataset.
+  Beta describes an association with a passive position, not a holding. Each annual
+  contribution is beta times the reference's mean daily return times 252; annual
+  alpha is the intercept times 252, and together they equal the run's annualized
+  arithmetic mean return. R² describes the share of daily variation explained,
+  while residual volatility describes the variation left over. Standard errors
+  are Newey–West with a Bartlett kernel and a sample-size-based lag; an alpha with
+  a small t is indistinguishable from zero. The fit is in-sample over the whole
+  window: choosing references after seeing the result is hypothesis generation.
+  The report also shows the range of betas in 126-session windows stepped by 21
+  sessions. Nonfinite rows are dropped jointly, too few sessions are marked
+  insufficient, and inseparable or ill-conditioned references are marked collinear
+  (design condition number above 1e12). Missing passive curves produce the warning
+  `EXPOSURE_DATA_MISSING` and name every missing symbol; fetch those symbols on the
+  strategy's feed over its sessions to retry.
+
+All diagnostics are descriptive and never change a claim, gate or trial count.
 Cost reruns write no runs or trials; the original run directory is never modified.
 Unavailable sections are explained and omitted from the report's tables.
 

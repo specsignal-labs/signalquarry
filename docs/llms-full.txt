@@ -572,7 +572,27 @@ includes the newest verified diagnostics for its run when available.
   by the best score) from the newest recorded sweep containing the configuration.
   Neighbours are those of the sweep's best point, using the declared grid order.
 
-All four diagnostics are descriptive and never change a claim, gate or trial count.
+- **Exposure (optional):** `sqy diagnose --strategy ID --exposure SPY --exposure TLT`
+  regresses daily run returns on an intercept and buy-and-hold daily returns for
+  up to eight different reference symbols, in the requested order. The passive
+  positions use the strategy's account, execution and costs, including splits and
+  dividends; the project must still reproduce the run's configuration and dataset.
+  Beta describes an association with a passive position, not a holding. Each annual
+  contribution is beta times the reference's mean daily return times 252; annual
+  alpha is the intercept times 252, and together they equal the run's annualized
+  arithmetic mean return. R² describes the share of daily variation explained,
+  while residual volatility describes the variation left over. Standard errors
+  are Newey–West with a Bartlett kernel and a sample-size-based lag; an alpha with
+  a small t is indistinguishable from zero. The fit is in-sample over the whole
+  window: choosing references after seeing the result is hypothesis generation.
+  The report also shows the range of betas in 126-session windows stepped by 21
+  sessions. Nonfinite rows are dropped jointly, too few sessions are marked
+  insufficient, and inseparable or ill-conditioned references are marked collinear
+  (design condition number above 1e12). Missing passive curves produce the warning
+  `EXPOSURE_DATA_MISSING` and name every missing symbol; fetch those symbols on the
+  strategy's feed over its sessions to retry.
+
+All diagnostics are descriptive and never change a claim, gate or trial count.
 Cost reruns write no runs or trials; the original run directory is never modified.
 Unavailable sections are explained and omitted from the report's tables.
 
@@ -676,6 +696,11 @@ the honest summary is "no detectable difference", whatever the point estimates s
 strategy did badly is a question for the next hypothesis. Adding a rule that avoids
 that regime and backtesting again on the same data is fitting to the past, and the
 trial ledger will count it.
+Repeat `--exposure SYMBOL` to ask how much daily return variation is associated
+with passive reference positions, with betas, annual contributions and remaining
+alpha reported using Newey–West uncertainty. This is an in-sample description;
+references chosen after seeing the run generate hypotheses, and an alpha with a
+small t is indistinguishable from zero.
 
 ## A worked study
 
@@ -1759,6 +1784,7 @@ Write descriptive diagnostics for a recorded backtest run.
 |---|---|
 | `--strategy` | strategy id of the recorded run (required) |
 | `--run` | backtest run id (default: the latest for this strategy) |
+| `--exposure` | passive reference symbol (repeatable, up to eight) |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy paper`
@@ -1984,6 +2010,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `EVIDENCE_LOG_CORRUPT` | evidence | An evidence log (trials, freezes or holdouts) was edited, truncated or reordered. | Restore evidence/ from version control; never edit it by hand. |
 | `EVIDENCE_LOG_REWRITTEN` | evidence | An evidence log or paper journal was shortened, edited or deleted since the base revision. | Restore it from the base revision; evidence logs are append-only. |
 | `EXPORT_FILE_TYPE_NOT_ALLOWED` | evidence | A file in the export has a type bundles may not carry. | Bundles carry JSON, Markdown, SVG and timestamp proofs only. |
+| `EXPOSURE_DATA_MISSING` | data | One or more requested exposure references have no usable passive return curve over the run's sessions. | Fetch the named symbols on the strategy's feed over its sessions, or choose references with recorded data. |
 | `FACTOR_EVALUATION_IDENTITY_INVALID` | data | A factor evaluation lacks a valid panel or membership identity. | Use verified panel and dated membership manifests before evaluation. |
 | `FACTOR_EVALUATION_SESSIONS_INVALID` | data | Factor decision sessions are duplicated, unordered, or outside the panel. | Use strictly increasing decision sessions recorded in the panel. |
 | `FACTOR_ID_DUPLICATE` | usage | Two registered factor modules declare the same id. | Give each project factor a unique id. |
