@@ -281,6 +281,38 @@ Backtest a parameter grid (each point on real data is a trial); reports PBO.
 | `--summary-only` | keep result.json and equity curves per point; leave out fills and decisions |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+## `sqy runs`
+
+List, show and compare backtest runs.
+
+### `sqy runs ls`
+
+List recent backtest runs, newest first.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | only runs of this strategy id |
+| `--limit` | how many runs to list (default 20) |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy runs show`
+
+Show one run's result document and artifacts.
+
+| Option | Meaning |
+|---|---|
+| `run` | run id |
+| `--project` | project directory (default: search upwards from the current directory) |
+
+### `sqy runs compare`
+
+Compare two or more runs against the first; writes comparison.md.
+
+| Option | Meaning |
+|---|---|
+| `runs` | run ids; the first is the reference |
+| `--project` | project directory (default: search upwards from the current directory) |
+
 ## `sqy backtest`
 
 Backtest a strategy and write run artifacts.

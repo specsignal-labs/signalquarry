@@ -223,6 +223,7 @@ from signalquarry.api.perf import perf_capture, perf_publish  # noqa: E402
 from signalquarry.api.project import backtest, check, check_factor, init, upgrade_agents_md  # noqa: E402
 from signalquarry.api.publish import bundle_verify, evidence_export  # noqa: E402
 from signalquarry.api.report import report  # noqa: E402
+from signalquarry.api.runs import runs_compare, runs_ls, runs_show  # noqa: E402
 from signalquarry.api.sweep import sweep  # noqa: E402
 from signalquarry.api.universe import (  # noqa: E402
     universe_as_of,
@@ -286,6 +287,9 @@ __all__ = [
     "paper_verify_continuity",
     "reason_code_catalog",
     "report",
+    "runs_compare",
+    "runs_ls",
+    "runs_show",
     "schema",
     "version",
     "universe_as_of",

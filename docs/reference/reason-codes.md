@@ -151,7 +151,10 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `REASON_CODE_UNKNOWN` | usage | The code is not a framework or declared strategy reason code. | Check spelling; codes are UPPER_SNAKE_CASE. |
 | `REPORT_CONFIGURATION_CHANGED` | evidence | The reported runs used a different configuration than the current code and spec. | Rerun the backtest and evaluation for the current configuration. |
 | `REPORT_NO_RUNS` | usage | There is no backtest or evaluation run to report on. | Run `sqy backtest --strategy <id>` (and `sqy evaluate`) first. |
+| `RUNS_NOT_COMPARABLE` | evidence | The runs differ in dataset, sessions, account or evidence grade, so nothing was differenced or ranked. | Compare runs produced on the same dataset and window with the same account; see data.reasons. |
+| `RUN_ARTIFACT_INVALID` | evidence | A run's result document or equity curve is missing, unreadable or no longer matches its recorded hash. | Do not edit `.signalquarry/runs/`; repeat the backtest to produce the run again. |
 | `RUN_LEASE_BUSY` | execution | Another run holds the deployment lease. | Retry after the running command finishes. |
+| `RUN_NOT_FOUND` | usage | No run directory has that id. | Run `sqy runs ls` to list run ids. |
 | `SCHEDULE_GITHUB_ACTIONS_DEMO_ONLY` | execution | GitHub Actions schedules are delayed and best-effort; use them for demos only. | Use systemd on a small VM (or launchd/cron on an always-on host) for forward tests. |
 | `SCHEMA_UNKNOWN` | usage | No bundled schema has that name. | Run `sqy schema` to list schema names. |
 | `STALE_OBSERVATIONS` | data | The latest completed bar is older than the declared staleness limit. | Refresh data with `sqy data fetch`. |
