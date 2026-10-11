@@ -18,7 +18,7 @@ def command_name(argv: list[str]) -> str:
     words = [argument for argument in argv if not argument.startswith("-")]
     command = (
         " ".join(words[:2])
-        if words[:1] in (["spec"], ["paper"], ["data"], ["trials"], ["holdout"])
+        if words[:1] in (["spec"], ["paper"], ["data"], ["trials"], ["holdout"], ["study"], ["runs"])
         else " ".join(words[:1])
     )
     return command or "unknown"

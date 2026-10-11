@@ -58,3 +58,12 @@ def test_command_request_rejects_oversized_input() -> None:
 
     assert response == {"stdout": "", "stderr": "request too large", "exit": 64}
     assert called is False
+
+
+def test_study_and_runs_subcommands_are_named_with_their_action() -> None:
+    from command_server import command_name
+
+    assert command_name(["study", "run", "--study", "x"]) == "study run"
+    assert command_name(["--json", "study", "check", "--study", "x"]) == "study check"
+    assert command_name(["runs", "compare", "a", "b"]) == "runs compare"
+    assert command_name(["backtest", "--strategy", "s"]) == "backtest"

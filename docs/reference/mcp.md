@@ -29,9 +29,14 @@ current host examples.
 The tools return the same `signalquarry.cli/v1` envelope as `sqy --json`:
 inspect `status`, `reason_codes`, `evidence`, and `next_actions`. Tool names
 follow the `sqy_` prefix. The adapter covers project creation, strategy and
-factor checks, data fetch/list/verify, backtest, freeze, evaluation, trial and
-holdout status, reports, and core paper operations. The CLI remains available
-for the full command set.
+factor checks, data fetch/list/verify, backtest (with per-run parameter
+overrides and a label), run listing and comparison, studies (scaffold, check,
+run, list, show), freeze, evaluation, trial and holdout status, reports, and
+core paper operations. The CLI remains available for the full command set.
+
+`sqy_study_run`, like `sqy_backtest` with overrides, records trials on real data
+and is refused beforehand when a family's budget would be exceeded. An agent can
+spend budget through these tools; it cannot extend one.
 
 `sqy_paper_run_once` can submit **paper** orders only after a human has armed
 the deployment in an interactive terminal and the existing kernel checks pass.

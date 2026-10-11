@@ -19,7 +19,7 @@ printf '%s\\n' "$out"
 python3 - "$code" "$@" <<'PY' >> "{log}"
 import json, sys
 words = [a for a in sys.argv[2:] if not a.startswith("-")]
-command = " ".join(words[:2]) if words[:1] in (["spec"], ["paper"], ["data"], ["trials"], ["holdout"]) else " ".join(words[:1])
+command = " ".join(words[:2]) if words[:1] in (["spec"], ["paper"], ["data"], ["trials"], ["holdout"], ["study"], ["runs"]) else " ".join(words[:1])
 print(json.dumps({{"command": command, "argv": sys.argv[2:], "exit": int(sys.argv[1])}}))
 PY
 exit $code

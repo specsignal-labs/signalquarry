@@ -49,6 +49,32 @@ Every new configuration you evaluate on real data is a recorded trial and makes
 the deflated Sharpe bar higher. Try fewer, better-reasoned ideas.
 <!-- signalquarry:end project/golden-path -->
 
+<!-- signalquarry:begin project/research-method v1 -->
+## Research method: compared with what?
+
+A backtest number on its own answers nothing. Before reporting a result:
+
+- **Baseline first.** Declare `benchmark:` in `strategy.yaml`. Every backtest, every
+  evaluation fold and the report then show the strategy against buy-and-hold of that symbol
+  under the same costs (`metrics.excess_total_return`, `beta`, `information_ratio`). Report
+  those with the strategy's own numbers, never the strategy's alone.
+- **One variant at a time.** `sqy backtest --strategy <id> --param name=value --label <name>`
+  tries a variant without editing `strategy.yaml`; `sqy sweep` tries a grid. On real data
+  each new configuration is a trial.
+- **Compare, do not eyeball.** `sqy runs ls`, then `sqy runs compare <reference> <run>…`.
+  If it warns `RUNS_NOT_COMPARABLE`, the runs differ in data, window or account: do not rank
+  them. If the interval of a difference contains zero, say the runs cannot be told apart.
+- **For a real question, write a study.** `sqy study init --strategy <id> --id <study>`, then
+  edit `studies/<study>/study.yaml`: the hypothesis, the baselines, the bounded variants and
+  exactly one `compare` rule, all decided before any run. `sqy study check` shows the arms and
+  the trials they cost; `sqy study run` returns `supported`, `not_supported` or
+  `insufficient`. Report that verdict as it is. Do not change the rule, the metric or the
+  baseline after seeing a result: an edited file is a different study.
+- **Comparisons and studies are in-sample.** They never raise the claim level; only
+  `sqy evaluate` on a frozen configuration does. Every configuration a study tries makes the
+  deflated Sharpe bar higher for the strategy.
+<!-- signalquarry:end project/research-method -->
+
 <!-- signalquarry:begin project/authoring-rules v2 -->
 ## Authoring rules
 
@@ -95,13 +121,16 @@ the deflated Sharpe bar higher. Try fewer, better-reasoned ideas.
 `sqy explain <CODE>` explains any reason code. `sqy doctor` checks the environment.
 <!-- signalquarry:end project/never -->
 
-<!-- signalquarry:begin project/files v2 -->
+<!-- signalquarry:begin project/files v3 -->
 ## Files
 
 - `signalquarry.toml` — project settings (data provider, strategy modules)
 - `src/{{package}}/<strategy>/strategy.py` and `strategy.yaml` — one strategy each
 - `tests/test_conformance.py` — runs `sqy check` in your test suite
-- `evidence/` — trial ledger and commitments (engine-written; never edit)
+- `studies/<id>/study.yaml` — a declared comparison (you write it before running it)
+- `evidence/` — trial ledger, study log and commitments (engine-written; never edit)
+- `.signalquarry/` — run artifacts: `runs/`, `sweeps/`, `comparisons/`, `studies/`, `reports/`
+  (engine-written; never edit or commit)
 - `data/manifests/` — dataset hashes (no prices)
 - `data/universe/snapshots/` — hash-only prospective asset-list observations; raw pages stay in the local cache
 - `paper/<alias>.paper.yaml` — a paper deployment; `paper/<alias>/journal.jsonl` is its
