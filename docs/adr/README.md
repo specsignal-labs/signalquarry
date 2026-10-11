@@ -16,3 +16,4 @@
 | [0012](0012-factor-portfolio-construction.md) | Factor composition and long-only portfolio construction (proposed) |
 | [0013](0013-corporate-action-identity.md) | Corporate-action identity and effective time (proposed) |
 | [0014](0014-real-data-formula-search.md) | Real-data formula search and the factor holdout (proposed; design decided 2026-10-06) |
+| [0015](0015-research-studies.md) | Research studies: declared, comparable sets of runs (proposed) |

@@ -54,8 +54,10 @@ class Resolved:
         ledger hash, stays what it was before benchmarks were compared.
         """
         symbol = self.strategy.spec.benchmark
-        if symbol is None:
-            return None
+        return None if symbol is None else self.symbol_source(symbol)
+
+    def symbol_source(self, symbol: str) -> tuple[Dataset, str] | None:
+        """The dataset holding ``symbol`` over this strategy's sessions, or ``None``."""
         if symbol in self.dataset.series:
             return self.dataset, symbol
         if self.grade == "synthetic":

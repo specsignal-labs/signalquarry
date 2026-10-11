@@ -7,6 +7,13 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Research studies (ADR 0015, proposed): `sqy study init | check | run | ls | show`. A study
+  runs a subject strategy, baselines (benchmark, volatility-matched benchmark, another
+  strategy) and bounded variants on one dataset and window, counts every candidate
+  configuration as a trial, refuses beforehand when a budget would be exceeded, reuses
+  finished arms, and reports a verdict bound to the predeclared rule with a paired bootstrap
+  interval. It never opens a holdout or raises a claim level. On real data a chained
+  `evidence/studies.jsonl` records each study and the fate of every arm.
 - `sqy runs ls | show | compare`: list recent runs, show one run's verified result document,
   and compare runs against a reference (configuration differences, return correlation and a
   paired bootstrap interval for the Sharpe difference), written as `comparison.json`,
@@ -38,6 +45,10 @@ change provisional surfaces after deprecation).
   evidence grade), dotted-path differences between two runs' parameters and specifications,
   return correlation, and a paired moving-block bootstrap interval for the difference in
   Sharpe ratio. Runs that are not comparable are not differenced. No command uses it yet.
+- ADR 0015 (proposed): research studies as declared, comparable sets of runs, with the
+  trial rule for each kind of arm, refusal before spending, resume and a rule-bound verdict.
+  The strict `study.yaml` contract (`signalquarry.study/v1`) is in place; no command reads it
+  yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and

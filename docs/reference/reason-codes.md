@@ -170,6 +170,15 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `STRATEGY_SPEC_MISSING` | signal | strategy.yaml is missing next to the strategy module. | Add strategy.yaml next to strategy.py. |
 | `STRATEGY_STATE_NOT_SERIALIZABLE` | signal | Strategy state must be canonical JSON (string keys, finite numbers, aware datetimes). | Store plain JSON values in state. |
 | `STRATEGY_STATE_TOO_LARGE` | signal | Strategy state exceeds 16 KB of canonical JSON. | Keep state small; recompute from bars instead. |
+| `STUDY_ARM_INVALID` | usage | An arm of the study cannot be built: invalid parameters or execution settings, a variant that changes nothing, or a baseline the dataset does not cover. | Correct the arm named in the summary. |
+| `STUDY_BENCHMARK_UNDECLARED` | usage | The strategy declares no benchmark, so the scaffolded benchmark baseline has no symbol yet. | Give the baseline a `symbol`, or declare `benchmark` in strategy.yaml. |
+| `STUDY_DATASET_MISMATCH` | data | The study pins a dataset other than the one its subject strategy resolves to. | Fetch or select the pinned dataset, or update `dataset` in the study file (that makes a new study). |
+| `STUDY_DETERMINISM_FAILED` | evidence | Recomputing an arm gave a different ledger than the run recorded earlier for the same configuration, dataset and window. | Do not use either result. Check that the strategy is pure (`sqy check`) and that the cached data verifies (`sqy data verify`). |
+| `STUDY_EXISTS` | usage | A study file with that id already exists. | Choose another id or edit the existing file. |
+| `STUDY_FILE_CHANGED` | evidence | The study file was edited after the result shown was produced, so the result belongs to a different study. | Run the study again to get a result for the current file. |
+| `STUDY_NOT_FOUND` | usage | The project has no `studies/<id>/study.yaml` with that id. | Run `sqy study ls`, or create one with `sqy study init --strategy <id> --id <study>`. |
+| `STUDY_NO_RESULT` | usage | The study has not been run yet. | Run `sqy study run --study <id>`. |
+| `STUDY_SPEC_INVALID` | usage | The study file does not satisfy the `signalquarry.study/v1` contract. | Fix the field named in the summary; the id must match the directory name. |
 | `SWEEP_RESULTS_ARE_IN_SAMPLE` | evidence | Sweep results are in-sample and raise the trial count. | Pick a configuration by reasoning, freeze it, then evaluate. |
 | `SWEEP_TOO_LARGE` | usage | The parameter grid has too many points. | Sweep fewer, better-reasoned values; each point on real data is a trial. |
 | `TRIAL_BUDGET_EXHAUSTED` | evidence | The family's trial budget is used up. | Stop, or have a human run `sqy trials extend --reason`. |

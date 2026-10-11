@@ -104,6 +104,62 @@ the evidence grade. Otherwise the command still lists them, warns
 picking the best row is exactly what the trial ledger and the deflated Sharpe ratio
 are there to price.
 
+## Studies: a declared comparison
+
+A study answers "does this idea add something over a baseline?" with the rule written
+down first. It is a file, `studies/<id>/study.yaml`:
+
+```yaml
+schema: signalquarry.study/v1
+id: trend-vs-hold
+hypothesis:
+  statement: Holding SPY only above its 200-session average lowers drawdown versus buy-and-hold.
+  falsification: Max drawdown over the same sessions is not lower than buy-and-hold.
+base: sma-trend                       # the subject strategy
+baselines:
+  - {id: buy-and-hold, kind: benchmark}        # engine buy-and-hold of the benchmark
+  - {id: vol-matched, kind: benchmark_scaled}  # the same, scaled to the subject's volatility
+variants:
+  - {id: half-weight, params: {weight: "0.5"}, role: ablation}
+  - {id: costs-x2, execution: {costs: {bps: "10"}}, role: sensitivity}
+grid: {period: [100, 150]}            # optional; each point is a candidate
+compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
+```
+
+```bash
+sqy study init --strategy sma-trend --id trend-vs-hold   # scaffold the file
+sqy study check --study trend-vs-hold    # arms, and the trials it would record; runs nothing
+sqy study run --study trend-vs-hold      # run every arm and compare
+sqy study show --study trend-vs-hold     # the latest result
+sqy study ls
+```
+
+What a study guarantees:
+
+- **Comparable arms.** Every arm runs on the subject's dataset over the same window, clipped
+  at the sealed holdout. A study has no way to open a holdout.
+- **Counted arms.** On real data the subject, every `candidate` and `ablation` variant and
+  every `strategy` baseline is a trial in its family. Benchmark baselines are not trials.
+  A `sensitivity` variant changes execution or cost assumptions only, cannot be selected, and
+  is not a trial. `study check` shows the count against each budget, and a study that would
+  exceed a budget is refused before anything runs.
+- **A rule-bound verdict.** `supported` needs the subject to be better than the `versus`
+  baseline on the declared metric, with a paired 90% bootstrap interval of the difference
+  wholly on that side. Better with an interval that contains zero is `insufficient`. Not
+  better is `not_supported`. The verdict is descriptive: it never raises a claim level, and
+  only `sqy evaluate` on a frozen configuration does.
+- **A history.** Each arm is an ordinary run, so a second `study run` reuses finished arms
+  and an interrupted study picks up where it stopped without counting anything twice.
+  `--rerun` recomputes every arm and requires the ledger hash recorded before. On real data
+  `evidence/studies.jsonl` records what each study set out to run and what became of every
+  arm, including failures; `sqy evidence verify` checks it.
+
+The result is written to `.signalquarry/studies/<run>/` as `study.json`, `comparison.md`
+and a chart. Variants appear beside the subject with the probability of backtest
+overfitting across them, not as a ranking: each configuration a study tries raises the
+deflated-Sharpe bar the strategy must later clear. Editing `study.yaml` makes a different
+study with its own identity.
+
 ## Freeze and holdout
 
 `sqy spec freeze --strategy <id>` records the configuration hash, hypothesis and

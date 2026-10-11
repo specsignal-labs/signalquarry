@@ -378,6 +378,44 @@ def _runs(args: argparse.Namespace) -> Envelope:
     return api.runs_ls(strategy_id=args.strategy, limit=args.limit, project=args.project)
 
 
+def _configure_study(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    create = actions.add_parser("init", help="Scaffold studies/ID/study.yaml for a strategy.")
+    create.add_argument("--strategy", required=True, help="the subject strategy id")
+    create.add_argument("--id", required=True, dest="study", help="id of the new study")
+    check = actions.add_parser(
+        "check", help="Validate a study, list its arms and the trials it would record; runs nothing."
+    )
+    check.add_argument("--study", required=True, help="study id")
+    run = actions.add_parser(
+        "run", help="Run every arm on one dataset and window and compare them by the declared rule."
+    )
+    run.add_argument("--study", required=True, help="study id")
+    run.add_argument(
+        "--rerun",
+        action="store_true",
+        help="recompute arms that already have a run and require the same ledger hash",
+    )
+    actions.add_parser("ls", help="List studies and the verdict of each one's latest run.")
+    show = actions.add_parser("show", help="Show the latest recorded result of a study.")
+    show.add_argument("--study", required=True, help="study id")
+    for child in actions.choices.values():
+        child.add_argument("--project", type=Path)
+        child.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+
+
+def _study(args: argparse.Namespace) -> Envelope:
+    if args.action == "init":
+        return api.study_init(args.strategy, args.study, project=args.project)
+    if args.action == "check":
+        return api.study_check(args.study, project=args.project)
+    if args.action == "run":
+        return api.study_run(args.study, rerun=args.rerun, project=args.project)
+    if args.action == "show":
+        return api.study_show(args.study, project=args.project)
+    return api.study_ls(project=args.project)
+
+
 def _configure_holdout(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
     status = actions.add_parser("status", help="Show each family's holdout seal and opening.")
@@ -659,6 +697,12 @@ COMMANDS: tuple[Command, ...] = (
         ),
     ),
     Command("runs", "List, show and compare backtest runs.", _runs, _configure_runs),
+    Command(
+        "study",
+        "Declared comparisons: a subject, baselines and bounded variants under one rule.",
+        _study,
+        _configure_study,
+    ),
     Command(
         "backtest",
         "Backtest a strategy and write run artifacts.",
