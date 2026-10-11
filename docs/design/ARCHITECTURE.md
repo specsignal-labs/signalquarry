@@ -519,6 +519,7 @@ flowchart LR
   sqy --> c_factor["factor"]
   c_factor --> c_factor_ls["ls"]
   c_factor --> c_factor_evaluate["evaluate"]
+  c_factor --> c_factor_report["report"]
   c_factor --> c_factor_holdout_seal["holdout seal"]
   c_factor --> c_factor_holdout_status["holdout status"]
   sqy --> c_data["data"]

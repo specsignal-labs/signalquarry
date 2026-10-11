@@ -97,6 +97,8 @@ change provisional surfaces after deprecation).
   OHLC consistency, non-positive prices, zero volume, stale closes and large moves that no
   recorded split explains. Its report holds dates and counts only, never a price, volume or
   return. No command uses it yet.
+- `sqy factor report` and `api.factor_report` write descriptive Markdown factor
+  diagnostics with IC and quintile SVG charts; no trial, evidence grade or holdout access.
 - Offline factor diagnostics via `sqy factor evaluate --synthetic` and a registered
   volume-shock starter via `sqy init NAME --demo --kind factor`; synthetic results
   make no real-market claims and record no trials or holdout access.
