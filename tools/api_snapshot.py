@@ -23,6 +23,7 @@ MODULES = (
     "signalquarry.sdk",
     "signalquarry.sdk.options",
     "signalquarry.api",
+    "signalquarry.research",
     "signalquarry.plugins",
     "signalquarry.testing",
 )
