@@ -49,6 +49,8 @@ class SpoolRun:
     fills_path: Path
     fill_count: int
     fees: Decimal
+    bought: Decimal = Decimal(0)  # total notional of buy fills
+    sold: Decimal = Decimal(0)  # total notional of sell fills
 
     def decisions_chunks(self) -> Iterator[str]:
         return _file_chunks(self.decisions_path)
@@ -65,6 +67,7 @@ def spool_equity_run(ticks: Generator[BacktestTick, None, BacktestEnd], scratch_
     sessions, equity, cash = [], [], []
     fill_count = 0
     fees = Decimal(0)
+    notional = {"buy": Decimal(0), "sell": Decimal(0)}
     try:
         with decisions_path.open("w", encoding="utf-8", newline="\n") as decisions_stream:
             with fills_path.open("w", encoding="utf-8", newline="\n") as fills_stream:
@@ -79,6 +82,7 @@ def spool_equity_run(ticks: Generator[BacktestTick, None, BacktestEnd], scratch_
                         fills_stream.write(canonical_json(fill_ledger_row(fill)) + "\n")
                         fill_count += 1
                         fees += fill.fee
+                        notional[fill.side] += fill.quantity * fill.price
                     sessions.append(tick.session)
                     equity.append(tick.equity)
                     cash.append(tick.cash)
@@ -97,4 +101,4 @@ def spool_equity_run(ticks: Generator[BacktestTick, None, BacktestEnd], scratch_
     result = SpoolSummary(
         sessions, equity, cash, final.positions, final.warnings, final.dataset_identity, ledger_hash
     )
-    return SpoolRun(result, decisions_path, fills_path, fill_count, fees)
+    return SpoolRun(result, decisions_path, fills_path, fill_count, fees, notional["buy"], notional["sell"])

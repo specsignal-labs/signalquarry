@@ -237,6 +237,9 @@ def evaluate_command(
     variance = float(np.var(summary["sharpes"], ddof=1)) if len(summary["sharpes"]) >= 2 else 0.0
     progress.emit("evaluate", step="walk_forward_and_stress", strategy=spec.id)
     chains = resolved.recorded_chains()
+    benchmark = resolved.benchmark_source()
+    if spec.benchmark is not None and benchmark is None:
+        envelope.warnings.append("BENCHMARK_DATA_MISSING")
     try:
         result = evaluate(
             spec,
@@ -249,6 +252,7 @@ def evaluate_command(
             stress=stress,
             open_holdout=False,
             recorded_chains=chains,
+            benchmark=benchmark,
         )
         pre_gates_ok = result.passed("G1_sample", "G2_walk_forward", "G3_stress")
         if open_holdout and not pre_gates_ok:
@@ -269,6 +273,7 @@ def evaluate_command(
                 stress=stress,
                 open_holdout=True,
                 recorded_chains=chains,
+                benchmark=benchmark,
             )
     except EngineError as exc:
         envelope.status, envelope.reason_codes, envelope.summary = (

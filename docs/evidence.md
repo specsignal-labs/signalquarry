@@ -95,6 +95,27 @@ not a gate; a wide interval says the sample cannot pin the Sharpe down.
 
 When a gate fails, the answer is a new hypothesis, not looser gates.
 
+## Benchmark comparison
+
+Set `benchmark: <SYMBOL>` in `strategy.yaml` to compare every run with holding that
+symbol. The benchmark is simulated by the same engine: one position at full weight
+under the strategy's own account, execution and cost settings, with dividends
+reinvested. `sqy data fetch --strategy <id>` fetches its bars with the strategy's.
+
+- `sqy backtest` writes `benchmark.csv` beside `equity.csv`, adds a `benchmark`
+  block to `result.json` (the benchmark's own metrics and the run's excess return,
+  tracking error, information ratio, beta, alpha, correlation and up and down
+  capture) and puts the headline numbers in the envelope's `metrics`. It also
+  records the deepest drawdown episodes and one-way turnover with fee drag.
+- `sqy evaluate` adds the benchmark's return and drawdown to each walk-forward fold
+  and an out-of-sample `relative` block, with the number of folds in which the
+  strategy was ahead.
+
+All of it is descriptive. No gate reads the benchmark, the comparison never raises a
+claim level, and the benchmark run is not a trial. Relative statistics need at least
+20 sessions and report `insufficient` otherwise. If no recorded dataset covers the
+benchmark, the command still succeeds and warns `BENCHMARK_DATA_MISSING`.
+
 ## Plugin gates
 
 Installed packages can add gates through the `signalquarry.gates` entry point (see
@@ -106,7 +127,9 @@ envelope's `gates`, and are add-only: a failing or broken plugin gate caps the c
 
 `sqy report --strategy <id>` renders `report.md` and `equity.svg` from run
 artifacts. The claim level and its permitted wording come first; every report
-ends with a hypothetical-results disclaimer.
+ends with a hypothetical-results disclaimer. With a benchmark, the report adds a
+strategy-against-benchmark table, the benchmark line on the chart and a per-fold
+table; drawdown episodes and trading activity are always shown.
 
 Report-section plugins (`signalquarry.report_sections`) append their own headed
 sections to `report.md`.
