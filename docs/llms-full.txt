@@ -481,7 +481,7 @@ compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
 ```
 
 ```bash
-sqy study init --strategy sma-trend --id trend-vs-hold   # scaffold the file
+sqy study init --strategy sma-trend --id trend-vs-hold --metric max_drawdown --direction lower
 sqy study check --study trend-vs-hold    # arms, and the trials it would record; runs nothing
 sqy study run --study trend-vs-hold      # run every arm and compare
 sqy study show --study trend-vs-hold     # the latest result
@@ -747,8 +747,12 @@ nothing about markets. The method is the point.
 
 ```bash
 sqy init trend-lab --demo && cd trend-lab
-sqy study init --strategy sma-trend --id trend-vs-hold
+sqy study init --strategy sma-trend --id trend-vs-hold --metric max_drawdown --direction lower
 ```
+
+`--metric` and `--direction` write the rule and a hypothesis that matches it. Without them
+the scaffold leaves both as `TODO` and the study is refused until you write them: the tool
+never picks the rule for you.
 
 Edit `studies/trend-vs-hold/study.yaml` so that it asks exactly the question in the
 hypothesis:
@@ -1718,6 +1722,8 @@ Scaffold studies/ID/study.yaml for a strategy.
 |---|---|
 | `--strategy` | the subject strategy id (required) |
 | `--id` | id of the new study (required) |
+| `--metric` | the comparison metric, e.g. max_drawdown (with --direction) |
+| `--direction` | higher or lower (with --metric) |
 | `--project` | project directory (default: search upwards from the current directory) |
 
 ### `sqy study check`
@@ -2241,6 +2247,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `STRATEGY_MODULE_INVALID` | signal | A strategy module must define exactly one @strategy function. | Keep one decide function per module. |
 | `STRATEGY_NOT_FOUND` | usage | No loaded strategy has that id. | Run `sqy check` to list strategies, or add the module to signalquarry.toml. |
 | `STRATEGY_PARAMS_INVALID` | signal | strategy.yaml params do not validate against the Params class. | Make params match the Params fields and bounds. |
+| `STRATEGY_RAISED` | signal | The strategy's decide function raised an exception during a backtest; the detail names the session, the exception type and its message. | Fix the strategy code. `SYMBOL_NOT_DECLARED` means it read a symbol that `data.symbols` in strategy.yaml does not list. `sqy check` runs the same function under conformance checks. |
 | `STRATEGY_RETURNED_NON_DECISION` | signal | decide() must return a Decision. | Return Decision.target, Decision.hold or Decision.unavailable. |
 | `STRATEGY_SPEC_INVALID` | signal | strategy.yaml does not match signalquarry.strategy/v1. | Fix the fields named in the detail. |
 | `STRATEGY_SPEC_MISSING` | signal | strategy.yaml is missing next to the strategy module. | Add strategy.yaml next to strategy.py. |

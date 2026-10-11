@@ -8,6 +8,7 @@ prices; corporate actions are stored separately and applied point-in-time.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -29,7 +30,13 @@ def _hash_array(digest: Any, values: np.ndarray) -> None:
     for start in range(0, len(values), IDENTITY_ARRAY_CHUNK):
         if start:
             digest.update(b",")
-        chunk = canonical_bytes(values[start : start + IDENTITY_ARRAY_CHUNK].tolist())
+        part = values[start : start + IDENTITY_ARRAY_CHUNK]
+        if part.dtype.kind in "iub" or (part.dtype.kind == "f" and bool(np.isfinite(part).all())):
+            # A flat list of Python ints, bools or finite floats is already canonical, so it
+            # is serialized directly; the bytes are those canonical_bytes produces.
+            chunk = json.dumps(part.tolist(), allow_nan=False, separators=(",", ":")).encode("utf-8")
+        else:
+            chunk = canonical_bytes(part.tolist())
         digest.update(chunk[1:-1])
     digest.update(b"]")
 

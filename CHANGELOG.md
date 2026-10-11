@@ -7,6 +7,13 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy study init --metric M --direction D` writes the comparison rule and a hypothesis that
+  matches it. Without them the scaffold leaves both as `TODO` and `study check` and `study run`
+  refuse it (`STUDY_SPEC_INVALID`): the scaffold no longer defaults to "higher Sharpe" beside a
+  hypothesis about something else.
+- An exception raised by a strategy during a backtest is reported as `STRATEGY_RAISED` with the
+  session, the exception type and its message, instead of `INTERNAL_ERROR`.
+  `BACKTEST_RANGE_EMPTY` now says what was asked for and what the data covers.
 - Agent eval task `benchmark-claim`: report whether a run beat its declared benchmark, as
   returned. The scorer's new opt-in rule `claims_fixed` treats a benchmark or hypothesis
   changed during the task as moving the goalposts.
@@ -219,6 +226,10 @@ change provisional surfaces after deprecation).
   (`OPTIONS_RECORDED_CHAINS_USED`), falling back to modelled prices elsewhere.
 
 ### Changed
+- Backtests on wide universes are several times faster with identical results: bars are built
+  only for the symbols a strategy reads, and the dataset identity is hashed without a Python
+  call per number (the bytes hashed are unchanged). An eight-arm study on a 300-symbol synthetic
+  universe went from 41.9 s to 7.4 s.
 - Factor trials are identified per family: recording the same configuration under a second family is that
   family's own trial in the default project evidence layout too (as it already was with `per_family`).
 - Building each decision's per-symbol bar windows is about 26% faster on the 10y x 3,000-symbol

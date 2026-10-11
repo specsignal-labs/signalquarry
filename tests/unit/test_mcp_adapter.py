@@ -138,7 +138,13 @@ def test_mcp_research_tools_run_variants_comparisons_and_a_study(tmp_path: Path)
             diagnosed = await call("sqy_diagnose", strategy_id="sma-trend", run_id=base["data"]["run_id"])
             assert diagnosed["status"] == "ok" and "regimes" in diagnosed["data"]["available"]
 
-            scaffold = await call("sqy_study_init", strategy_id="sma-trend", study_id="first")
+            scaffold = await call(
+                "sqy_study_init",
+                strategy_id="sma-trend",
+                study_id="first",
+                metric="max_drawdown",
+                direction="lower",
+            )
             assert scaffold["status"] == "ok"
             checked = await call("sqy_study_check", study_id="first")
             assert [arm["id"] for arm in checked["data"]["arms"]] == ["base", "costs-x2", "buy-and-hold"]

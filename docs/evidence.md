@@ -182,7 +182,7 @@ compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}
 ```
 
 ```bash
-sqy study init --strategy sma-trend --id trend-vs-hold   # scaffold the file
+sqy study init --strategy sma-trend --id trend-vs-hold --metric max_drawdown --direction lower
 sqy study check --study trend-vs-hold    # arms, and the trials it would record; runs nothing
 sqy study run --study trend-vs-hold      # run every arm and compare
 sqy study show --study trend-vs-hold     # the latest result

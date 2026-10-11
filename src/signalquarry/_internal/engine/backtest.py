@@ -21,7 +21,7 @@ next unchanged target.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Generator, Iterable
+from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, Decimal
@@ -302,7 +302,7 @@ def iter_equity_backtest(
     first = next((i for i, s in enumerate(sessions) if start is None or s >= start), len(sessions))
     last = max((i for i, s in enumerate(sessions) if end is None or s <= end), default=-1)
     if first > last:
-        raise EngineError("BACKTEST_RANGE_EMPTY")
+        raise EngineError(_range_empty(sessions, start, end))
     first = max(first, 1)
 
     execution = spec.execution
@@ -368,6 +368,7 @@ def iter_equity_backtest(
             i,
             lookback,
             allowed_codes,
+            name_strategy_errors=True,
         )
         record: dict[str, Any] = {
             "session": session.isoformat(),
@@ -452,6 +453,47 @@ def run_backtest(
     return result
 
 
+def _range_empty(sessions: Sequence[date], start: date | None, end: date | None) -> str:
+    """``BACKTEST_RANGE_EMPTY`` with what was asked for and what the data covers."""
+    asked = (
+        f"{start.isoformat() if start else 'the first session'} to {end.isoformat() if end else 'the last'}"
+    )
+    if not sessions:
+        return f"BACKTEST_RANGE_EMPTY:asked for {asked}; the dataset has no sessions"
+    return (
+        f"BACKTEST_RANGE_EMPTY:asked for {asked}; "
+        f"the data covers {sessions[0].isoformat()} to {sessions[-1].isoformat()}"
+    )
+
+
+class _LazyBars(Mapping[str, Bars]):
+    """The declared symbols' bars for one decision, each built when it is first read.
+
+    A strategy that reads three symbols of five hundred pays for three. Keys, order and
+    values are those of the eager mapping this replaces.
+    """
+
+    __slots__ = ("_built", "_start", "_stop", "_symbols", "_views")
+
+    def __init__(self, views: _Views, symbols: Sequence[str], start: int, stop: int) -> None:
+        self._views, self._symbols, self._start, self._stop = views, symbols, start, stop
+        self._built: dict[str, Bars] = {}
+
+    def __getitem__(self, symbol: str) -> Bars:
+        found = self._built.get(symbol)
+        if found is None:
+            if symbol not in self._views.present:
+                raise KeyError(symbol)
+            found = self._built[symbol] = self._views.bars(symbol, self._start, self._stop)
+        return found
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._symbols)
+
+    def __len__(self) -> int:
+        return len(self._symbols)
+
+
 def _decide(
     spec: StrategySpecV1,
     definition: StrategyDef,
@@ -464,18 +506,19 @@ def _decide(
     index: int,
     lookback: int,
     allowed_codes: set[str],
+    *,
+    name_strategy_errors: bool = False,
 ) -> Decision:
     if index < lookback:
         return Decision.unavailable("INSUFFICIENT_HISTORY")
     start = index - lookback
-    bars: dict[str, Bars] = {}
     for symbol in spec.data.symbols:
         last = views.last_present(symbol, index)
         if last is None or last < start:
             return Decision.unavailable("INSUFFICIENT_HISTORY")
         if index - 1 - last > spec.data.max_staleness_sessions:
             return Decision.unavailable("STALE_OBSERVATIONS")
-        bars[symbol] = views.bars(symbol, start, index)
+    bars = _LazyBars(views, spec.data.symbols, start, index)
     marks = {symbol: _mark_price(dataset, views, symbol, index) or ZERO for symbol in quantity}
     holdings = {symbol: amount for symbol, amount in quantity.items() if amount}
     invested = sum((holdings[s] * marks[s] for s in holdings), ZERO)
@@ -493,7 +536,15 @@ def _decide(
         equity=_quantize_cash(equity),
         state=freeze_state(state),
     )
-    decision = definition.decide(ctx, params)
+    try:
+        decision = definition.decide(ctx, params)
+    except Exception as exc:
+        if not name_strategy_errors:
+            raise  # the paper path reports a strategy failure in its own terms
+        # In a backtest a bug in the strategy is the strategy's, not the framework's.
+        raise EngineError(
+            f"STRATEGY_RAISED:{dataset.sessions[index].isoformat()}: {type(exc).__name__}: {exc}"
+        ) from exc
     if not isinstance(decision, Decision):
         raise EngineError(f"STRATEGY_RETURNED_NON_DECISION:{type(decision).__name__}")
     undeclared = [code for code in decision.reason_codes if code not in allowed_codes]

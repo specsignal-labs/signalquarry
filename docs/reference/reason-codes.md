@@ -185,6 +185,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `STRATEGY_MODULE_INVALID` | signal | A strategy module must define exactly one @strategy function. | Keep one decide function per module. |
 | `STRATEGY_NOT_FOUND` | usage | No loaded strategy has that id. | Run `sqy check` to list strategies, or add the module to signalquarry.toml. |
 | `STRATEGY_PARAMS_INVALID` | signal | strategy.yaml params do not validate against the Params class. | Make params match the Params fields and bounds. |
+| `STRATEGY_RAISED` | signal | The strategy's decide function raised an exception during a backtest; the detail names the session, the exception type and its message. | Fix the strategy code. `SYMBOL_NOT_DECLARED` means it read a symbol that `data.symbols` in strategy.yaml does not list. `sqy check` runs the same function under conformance checks. |
 | `STRATEGY_RETURNED_NON_DECISION` | signal | decide() must return a Decision. | Return Decision.target, Decision.hold or Decision.unavailable. |
 | `STRATEGY_SPEC_INVALID` | signal | strategy.yaml does not match signalquarry.strategy/v1. | Fix the fields named in the detail. |
 | `STRATEGY_SPEC_MISSING` | signal | strategy.yaml is missing next to the strategy module. | Add strategy.yaml next to strategy.py. |
