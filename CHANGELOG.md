@@ -7,6 +7,11 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy diagnose` is in the research guide, the project `AGENTS.md` research block and the MCP
+  adapter (`sqy_diagnose`).
+- A "Research method" guide: five working rules, the commands by question, and one study
+  worked from hypothesis to a rejected verdict, with the study file under
+  `examples/trend_vs_hold_study/`. A test runs that file and checks the numbers the guide quotes.
 - `sqy diagnose --strategy ID [--run RUN_ID]` writes descriptive regime and calendar-year
   performance, cost sensitivity with an interpolated break-even, recorded fold consistency,
   and recorded parameter sensitivity. `sqy report` includes the newest verified diagnostics

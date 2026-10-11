@@ -28,6 +28,7 @@ def test_new_projects_tell_agents_how_to_compare(tmp_path: Path) -> None:
         "`supported`, `not_supported` or\n  `insufficient`",
         "an edited file is a different study",
         "They never raise the claim level",
+        "sqy diagnose --strategy <id>",
     ):
         assert phrase in text, phrase
     assert "<!-- signalquarry:begin project/files v3 -->" in text

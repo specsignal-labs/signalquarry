@@ -1,0 +1,14 @@
+schema: signalquarry.study/v1
+id: trend-vs-hold
+hypothesis:
+  statement: Holding SYNA only while it closes above its 200-session average reduces drawdown versus buy-and-hold.
+  falsification: Maximum drawdown over the same sessions is not lower than buy-and-hold.
+base: sma-trend
+baselines:
+  - {id: buy-and-hold, kind: benchmark}
+  - {id: vol-matched, kind: benchmark_scaled}
+variants:
+  - {id: half-weight, params: {weight: "0.5"}, role: ablation, note: Half the exposure and no other change.}
+  - {id: costs-x2, execution: {costs: {bps: "10"}}, role: sensitivity}
+grid: {period: [100, 150]}
+compare: {metric: max_drawdown, direction: lower, versus: buy-and-hold}

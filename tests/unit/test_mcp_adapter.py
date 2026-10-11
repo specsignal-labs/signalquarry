@@ -99,6 +99,7 @@ def test_mcp_research_tools_run_variants_comparisons_and_a_study(tmp_path: Path)
         async with Client(mcp) as client:
             tools = {item.name for item in (await client.list_tools()).tools}
             assert {
+                "sqy_diagnose",
                 "sqy_runs_ls",
                 "sqy_runs_show",
                 "sqy_runs_compare",
@@ -133,6 +134,9 @@ def test_mcp_research_tools_run_variants_comparisons_and_a_study(tmp_path: Path)
                 "sqy_runs_compare", run_ids=[base["data"]["run_id"], varied["data"]["run_id"]]
             )
             assert compared["data"]["comparable"] is True and compared["command"] == "runs compare"
+
+            diagnosed = await call("sqy_diagnose", strategy_id="sma-trend", run_id=base["data"]["run_id"])
+            assert diagnosed["status"] == "ok" and "regimes" in diagnosed["data"]["available"]
 
             scaffold = await call("sqy_study_init", strategy_id="sma-trend", study_id="first")
             assert scaffold["status"] == "ok"
