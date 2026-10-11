@@ -1,0 +1,13 @@
+schema: signalquarry.factor/v1
+id: volume-shock
+family: volume-shock
+version: "1"
+hypothesis:
+  statement: >-
+    This is a demonstration on synthetic data. The synthetic panel plants a
+    relation between volume shocks and next-session returns on purpose.
+  falsification: >-
+    Nonpositive horizon-1 mean rank IC with the default planted signal indicates
+    that this demonstration does not recover the intended synthetic relation.
+params:
+  lookback: 20

@@ -81,9 +81,9 @@ def _configure_init(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lab", action="store_true", help="a multi-family strategy lab (per-family ledgers)")
     parser.add_argument(
         "--kind",
-        choices=["equity", "options"],
+        choices=["equity", "options", "factor"],
         default="equity",
-        help="starter strategy: equity trend or options wheel",
+        help="starter: equity trend, options wheel, or factor demo (requires --demo)",
     )
     parser.add_argument(
         "--package", help="Python package name for strategies (default: from the directory name)"
@@ -141,13 +141,22 @@ def _configure_factor(parser: argparse.ArgumentParser) -> None:
         help="Compute descriptive, unverified diagnostics from selected local manifests.",
     )
     evaluate.add_argument("--factor", required=True, help="registered factor ID")
-    evaluate.add_argument("--dataset-id", required=True, help="locally recorded dataset manifest ID")
+    evaluate.add_argument("--dataset-id", help="locally recorded dataset manifest ID")
     evaluate.add_argument(
         "--universe-manifest",
         type=Path,
         action="append",
-        required=True,
         help="dated universe build manifest path; repeat for each decision session",
+    )
+    evaluate.add_argument(
+        "--synthetic", action="store_true", help="use an offline synthetic panel without manifests"
+    )
+    evaluate.add_argument(
+        "--symbols", type=int, default=200, help="synthetic panel symbol count (default: 200)"
+    )
+    evaluate.add_argument("--seed", type=int, default=7, help="synthetic panel random seed (default: 7)")
+    evaluate.add_argument(
+        "--planted-ic", type=float, default=0.05, help="synthetic signal loading (default: 0.05)"
     )
     evaluate.add_argument("--project", type=Path, help="project directory (default: search upwards)")
     evaluate.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
@@ -159,7 +168,11 @@ def _factor(args: argparse.Namespace) -> Envelope:
     return api.factor_evaluate(
         args.factor,
         args.dataset_id,
-        universe_manifests=args.universe_manifest,
+        universe_manifests=args.universe_manifest or (),
+        synthetic=args.synthetic,
+        synthetic_symbols=args.symbols,
+        synthetic_seed=args.seed,
+        synthetic_planted_ic=args.planted_ic,
         project=args.project,
     )
 

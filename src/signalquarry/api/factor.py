@@ -5,13 +5,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from datetime import date, datetime
+from contextlib import ExitStack
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, cast
 
+from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
 from signalquarry._internal.data.library import LibraryError, dataset_from_manifest
 from signalquarry._internal.data.panel import PanelStore
+from signalquarry._internal.data.synthetic import synthetic_memberships, synthetic_panel
 from signalquarry._internal.data.universe_build import verify_universe_manifest
 from signalquarry._internal.factors.evaluate import UniverseAt, rank_ic, score_factor
 from signalquarry._internal.factors.labels import derive_forward_return_labels
@@ -156,13 +160,28 @@ def _load_evaluation_membership(
 
 def factor_evaluate(
     factor_id: str,
-    dataset_id: str,
+    dataset_id: str | None = None,
     *,
-    universe_manifests: Sequence[Path],
+    universe_manifests: Sequence[Path] = (),
+    synthetic: bool = False,
+    synthetic_symbols: int = 200,
+    synthetic_seed: int = 7,
+    synthetic_planted_ic: float = 0.05,
     project: Path | None = None,
 ) -> Envelope:
     """Return descriptive factor metrics with no trial, grade, or holdout authority."""
     envelope = Envelope(command="factor evaluate")
+    # A dataset without universe manifests is not a usage error: as before, the real-data path
+    # reports that the dated universe input is unavailable.
+    if (synthetic and (dataset_id is not None or universe_manifests)) or (
+        not synthetic and dataset_id is None
+    ):
+        return Envelope(
+            command=envelope.command,
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="select --synthetic alone, or --dataset-id with one --universe-manifest per decision",
+        )
     loaded = _load(project, envelope.command)
     if isinstance(loaded, Envelope):
         return loaded
@@ -187,36 +206,71 @@ def factor_evaluate(
             summary=f"factor {factor_id} must pass synthetic conformance before evaluation",
             data={"factor": factor_id, "checks": [check.as_dict() for check in checks]},
         )
+    dataset_manifest: dict[str, Any] = {}
     try:
-        library = library_for(root)
-        manifests = [entry for entry in library.manifests() if entry.get("dataset_id") == dataset_id]
-        if len(manifests) != 1:
-            raise LibraryError("DATA_MANIFEST_INVALID", f"expected one manifest for dataset {dataset_id}")
-        dataset_manifest = manifests[0]
-        dataset = dataset_from_manifest(library, dataset_manifest)
-        memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest)
-        panel_store = PanelStore(library.cache_dir)
-        panel_store.build(dataset)
-        selected_symbols = tuple(
-            sorted({symbol for membership in memberships for symbol in membership.symbols})
-        )
-        panel = panel_store.load(dataset.identity(), symbols=selected_symbols)
-        sessions = tuple(member.session for member in memberships)
-        labels = derive_forward_return_labels(
-            dataset,
-            decision_sessions=sessions,
-            symbols=panel.symbols,
-            horizons=item.spec.evaluation.horizons,
-        )
-        scores = score_factor(item.definition, item.params, panel, memberships)
-        report = rank_ic(
-            scores,
-            labels,
-            blocks=item.spec.evaluation.chronological_blocks,
-            cost_bps=float(item.spec.evaluation.cost_bps),
-            capital=float(item.spec.evaluation.capital),
-        )
+        with ExitStack() as stack:
+            if synthetic:
+                generated = synthetic_panel(
+                    n_symbols=synthetic_symbols,
+                    seed=synthetic_seed,
+                    planted_ic=synthetic_planted_ic,
+                )
+                dataset = generated.dataset
+                memberships = tuple(
+                    UniverseAt(
+                        session=session,
+                        observed_at=datetime.combine(session - timedelta(days=1), time(21), UTC),
+                        decision_cutoff=datetime.combine(session - timedelta(days=1), time(21), UTC),
+                        symbols=symbols,
+                        identity=canonical_hash({"session": session, "symbols": symbols}),
+                    )
+                    for session, symbols in synthetic_memberships(generated)
+                )
+                scratch = stack.enter_context(TemporaryDirectory(prefix="signalquarry-factor-"))
+                panel_store = PanelStore(Path(scratch))
+            else:
+                library = library_for(root)
+                manifests = [entry for entry in library.manifests() if entry.get("dataset_id") == dataset_id]
+                if len(manifests) != 1:
+                    raise LibraryError(
+                        "DATA_MANIFEST_INVALID", f"expected one manifest for dataset {dataset_id}"
+                    )
+                dataset_manifest = manifests[0]
+                dataset = dataset_from_manifest(library, dataset_manifest)
+                memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest)
+                panel_store = PanelStore(library.cache_dir)
+            panel_store.build(dataset)
+            selected_symbols = tuple(
+                sorted({symbol for membership in memberships for symbol in membership.symbols})
+            )
+            panel = panel_store.load(dataset.identity(), symbols=selected_symbols)
+            sessions = tuple(member.session for member in memberships)
+            labels = derive_forward_return_labels(
+                dataset,
+                decision_sessions=sessions,
+                symbols=panel.symbols,
+                horizons=item.spec.evaluation.horizons,
+            )
+            scores = score_factor(item.definition, item.params, panel, memberships)
+            report = rank_ic(
+                scores,
+                labels,
+                blocks=item.spec.evaluation.chronological_blocks,
+                cost_bps=float(item.spec.evaluation.cost_bps),
+                capital=float(item.spec.evaluation.capital),
+            )
     except (LibraryError, OSError, TypeError, ValueError, KeyError) as exc:
+        if (
+            synthetic
+            and isinstance(exc, ValueError)
+            and str(exc).startswith("SYNTHETIC_PANEL_ARGUMENT_INVALID:")
+        ):
+            return Envelope(
+                command=envelope.command,
+                status="usage",
+                reason_codes=["USAGE_INVALID"],
+                summary=f"invalid synthetic panel argument: {str(exc).split(':', 1)[1]}",
+            )
         code = getattr(exc, "code", None) or str(exc).split(":", 1)[0]
         if code not in REASON_CODES:
             code = "DATA_MANIFEST_INVALID"
@@ -231,22 +285,39 @@ def factor_evaluate(
     return Envelope(
         command=envelope.command,
         summary=(
-            f"unverified descriptive diagnostics for {factor_id}; no trial recorded, "
+            f"synthetic diagnostics for {factor_id}; these numbers say nothing about real markets; "
+            "no trial recorded and no holdout touched"
+            if synthetic
+            else f"unverified descriptive diagnostics for {factor_id}; no trial recorded, "
             "evidence grade assigned, or holdout accessed"
         ),
+        evidence={"grade": "synthetic", "claim_level": "none"} if synthetic else None,
         data={
             "factor": factor_id,
             "family": item.spec.family,
             "configuration_hash": item.configuration_hash,
             "code_tree_hash": item.code_tree_hash,
-            "dataset_id": dataset_id,
-            "dataset_manifest_hash": dataset_manifest["manifest_hash"],
+            "dataset_id": "synthetic-panel" if synthetic else dataset_id,
+            **(
+                {
+                    "synthetic": {
+                        "symbols": synthetic_symbols,
+                        "seed": synthetic_seed,
+                        "planted_ic": synthetic_planted_ic,
+                        "decision_sessions": len(memberships),
+                    }
+                }
+                if synthetic
+                else {
+                    "dataset_manifest_hash": dataset_manifest["manifest_hash"],
+                    "universe_manifests": [member.identity for member in memberships],
+                }
+            ),
             "dataset_identity": report.dataset_identity,
             "universe_identity": report.universe_identity,
-            "universe_manifests": [member.identity for member in memberships],
             "decision_sessions": [session.isoformat() for session in scores.sessions],
             "label_identity": report.label_identity,
-            "scope": report.scope,
+            "scope": "synthetic" if synthetic else report.scope,
             "authority": {
                 "provenance_verified": False,
                 "trial_recorded": False,

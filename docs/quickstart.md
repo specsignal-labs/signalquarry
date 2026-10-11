@@ -28,6 +28,20 @@ Synthetic data proves nothing about markets; the demo's claim level stays `none`
 For real data, create a project without `--demo`, add your Alpaca keys (see
 [Data](data.md)) and run `sqy data fetch --strategy <id>` before backtesting.
 
+### Factor research offline
+
+Create a demo project with `sqy init factor-demo --demo --kind factor`, then
+run these commands inside `factor-demo`:
+
+```bash
+sqy factor ls
+sqy check --factor-id volume-shock
+sqy factor evaluate --factor volume-shock --synthetic
+```
+
+Synthetic results diagnose the factor code path; they are not evidence about
+real markets and record no trial or holdout access.
+
 ## Using a coding agent
 
 Open the project in your agent (Claude Code, Codex, …). It reads `AGENTS.md`

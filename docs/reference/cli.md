@@ -43,7 +43,7 @@ Create a new strategy project.
 | `--project` | project directory for --upgrade-agents-md |
 | `--demo` | use synthetic data (no credentials needed) |
 | `--lab` | a multi-family strategy lab (per-family ledgers) |
-| `--kind` | starter strategy: equity trend or options wheel (one of `equity`, `options`) |
+| `--kind` | starter: equity trend, options wheel, or factor demo (requires --demo) (one of `equity`, `options`, `factor`) |
 | `--package` | Python package name for strategies (default: from the directory name) |
 
 ## `sqy check`
@@ -78,8 +78,12 @@ Compute descriptive, unverified diagnostics from selected local manifests.
 | Option | Meaning |
 |---|---|
 | `--factor` | registered factor ID (required) |
-| `--dataset-id` | locally recorded dataset manifest ID (required) |
-| `--universe-manifest` | dated universe build manifest path; repeat for each decision session (required) |
+| `--dataset-id` | locally recorded dataset manifest ID |
+| `--universe-manifest` | dated universe build manifest path; repeat for each decision session |
+| `--synthetic` | use an offline synthetic panel without manifests |
+| `--symbols` | synthetic panel symbol count (default: 200) |
+| `--seed` | synthetic panel random seed (default: 7) |
+| `--planted-ic` | synthetic signal loading (default: 0.05) |
 | `--project` | project directory (default: search upwards) |
 
 ## `sqy data`
