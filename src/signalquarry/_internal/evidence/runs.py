@@ -19,9 +19,9 @@ def new_run_id(configuration_hash: str, now: datetime) -> str:
     return now.strftime("%Y%m%dT%H%M%SZ") + "-" + configuration_hash.removeprefix("sha256:")[:8]
 
 
-def unique_run_id(root: Path, run_id: str) -> str:
+def unique_run_id(root: Path, run_id: str, *, kind: str = "runs") -> str:
     """``run_id``, or ``run_id-2``, ``-3``… when a run with that id already exists."""
-    runs, candidate, number = root / ".signalquarry" / "runs", run_id, 1
+    runs, candidate, number = root / ".signalquarry" / kind, run_id, 1
     while (runs / candidate).exists():
         number += 1
         candidate = f"{run_id}-{number}"
@@ -29,9 +29,10 @@ def unique_run_id(root: Path, run_id: str) -> str:
 
 
 def write_run(
-    root: Path, run_id: str, files: dict[str, str | bytes | Iterable[str | bytes]]
+    root: Path, run_id: str, files: dict[str, str | bytes | Iterable[str | bytes]], *, kind: str = "runs"
 ) -> list[dict[str, str]]:
-    run_dir = root / ".signalquarry" / "runs" / run_id
+    """Write one directory under ``.signalquarry/<kind>/``; a failure removes what was written."""
+    run_dir = root / ".signalquarry" / kind / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     artifacts = []
     try:
