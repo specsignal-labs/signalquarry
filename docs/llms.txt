@@ -44,4 +44,5 @@ Framework version 0.2.0.dev0. Run `sqy docs --llms --full` for the complete text
 - `sqy perf`: Paper performance snapshots: private captures, or a public feed (live_feed: allow).
 - `sqy docs`: Print llms.txt (or --full: every guide, the CLI reference and reason codes) for agents.
 - `sqy report`: Render the latest backtest and evaluation as report.md and equity.svg.
+- `sqy diagnose`: Write descriptive diagnostics for a recorded backtest run.
 - `sqy paper`: Alpaca paper forward tests: preflight, dry-run, run-once, status, halt.

@@ -184,6 +184,12 @@ def _configure_report(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--project", type=Path)
 
 
+def _configure_diagnose(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--strategy", required=True, help="strategy id of the recorded run")
+    parser.add_argument("--run", help="backtest run id (default: the latest for this strategy)")
+    parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
+
+
 def _configure_data(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
     fetch = actions.add_parser(
@@ -752,6 +758,12 @@ COMMANDS: tuple[Command, ...] = (
         "Render the latest backtest and evaluation as report.md and equity.svg.",
         lambda args: api.report(args.strategy, run_id=args.run, project=args.project),
         _configure_report,
+    ),
+    Command(
+        "diagnose",
+        "Write descriptive diagnostics for a recorded backtest run.",
+        lambda args: api.diagnose(args.strategy, run_id=args.run, project=args.project),
+        _configure_diagnose,
     ),
     Command(
         "paper",

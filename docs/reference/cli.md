@@ -478,6 +478,16 @@ Render the latest backtest and evaluation as report.md and equity.svg.
 | `--run` | backtest run id (default: the latest) |
 | `--project` | project directory (default: search upwards from the current directory) |
 
+## `sqy diagnose`
+
+Write descriptive diagnostics for a recorded backtest run.
+
+| Option | Meaning |
+|---|---|
+| `--strategy` | strategy id of the recorded run (required) |
+| `--run` | backtest run id (default: the latest for this strategy) |
+| `--project` | project directory (default: search upwards from cwd) |
+
 ## `sqy paper`
 
 Alpaca paper forward tests: preflight, dry-run, run-once, status, halt.

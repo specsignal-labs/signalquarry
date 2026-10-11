@@ -225,6 +225,7 @@ def render_report(
     evaluation: dict[str, Any] | None,
     trials: dict[str, Any],
     chart: str | None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> str:
     evidence = (evaluation or result or {}).get("evidence") or {}
     grade = evidence.get("grade", "unknown")
@@ -277,6 +278,8 @@ def render_report(
             lines += _drawdown_lines(result["drawdowns"])
         if (result.get("activity") or {}).get("status") == "ok":
             lines += _activity_lines(result["activity"], m.get("fees", "–"))
+    if diagnostics is not None:
+        lines += diagnostic_lines(diagnostics)
     if evaluation is not None:
         oos = evaluation.get("oos", {})
         lines += [
@@ -592,3 +595,94 @@ def render_study(result: dict[str, Any], *, chart: bool) -> str:
             lines.append(f"- {arm['id']}: run `{arm['run_id']}`, configuration `{arm['configuration_hash']}`")
     lines += ["", "---", "", f"*{DISCLAIMER}*", ""]
     return "\n".join(lines)
+
+
+def diagnostic_lines(document: dict[str, Any]) -> list[str]:
+    """Render recorded diagnostics; do no calculations or simulations here."""
+    lines: list[str] = []
+    unavailable: list[str] = []
+    regimes = document["regimes"]
+    if regimes["status"] == "ok":
+        lines += ["## Regimes", "", "Descriptive only. " + regimes["note"], ""]
+        for kind in ("calendar", "trend", "volatility"):
+            block = regimes[kind]
+            if block["status"] != "ok":
+                unavailable.append(f"{kind}: {block['reason']}")
+                continue
+            lines += [
+                f"### {kind.title()}",
+                "",
+                "| Regime | Sessions | Share | Status | Return | Sharpe | Max drawdown | Benchmark return | Excess |",
+                "|---|---|---|---|---|---|---|---|---|",
+            ]
+            for row in block["rows"]:
+                lines.append(
+                    f"| {row['regime']} | {row['sessions']} | {_percent(row['share'])} | {row['status']} | "
+                    f"{_percent(row['total_return'])} | {_number(row['sharpe'])} | "
+                    f"{_percent(row['max_drawdown'])} | {_percent(row['benchmark_total_return'])} | "
+                    f"{_percent(row['excess_return'])} |"
+                )
+            lines.append("")
+    else:
+        unavailable.append(f"regimes: {regimes['reason']}")
+    costs = document["costs"]
+    if costs["status"] == "ok":
+        lines += [
+            "## Cost sensitivity",
+            "",
+            costs["note"],
+            "",
+            "| Cost multiplier | Return | Sharpe | Max drawdown |",
+            "|---|---|---|---|",
+        ]
+        for point in costs["points"]:
+            lines.append(
+                f"| {point['multiplier']}× | {_percent(point['total_return'])} | "
+                f"{_number(point['sharpe'])} | {_percent(point['max_drawdown'])} |"
+            )
+        lines += [
+            "",
+            f"Break-even at {_number(costs['break_even'], 2)}× costs (linear interpolation)."
+            if costs["break_even"] is not None
+            else "The return is not positive even at zero cost, so there is no break-even."
+            if (costs["points"][0].get("total_return") or 0) <= 0
+            else "No break-even within 4× costs: the return stays positive.",
+            "",
+        ]
+    else:
+        unavailable.append(f"costs: {costs['reason']}")
+    folds = document["folds"]
+    if folds["status"] == "ok":
+        summary = folds["consistency"]
+        lines += [
+            "## Fold consistency",
+            "",
+            "Descriptive only; this does not change any evaluation gate or claim.",
+            "",
+            f"{summary['positive']} of {summary['folds']} folds positive "
+            f"({_percent(summary['share_positive'])}); ahead of benchmark in "
+            f"{summary['ahead_of_benchmark'] if summary['ahead_of_benchmark'] is not None else 'unavailable'} folds. "
+            f"Best return {_percent(summary['best'])}, worst {_percent(summary['worst'])}, "
+            f"sample dispersion {_percent(summary['dispersion'])}. Status: {summary['status']}.",
+            "",
+        ]
+    else:
+        unavailable.append(f"folds: {folds['reason']}")
+    parameters = document["parameters"]
+    if parameters["status"] == "ok":
+        best = parameters["best"]
+        lines += [
+            "## Parameter sensitivity",
+            "",
+            "Descriptive only; these recorded sweep results do not change a claim.",
+            "",
+            f"Best point: `{best['params'] if best else 'unavailable'}` "
+            f"({_number(best['value'] if best else None)} {parameters['metric']}); "
+            f"neighbour median {_number(parameters['neighbour_median'])}; plateau {_number(parameters['plateau'], 6)}.",
+            "",
+        ]
+    else:
+        unavailable.append(f"parameters: {parameters['reason']}")
+    if unavailable:
+        lines += ["Unavailable diagnostics: " + " ".join(unavailable), ""]
+    return lines
