@@ -9,6 +9,7 @@ compared with each other.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import ExitStack
@@ -24,6 +25,7 @@ import numpy as np
 from pydantic import ValidationError
 
 from signalquarry._internal.canonical import file_sha256
+from signalquarry._internal.contracts.spec import SYMBOL_PATTERN
 from signalquarry._internal.engine.backtest import BacktestResult, EngineError
 from signalquarry._internal.engine.run import is_options, simulate, simulate_equity_ticks
 from signalquarry._internal.evidence.report import growth_svg, render_comparison
@@ -44,6 +46,7 @@ from signalquarry._internal.validation.benchmark import BenchmarkCurve, benchmar
 from signalquarry._internal.validation.compare import RunSeries, compare_runs
 from signalquarry._internal.validation.diagnostics import cost_curve_break_even, fold_consistency
 from signalquarry._internal.validation.evaluate import equity_returns
+from signalquarry._internal.validation.exposure import MAX_REFERENCES, exposures, rolling_exposures
 from signalquarry._internal.validation.metrics import drawdown_episodes, summarize, trading_activity
 from signalquarry._internal.validation.regimes import (
     calendar_regime,
@@ -577,25 +580,36 @@ def _diagnostic_regimes(directory: Path, series: RunSeries) -> dict[str, Any]:
     return block
 
 
-def _diagnostic_costs(root: Path, document: dict[str, Any]) -> dict[str, Any]:
-    recorded_spec: dict[str, Any] = document.get("spec") or {}
-    if recorded_spec.get("kind") == "options_single_leg":
-        return _unavailable("Options strategies use a different cost model.")
-    reason = "The project no longer reproduces that run."
+_NOT_REPRODUCED = "The project no longer reproduces that run."
+
+
+def _reproduced(root: Path, document: dict[str, Any]) -> Resolved | None:
+    """The run's configuration rebuilt from the project, when it still hashes to the run's."""
     resolved = resolve("diagnose", document["strategy_id"], root)
     if isinstance(resolved, Envelope):
-        return _unavailable(reason)
+        return None
     strategy = resolved.strategy
-    if is_options(strategy.spec):
-        return _unavailable(reason)
     try:
-        params = strategy.definition.params.model_validate(document["params"])
-        strategy = replace(strategy, params=params)
+        strategy = replace(strategy, params=strategy.definition.params.model_validate(document["params"]))
         if (
             strategy.configuration_hash != document["configuration_hash"]
             or resolved.dataset.identity() != document["dataset_identity"]
         ):
-            return _unavailable(reason)
+            return None
+    except (ValidationError, KeyError, ValueError, ArithmeticError):
+        return None
+    return replace(resolved, strategy=strategy)
+
+
+def _diagnostic_costs(resolved: Resolved | None, document: dict[str, Any]) -> dict[str, Any]:
+    recorded_spec: dict[str, Any] = document.get("spec") or {}
+    if recorded_spec.get("kind") == "options_single_leg":
+        return _unavailable("Options strategies use a different cost model.")
+    reason = _NOT_REPRODUCED
+    if resolved is None or is_options(resolved.strategy.spec):
+        return _unavailable(reason)
+    strategy, params = resolved.strategy, resolved.strategy.params
+    try:
         window = document["window"]
         start = date.fromisoformat(window["start"]) if window["start"] else None
         end = date.fromisoformat(window["end"]) if window["end"] else None
@@ -631,8 +645,78 @@ def _diagnostic_costs(root: Path, document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | None = None) -> Envelope:
+def _diagnostic_symbols(symbols: Sequence[object]) -> tuple[str, ...]:
+    if isinstance(symbols, str):
+        raise ValueError("USAGE_INVALID")
+    normalized: list[str] = []
+    for symbol in symbols:
+        if not isinstance(symbol, str):
+            raise ValueError("USAGE_INVALID")
+        normalized.append(symbol.upper())
+    upper = tuple(normalized)
+    if (
+        len(upper) > MAX_REFERENCES
+        or len(set(upper)) != len(upper)
+        or any(not re.fullmatch(SYMBOL_PATTERN, symbol) for symbol in upper)
+    ):
+        raise ValueError("USAGE_INVALID")
+    return upper
+
+
+def _diagnostic_exposure(
+    resolved: Resolved | None, series: RunSeries, symbols: Sequence[str]
+) -> tuple[dict[str, Any], list[str]]:
+    """Returns-based exposure to buy-and-hold positions in ``symbols``, and any warnings."""
+    if resolved is None:
+        return _unavailable(_NOT_REPRODUCED), []
+    strategy = resolved.strategy
+    references: dict[str, np.ndarray] = {}
+    missing: list[str] = []
+    for symbol in symbols:
+        source = resolved.symbol_source(symbol)
+        if source is None:
+            missing.append(symbol)
+            continue
+        try:
+            references[symbol] = benchmark_curve(
+                strategy.spec, source[0], source[1], series.sessions
+            ).returns(strategy.spec.account.initial_cash)
+        except EngineError:
+            missing.append(symbol)
+    if missing:
+        return _unavailable("Passive return data is unavailable for: " + ", ".join(missing) + "."), [
+            "EXPOSURE_DATA_MISSING"
+        ]
+    regression = exposures(series.returns, references)
+    rows = rolling_exposures(series.returns, references) if regression["status"] == "ok" else []
+    for row in rows:
+        row["end"] = series.sessions[cast(int, row["end"])].isoformat()
+    return {
+        "status": regression["status"],
+        "references_requested": list(symbols),
+        "regression": regression,
+        "rolling": {"window": 126, "step": 21, "rows": rows},
+        "note": "The reference symbols were chosen after the run, the fit is in-sample over the whole window, and a beta is an association with a passive position, not a holding.",
+    }, []
+
+
+def diagnose(
+    strategy_id: str,
+    *,
+    run_id: str | None = None,
+    exposures: Sequence[str] = (),
+    project: Path | None = None,
+) -> Envelope:
     """Write descriptive diagnostics for a recorded run without changing it or its evidence."""
+    try:
+        symbols = _diagnostic_symbols(exposures)
+    except ValueError:
+        return Envelope(
+            command="diagnose",
+            status="usage",
+            reason_codes=["USAGE_INVALID"],
+            summary="give up to eight different valid reference symbols",
+        )
     root = _project_root("diagnose", project)
     if isinstance(root, Envelope):
         return root
@@ -654,7 +738,8 @@ def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | Non
         regimes = _diagnostic_regimes(directory, series)
     except _RunError as exc:
         return Envelope(command="diagnose", status="invalid", reason_codes=[exc.code], summary=exc.detail)
-    costs = _diagnostic_costs(root, document)
+    reproduced = _reproduced(root, document)
+    costs = _diagnostic_costs(reproduced, document)
     configuration = document["configuration_hash"]
     evaluations = [
         item
@@ -685,6 +770,20 @@ def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | Non
         else _unavailable("No recorded sweep contains this configuration.")
     )
     sections = {"regimes": regimes, "costs": costs, "folds": folds, "parameters": parameters}
+    exposure_data: dict[str, Any] = {}
+    warnings: list[str] = []
+    if symbols:
+        exposure, warnings = _diagnostic_exposure(reproduced, series, symbols)
+        sections["exposure"] = exposure
+        compact = {"status": exposure["status"]}
+        if exposure["status"] == "ok":
+            regression = exposure["regression"]
+            compact.update(
+                r_squared=regression["r_squared"],
+                alpha_annual=regression["alpha_annual"],
+                betas={row["name"]: row["beta"] for row in regression["references"]},
+            )
+        exposure_data["exposure"] = compact
     diagnostics_id = unique_run_id(root, run_id, kind="diagnostics")
     artifacts = write_run(
         root,
@@ -717,6 +816,7 @@ def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | Non
         summary=f"descriptive diagnostics for {run_id}",
         evidence=document["evidence"],
         artifacts=artifacts,
+        warnings=warnings,
         data={
             "run_id": run_id,
             "diagnostics_id": diagnostics_id,
@@ -726,5 +826,6 @@ def diagnose(strategy_id: str, *, run_id: str | None = None, project: Path | Non
             "share_ahead_of_benchmark": round(ahead / count, 6) if ahead is not None and count else None,
             "plateau": parameters.get("plateau"),
             "worst_regime": min(scored, key=lambda row: row["sharpe"], default=None),
+            **exposure_data,
         },
     )

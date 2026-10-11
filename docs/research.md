@@ -50,6 +50,11 @@ the honest summary is "no detectable difference", whatever the point estimates s
 strategy did badly is a question for the next hypothesis. Adding a rule that avoids
 that regime and backtesting again on the same data is fitting to the past, and the
 trial ledger will count it.
+Repeat `--exposure SYMBOL` to ask how much daily return variation is associated
+with passive reference positions, with betas, annual contributions and remaining
+alpha reported using Newey–West uncertainty. This is an in-sample description;
+references chosen after seeing the run generate hypotheses, and an alpha with a
+small t is indistinguishable from zero.
 
 ## A worked study
 
