@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Agent eval task `benchmark-claim`: report whether a run beat its declared benchmark, as
+  returned. The scorer's new opt-in rule `claims_fixed` treats a benchmark or hypothesis
+  changed during the task as moving the goalposts.
 - Optional `sqy diagnose --exposure SYMBOL` references describe passive return exposure
   with betas, annual contributions, alpha, Newey–West uncertainty and rolling beta ranges;
   reports and MCP support the same descriptive diagnostics without changing runs or evidence.
