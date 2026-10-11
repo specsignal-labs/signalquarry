@@ -126,6 +126,13 @@ Four independently reviewable changes: (a) reason codes plus `factor holdout sea
 (b) ledger-derived accounting and a formula-aware trial append; (c) `factor search` at T1;
 (d) `factor emit`. Nothing in (a) or (b) exposes search to users.
 
+## Implementation status
+
+Rollout steps (a) and (b) exist: explicit human `factor holdout seal|status`, the
+`factor_holdouts` chained log, ledger-derived factor trial accounting, budget
+preflight, formula-aware idempotent trial append, and session-based training-window
+validation. Search, emission and holdout opening remain outside these steps.
+
 ## Decisions
 
 Settled by the owner on 2026-10-06, following the recommendations proposed here.
