@@ -128,8 +128,13 @@ a budget and opening a holdout stay human-only, as today.
 
 Implemented as proposed, pending the open questions: the contract, `study init | check | run |
 ls | show`, the study log and its verification, resume and `--rerun`. The acceptance tests
-above are in `tests/e2e/test_study_flow.py`. Not yet built: `study compare` as a separate
-re-render (a run always writes its comparison), parallel arms, and per-arm walk-forward folds.
+above are in `tests/e2e/test_study_flow.py`. `study run --jobs N` simulates arms in worker
+processes and leaves every append with the parent, in the declared order
+(`tests/e2e/test_parallel_jobs.py`): the trial ledger, the runs and the study log are the ones a
+single process writes. A simulation that finished in a worker after an earlier arm failed is
+discarded unseen and is not a trial, as an arm that was never reached is not. Not yet built:
+`study compare` as a separate re-render (a run always writes its comparison) and per-arm
+walk-forward folds.
 Each open question below is one decision in the code: whether an arm `counts` in
 `api.study`, and the outcome rule in `validation.compare.verdict`.
 

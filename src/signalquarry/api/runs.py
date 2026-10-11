@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from multiprocessing import get_context
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Literal, cast
@@ -21,10 +24,10 @@ import numpy as np
 from pydantic import ValidationError
 
 from signalquarry._internal.canonical import file_sha256
-from signalquarry._internal.engine.backtest import EngineError
+from signalquarry._internal.engine.backtest import BacktestResult, EngineError
 from signalquarry._internal.engine.run import is_options, simulate, simulate_equity_ticks
 from signalquarry._internal.evidence.report import growth_svg, render_comparison
-from signalquarry._internal.evidence.run_spool import spool_equity_run
+from signalquarry._internal.evidence.run_spool import SpoolRun, SpoolSummary, spool_equity_run
 from signalquarry._internal.evidence.runs import (
     csv_chunks,
     iter_runs,
@@ -92,6 +95,217 @@ def _benchmark(
     return cache[key]
 
 
+@dataclass(frozen=True)
+class Simulated:
+    """A finished simulation that has been neither recorded nor written.
+
+    ``spool`` holds an equity run's fills and decisions in the caller's scratch directory;
+    an options run keeps them on ``result``. It can cross a process boundary.
+    """
+
+    result: SpoolSummary | BacktestResult
+    spool: SpoolRun | None = None
+
+
+def simulate_run(
+    resolved: Resolved, *, start: date | None = None, end: date | None = None, scratch: Path
+) -> Simulated:
+    """Simulate ``resolved.strategy``. Reads no evidence and writes only inside ``scratch``.
+
+    Raises :class:`EngineError` when the simulation fails, leaving ``scratch`` empty.
+    """
+    strategy = resolved.strategy
+    spec = strategy.spec
+    if is_options(spec):
+        return Simulated(
+            simulate(
+                spec,
+                strategy.definition,
+                strategy.params,
+                resolved.dataset,
+                start=start,
+                end=end,
+                recorded_chains=resolved.recorded_chains(),
+            )
+        )
+    spool = spool_equity_run(
+        simulate_equity_ticks(
+            spec, strategy.definition, strategy.params, resolved.dataset, start=start, end=end
+        ),
+        scratch,
+    )
+    return Simulated(spool.result, spool)
+
+
+def simulation_pool(stack: ExitStack, workers: int) -> tuple[ProcessPoolExecutor, Path]:
+    """Worker processes for :func:`simulate_run`, and the scratch directory they spool into.
+
+    Both live until ``stack`` closes; leaving early cancels what has not started. Workers are
+    spawned, so on every platform they import the project afresh and share nothing with the
+    caller but the files. A worker rebuilds its configuration from those files and must check
+    it against the hashes the caller planned with; the caller commits the results in its own
+    order with :func:`commit_run`, so what is recorded does not depend on the workers.
+    """
+    scratch = Path(stack.enter_context(TemporaryDirectory(prefix="signalquarry-jobs-")))
+    pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn"))
+    stack.callback(pool.shutdown, wait=True, cancel_futures=True)
+    return pool, scratch
+
+
+def commit_run(
+    resolved: Resolved,
+    simulated: Simulated,
+    *,
+    command: str,
+    start: date | None = None,
+    end: date | None = None,
+    label: str | None = None,
+    detail: Detail = "full",
+    benchmarks: dict[tuple[date, date, int], BenchmarkCurve | None] | None = None,
+    record: bool = True,
+) -> RunOutcome:
+    """Record the trial of a finished simulation and write its run directory, in that order.
+
+    ``start`` and ``end`` are the window the simulation was asked for. Every append to the
+    evidence happens here, so a caller that simulates elsewhere (another process) still
+    records in the order it commits.
+    """
+    root, strategy = resolved.root, resolved.strategy
+    spec = strategy.spec
+    initial = spec.account.initial_cash
+    result = simulated.result
+    traded: tuple[Decimal, Decimal] | None = None  # notional bought and sold (equity runs)
+    fill_rows: Iterable[Iterable[Any]]
+    decision_chunks: Iterable[str]
+    if simulated.spool is None:
+        assert isinstance(result, BacktestResult)
+        fills = result.fills
+        fill_count = len(fills)
+        fees = sum((fill.fee for fill in fills), Decimal(0))
+        fill_rows = (
+            [
+                f.session.isoformat(),
+                f.symbol,
+                f.side,
+                f.quantity,
+                f.price,
+                f.fee,
+                f.settle_session.isoformat() if f.settle_session else "",
+            ]
+            for f in fills
+        )
+        decision_chunks = jsonl_chunks(result.decisions)
+    else:
+        spool = simulated.spool
+        fill_count = spool.fill_count
+        fees = spool.fees
+        traded = (spool.bought, spool.sold)
+        fill_rows = spool.fills_csv_rows()
+        decision_chunks = spool.decisions_chunks()
+    returns = equity_returns(result, initial)
+    m = moments(returns)
+    if record:
+        record_run_trial(
+            resolved,
+            command=command,
+            returns=returns,
+            moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
+            window=(result.sessions[0], result.sessions[-1]),
+        )
+    metrics = summarize(result.sessions, result.equity, initial, fills=fill_count, fees=fees)
+    # Descriptive context for the same run: none of it enters a gate or the claim level.
+    context: dict[str, Any] = {"drawdowns": drawdown_episodes(result.sessions, result.equity, initial)}
+    if traded is not None:
+        context["activity"] = trading_activity(
+            result.sessions, result.equity, bought=traded[0], sold=traded[1], fees=fees
+        )
+    warnings: list[str] = []
+    next_actions: list[dict[str, str]] = []
+    benchmark = _benchmark(resolved, result.sessions, {} if benchmarks is None else benchmarks)
+    if benchmark is not None:
+        context["benchmark"] = benchmark_summary(benchmark, returns, initial)
+    elif spec.benchmark is not None:
+        warnings.append("BENCHMARK_DATA_MISSING")
+        next_actions.append(
+            {
+                "command": f"sqy data fetch --strategy {spec.id}",
+                "why": f"No recorded dataset covers the benchmark {spec.benchmark}.",
+            }
+        )
+    run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
+    evidence = {
+        "grade": resolved.evidence_grade,
+        "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
+        "holdout": holdout_state(root, spec.family),
+        "trial": None
+        if resolved.grade == "synthetic"
+        else trial_evidence(root, spec.family, strategy.configuration_hash),
+    }
+    document = result_document(
+        run_id=run_id,
+        strategy_id=spec.id,
+        strategy_version=spec.version,
+        configuration_hash=strategy.configuration_hash,
+        code_tree_hash=strategy.code_tree_hash,
+        dataset_id=resolved.dataset_id,
+        dataset_identity=result.dataset_identity,
+        ledger_hash=result.ledger_hash,
+        evidence=evidence,
+        metrics=metrics,
+        warnings=result.warnings,
+        # What produced the run, so that two runs can be told apart without the project.
+        command=command,
+        params=strategy.params.model_dump(mode="json"),
+        # The declared parameters stay out of `spec`: `params` holds the ones used.
+        spec={key: value for key, value in spec.outcome_document().items() if key != "params"},
+        # The window that was asked for (after any holdout clip), not the sessions found.
+        window={
+            "start": None if start is None else start.isoformat(),
+            "end": None if end is None else end.isoformat(),
+        },
+        trial_recorded=record and resolved.grade != "synthetic",
+        **({} if label is None else {"label": label}),
+        **context,
+    )
+    files: dict[str, str | bytes | Iterable[str | bytes]] = {
+        "result.json": document,
+        "equity.csv": csv_chunks(
+            ["session", "equity", "settled_cash"],
+            [
+                [s.isoformat(), e, c]
+                for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
+            ],
+        ),
+    }
+    if benchmark is not None:
+        files["benchmark.csv"] = csv_chunks(
+            ["session", "equity"],
+            [[s.isoformat(), e] for s, e in zip(benchmark.sessions, benchmark.equity, strict=True)],
+        )
+    if detail == "full":
+        files["fills.csv"] = csv_chunks(
+            ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"], fill_rows
+        )
+        files["decisions.jsonl"] = decision_chunks
+    artifacts = write_run(root, run_id, files)
+    return RunOutcome(
+        run_id=run_id,
+        sessions=result.sessions,
+        returns=returns,
+        metrics=metrics,
+        context=context,
+        evidence=evidence,
+        artifacts=artifacts,
+        ledger_hash=result.ledger_hash,
+        dataset_identity=result.dataset_identity,
+        fill_count=fill_count,
+        engine_warnings=result.warnings,
+        result_hash=str(json.loads(document)["result_hash"]),
+        warnings=warnings,
+        next_actions=next_actions,
+    )
+
+
 def execute_run(
     resolved: Resolved,
     *,
@@ -111,163 +325,19 @@ def execute_run(
     ``record=False`` is for a run that is not a candidate (a study's sensitivity arm): it
     writes the run and appends no trial.
     """
-    root, strategy = resolved.root, resolved.strategy
-    spec = strategy.spec
-    initial = spec.account.initial_cash
-    scratch: TemporaryDirectory[str] | None = None
-    traded: tuple[Decimal, Decimal] | None = None  # notional bought and sold (equity runs)
-    fill_rows: Iterable[Iterable[Any]]
-    decision_chunks: Iterable[str]
-    try:
-        if is_options(spec):
-            result = simulate(
-                spec,
-                strategy.definition,
-                strategy.params,
-                resolved.dataset,
-                start=start,
-                end=end,
-                recorded_chains=resolved.recorded_chains(),
-            )
-            fill_count = len(result.fills)
-            fees = sum((fill.fee for fill in result.fills), Decimal(0))
-            fill_rows = (
-                [
-                    f.session.isoformat(),
-                    f.symbol,
-                    f.side,
-                    f.quantity,
-                    f.price,
-                    f.fee,
-                    f.settle_session.isoformat() if f.settle_session else "",
-                ]
-                for f in result.fills
-            )
-            decision_chunks = jsonl_chunks(result.decisions)
-        else:
-            scratch = TemporaryDirectory(prefix="signalquarry-backtest-")
-            spool = spool_equity_run(
-                simulate_equity_ticks(
-                    spec, strategy.definition, strategy.params, resolved.dataset, start=start, end=end
-                ),
-                Path(scratch.name),
-            )
-            result = spool.result
-            fill_count = spool.fill_count
-            fees = spool.fees
-            traded = (spool.bought, spool.sold)
-            fill_rows = spool.fills_csv_rows()
-            decision_chunks = spool.decisions_chunks()
-    except EngineError:
-        if scratch is not None:
-            scratch.cleanup()
-        raise
-    try:
-        returns = equity_returns(result, initial)
-        m = moments(returns)
-        if record:
-            record_run_trial(
-                resolved,
-                command=command,
-                returns=returns,
-                moments={"n": m.n, "sharpe": m.sharpe, "skew": m.skew, "kurtosis": m.kurtosis},
-                window=(result.sessions[0], result.sessions[-1]),
-            )
-        metrics = summarize(result.sessions, result.equity, initial, fills=fill_count, fees=fees)
-        # Descriptive context for the same run: none of it enters a gate or the claim level.
-        context: dict[str, Any] = {"drawdowns": drawdown_episodes(result.sessions, result.equity, initial)}
-        if traded is not None:
-            context["activity"] = trading_activity(
-                result.sessions, result.equity, bought=traded[0], sold=traded[1], fees=fees
-            )
-        warnings: list[str] = []
-        next_actions: list[dict[str, str]] = []
-        benchmark = _benchmark(resolved, result.sessions, {} if benchmarks is None else benchmarks)
-        if benchmark is not None:
-            context["benchmark"] = benchmark_summary(benchmark, returns, initial)
-        elif spec.benchmark is not None:
-            warnings.append("BENCHMARK_DATA_MISSING")
-            next_actions.append(
-                {
-                    "command": f"sqy data fetch --strategy {spec.id}",
-                    "why": f"No recorded dataset covers the benchmark {spec.benchmark}.",
-                }
-            )
-        run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
-        evidence = {
-            "grade": resolved.evidence_grade,
-            "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
-            "holdout": holdout_state(root, spec.family),
-            "trial": None
-            if resolved.grade == "synthetic"
-            else trial_evidence(root, spec.family, strategy.configuration_hash),
-        }
-        document = result_document(
-            run_id=run_id,
-            strategy_id=spec.id,
-            strategy_version=spec.version,
-            configuration_hash=strategy.configuration_hash,
-            code_tree_hash=strategy.code_tree_hash,
-            dataset_id=resolved.dataset_id,
-            dataset_identity=result.dataset_identity,
-            ledger_hash=result.ledger_hash,
-            evidence=evidence,
-            metrics=metrics,
-            warnings=result.warnings,
-            # What produced the run, so that two runs can be told apart without the project.
+    with TemporaryDirectory(prefix="signalquarry-backtest-") as scratch:
+        simulated = simulate_run(resolved, start=start, end=end, scratch=Path(scratch))
+        return commit_run(
+            resolved,
+            simulated,
             command=command,
-            params=strategy.params.model_dump(mode="json"),
-            # The declared parameters stay out of `spec`: `params` holds the ones used.
-            spec={key: value for key, value in spec.outcome_document().items() if key != "params"},
-            # The window that was asked for (after any holdout clip), not the sessions found.
-            window={
-                "start": None if start is None else start.isoformat(),
-                "end": None if end is None else end.isoformat(),
-            },
-            trial_recorded=record and resolved.grade != "synthetic",
-            **({} if label is None else {"label": label}),
-            **context,
+            start=start,
+            end=end,
+            label=label,
+            detail=detail,
+            benchmarks=benchmarks,
+            record=record,
         )
-        files: dict[str, str | bytes | Iterable[str | bytes]] = {
-            "result.json": document,
-            "equity.csv": csv_chunks(
-                ["session", "equity", "settled_cash"],
-                [
-                    [s.isoformat(), e, c]
-                    for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
-                ],
-            ),
-        }
-        if benchmark is not None:
-            files["benchmark.csv"] = csv_chunks(
-                ["session", "equity"],
-                [[s.isoformat(), e] for s, e in zip(benchmark.sessions, benchmark.equity, strict=True)],
-            )
-        if detail == "full":
-            files["fills.csv"] = csv_chunks(
-                ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"], fill_rows
-            )
-            files["decisions.jsonl"] = decision_chunks
-        artifacts = write_run(root, run_id, files)
-    finally:
-        if scratch is not None:
-            scratch.cleanup()
-    return RunOutcome(
-        run_id=run_id,
-        sessions=result.sessions,
-        returns=returns,
-        metrics=metrics,
-        context=context,
-        evidence=evidence,
-        artifacts=artifacts,
-        ledger_hash=result.ledger_hash,
-        dataset_identity=result.dataset_identity,
-        fill_count=fill_count,
-        engine_warnings=result.warnings,
-        result_hash=str(json.loads(document)["result_hash"]),
-        warnings=warnings,
-        next_actions=next_actions,
-    )
 
 
 class _RunError(Exception):

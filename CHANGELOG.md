@@ -7,6 +7,11 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy study run --jobs N` and `sqy sweep --jobs N` simulate arms and grid points in worker
+  processes. Trials, runs and the study log are still written by one process in the declared
+  order, so the record is the one a single process writes; a worker that rebuilds a different
+  project stops the command (`PROJECT_CHANGED_DURING_RUN`). The MCP `sqy_study_run` accepts
+  `jobs`.
 - `signalquarry.research.load_panel`: the bars a strategy runs on, for exploration, as read-only
   arrays or an Arrow table. On recorded data it requires the family's holdout seal and stops on
   the last session before it; prices are split-adjusted from splits inside the panel only.
