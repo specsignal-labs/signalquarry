@@ -90,6 +90,23 @@ def test_missing_trading_days_are_sorted_and_exclude_closures() -> None:
     assert result["symbols"]["XYZ"]["gaps"] == []
 
 
+def test_calendar_can_be_skipped_without_changing_other_checks() -> None:
+    recorded = dataset(
+        (date(2024, 7, 3), date(2024, 7, 4), date(2024, 7, 6), date(2024, 7, 9)),
+        {"XYZ": {"open": [100, 101, 102, 103]}},
+    )
+    checked = assess(recorded)
+    assert checked["findings"] == [
+        "QUALITY_SESSION_ON_HOLIDAY",
+        "QUALITY_SESSION_ON_WEEKEND",
+        "QUALITY_TRADING_DAY_MISSING",
+    ]
+    skipped = assess(recorded, check_calendar=False)
+    checked["sessions"].update(calendar="not_checked", holiday_sessions=[], missing_trading_days=[])
+    checked["findings"] = ["QUALITY_SESSION_ON_WEEKEND"]
+    assert skipped == checked
+
+
 @pytest.mark.parametrize("year", [MIN_YEAR - 1, MAX_YEAR + 1])
 def test_outside_calendar_range_has_no_holiday_or_missing_day_findings(year: int) -> None:
     sessions = tuple(day for day in weekdays(date(year, 12, 24), 5) if day.day != 26)

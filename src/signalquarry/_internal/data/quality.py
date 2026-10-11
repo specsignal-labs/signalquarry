@@ -23,12 +23,14 @@ class QualityThresholds:
     extreme_move: float = 0.40
 
 
-def _session_report(dataset: Dataset) -> dict[str, Any]:
+def _session_report(dataset: Dataset, *, check_calendar: bool) -> dict[str, Any]:
     sessions = dataset.sessions
     tracked = sum(MIN_YEAR <= session.year <= MAX_YEAR for session in sessions)
     calendar = "weekdays_only" if not tracked else "nyse" if tracked == len(sessions) else "partial"
+    if not check_calendar:
+        calendar = "not_checked"
     missing = []
-    if sessions:
+    if check_calendar and sessions:
         # Bound the scan to the verified calendar, even for very long datasets.
         start = max(sessions[0].toordinal(), date(MIN_YEAR, 1, 1).toordinal())
         stop = min(sessions[-1].toordinal(), date(MAX_YEAR, 12, 31).toordinal())
@@ -44,7 +46,9 @@ def _session_report(dataset: Dataset) -> dict[str, Any]:
         "calendar": calendar,
         "weekend_sessions": [session.isoformat() for session in sessions if session.weekday() >= 5],
         "holiday_sessions": [
-            session.isoformat() for session in sessions if session.weekday() < 5 and is_holiday(session)
+            session.isoformat()
+            for session in sessions
+            if check_calendar and session.weekday() < 5 and is_holiday(session)
         ],
         "missing_trading_days": missing,
     }
@@ -145,6 +149,7 @@ def assess(
     dataset: Dataset,
     *,
     symbols: tuple[str, ...] | None = None,
+    check_calendar: bool = True,
     thresholds: QualityThresholds = QualityThresholds(),  # noqa: B008 -- frozen, immutable default
 ) -> dict[str, Any]:
     """Inspect recorded sessions and present bars without changing the dataset."""
@@ -152,7 +157,7 @@ def assess(
     for symbol in selected:
         if symbol not in dataset.series:
             raise ValueError(f"QUALITY_SYMBOL_UNKNOWN:{symbol}")
-    sessions = _session_report(dataset)
+    sessions = _session_report(dataset, check_calendar=check_calendar)
     reports = {symbol: _symbol_report(dataset, symbol, thresholds) for symbol in selected}
     splits = Counter(split.symbol for split in dataset.splits)
     dividends = Counter(dividend.symbol for dividend in dataset.dividends)
