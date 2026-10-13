@@ -215,6 +215,11 @@ def _configure_backtest(parser: argparse.ArgumentParser) -> None:
         help="NAME=VALUE parameter override for this run only (repeatable); strategy.yaml is not changed",
     )
     parser.add_argument("--label", help="short name stored with the run")
+    parser.add_argument(
+        "--positions",
+        action="store_true",
+        help="record per-session equity holdings and marks for attribution",
+    )
     parser.add_argument("--project", type=Path, help="project directory (default: search upwards from cwd)")
 
 
@@ -790,6 +795,7 @@ COMMANDS: tuple[Command, ...] = (
             end=args.end,
             params=args.param,
             label=args.label,
+            positions=args.positions,
             project=args.project,
         ),
         _configure_backtest,

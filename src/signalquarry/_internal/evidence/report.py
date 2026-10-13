@@ -724,8 +724,67 @@ def diagnostic_lines(document: dict[str, Any]) -> list[str]:
                 "collinear": "The references move together too closely to separate.",
             }.get(exposure["status"], "–")
             unavailable.append(f"exposure: {reason}")
+    attribution = document.get("attribution")
+    if attribution is not None:
+        if attribution["status"] == "ok":
+            lines += _attribution_lines(attribution)
+        else:
+            unavailable.append(f"attribution: {attribution['reason']}")
     if unavailable:
         lines += ["Unavailable diagnostics: " + " ".join(unavailable), ""]
+    return lines
+
+
+def _attribution_lines(block: dict[str, Any]) -> list[str]:
+    rows = sorted(block["by_symbol"], key=lambda row: (-abs(Decimal(row["pnl"])), row["symbol"]))
+    lines = [
+        "## Attribution",
+        "",
+        block["note"],
+        "",
+        "| Symbol | P&L (currency) | Share of initial cash | Sessions held | Average weight while held |",
+        "|---|---|---|---|---|",
+    ]
+    for row in rows[:10]:
+        lines.append(
+            f"| {escape(row['symbol'])} | {_number(row['pnl'])} | {_percent(row['share_initial'])} | "
+            f"{row['sessions_held']} | {_percent(row['average_weight'])} |"
+        )
+    if len(rows) > 10:
+        rest = sum((Decimal(row["pnl"]) for row in rows[10:]), Decimal(0))
+        lines += ["", f"Remaining {len(rows) - 10} symbols: P&L {_number(rest)}."]
+    parts = block["reconciliation"]
+    lines += [
+        "",
+        f"Total P&L {parts['total']} = symbols {parts['symbols']} + fees {parts['fees']} "
+        f"+ remainder {parts['remainder']} (currency).",
+        "",
+        block["remainder_note"],
+        "",
+        "| Year | Symbol P&L | Fees | Remainder | Total P&L |",
+        "|---|---|---|---|---|",
+    ]
+    for row in block["by_year"]:
+        lines.append(
+            f"| {row['year']} | {row['symbols']} | {row['fees']} | {row['remainder']} | {row['total']} |"
+        )
+    exposure = block["exposure"]
+    largest = exposure["largest_weight"]
+    lines += [
+        "",
+        f"Average invested share {_percent(exposure['average_invested_share'])}; "
+        f"sessions with positions {_percent(exposure['position_session_share'])}; "
+        f"holdings average {_number(exposure['average_holdings'])}, maximum {exposure['maximum_holdings']}; "
+        f"average Herfindahl {_number(exposure['average_herfindahl'], 6)}; largest single weight "
+        + (
+            f"{_percent(largest['weight'])} in {escape(largest['symbol'])} on {largest['session']}."
+            if largest is not None
+            else "unavailable."
+        ),
+        "",
+        exposure["note"],
+        "",
+    ]
     return lines
 
 

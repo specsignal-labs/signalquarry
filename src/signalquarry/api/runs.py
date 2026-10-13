@@ -8,6 +8,8 @@ compared with each other.
 
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -42,6 +44,7 @@ from signalquarry._internal.evidence.runs import (
     write_run,
 )
 from signalquarry._internal.project.project import ProjectError, find_root
+from signalquarry._internal.validation.attribution import FillRow, PositionRow, attribution
 from signalquarry._internal.validation.benchmark import BenchmarkCurve, benchmark_curve, benchmark_summary
 from signalquarry._internal.validation.compare import RunSeries, compare_runs
 from signalquarry._internal.validation.diagnostics import cost_curve_break_even, fold_consistency
@@ -111,7 +114,12 @@ class Simulated:
 
 
 def simulate_run(
-    resolved: Resolved, *, start: date | None = None, end: date | None = None, scratch: Path
+    resolved: Resolved,
+    *,
+    start: date | None = None,
+    end: date | None = None,
+    scratch: Path,
+    positions: bool = False,
 ) -> Simulated:
     """Simulate ``resolved.strategy``. Reads no evidence and writes only inside ``scratch``.
 
@@ -120,6 +128,8 @@ def simulate_run(
     strategy = resolved.strategy
     spec = strategy.spec
     if is_options(spec):
+        if positions:
+            raise EngineError("STRATEGY_KIND_MISMATCH:Positions are available for equity strategies only.")
         return Simulated(
             simulate(
                 spec,
@@ -133,7 +143,13 @@ def simulate_run(
         )
     spool = spool_equity_run(
         simulate_equity_ticks(
-            spec, strategy.definition, strategy.params, resolved.dataset, start=start, end=end
+            spec,
+            strategy.definition,
+            strategy.params,
+            resolved.dataset,
+            start=start,
+            end=end,
+            positions=positions,
         ),
         scratch,
     )
@@ -244,6 +260,32 @@ def commit_run(
         if resolved.grade == "synthetic"
         else trial_evidence(root, spec.family, strategy.configuration_hash),
     }
+    positions_metadata: dict[str, Any] = {}
+    if simulated.spool is not None and simulated.spool.positions_path is not None:
+        spool = simulated.spool
+        positions_metadata = {
+            "positions": True,
+            "positions_accounting": {
+                "positions_sha256": file_sha256(spool.positions_path),
+                "fills_sha256": _chunks_hash(
+                    csv_chunks(
+                        ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"],
+                        spool.fills_csv_rows(),
+                    )
+                ),
+                "equity_sha256": _chunks_hash(
+                    csv_chunks(
+                        ["session", "equity", "settled_cash"],
+                        (
+                            [s.isoformat(), e, c]
+                            for s, e, c in zip(result.sessions, result.equity, result.cash, strict=True)
+                        ),
+                    )
+                ),
+                "cash_components": spool.positions_cash,
+                "cash_columns": ["session", "pending", "receivable", "rounding"],
+            },
+        }
     document = result_document(
         run_id=run_id,
         strategy_id=spec.id,
@@ -269,6 +311,7 @@ def commit_run(
         trial_recorded=record and resolved.grade != "synthetic",
         **({} if label is None else {"label": label}),
         **context,
+        **positions_metadata,
     )
     files: dict[str, str | bytes | Iterable[str | bytes]] = {
         "result.json": document,
@@ -285,11 +328,15 @@ def commit_run(
             ["session", "equity"],
             [[s.isoformat(), e] for s, e in zip(benchmark.sessions, benchmark.equity, strict=True)],
         )
-    if detail == "full":
+    if positions_metadata:
+        assert simulated.spool is not None
+        files["positions.csv"] = simulated.spool.positions_chunks()
+    if detail == "full" or positions_metadata:
         files["fills.csv"] = csv_chunks(
             ["session", "symbol", "side", "quantity", "price", "fee", "settle_session"], fill_rows
         )
-        files["decisions.jsonl"] = decision_chunks
+        if detail == "full":
+            files["decisions.jsonl"] = decision_chunks
     artifacts = write_run(root, run_id, files)
     return RunOutcome(
         run_id=run_id,
@@ -309,6 +356,13 @@ def commit_run(
     )
 
 
+def _chunks_hash(chunks: Iterable[str]) -> str:
+    digest = hashlib.sha256()
+    for chunk in chunks:
+        digest.update(chunk.encode("utf-8"))
+    return digest.hexdigest()
+
+
 def execute_run(
     resolved: Resolved,
     *,
@@ -319,6 +373,7 @@ def execute_run(
     detail: Detail = "full",
     benchmarks: dict[tuple[date, date, int], BenchmarkCurve | None] | None = None,
     record: bool = True,
+    positions: bool = False,
 ) -> RunOutcome:
     """Simulate ``resolved.strategy``, record its trial and write its run directory.
 
@@ -329,7 +384,7 @@ def execute_run(
     writes the run and appends no trial.
     """
     with TemporaryDirectory(prefix="signalquarry-backtest-") as scratch:
-        simulated = simulate_run(resolved, start=start, end=end, scratch=Path(scratch))
+        simulated = simulate_run(resolved, start=start, end=end, scratch=Path(scratch), positions=positions)
         return commit_run(
             resolved,
             simulated,
@@ -548,6 +603,89 @@ def runs_compare(run_ids: Sequence[str], *, project: Path | None = None) -> Enve
 
 def _unavailable(reason: str) -> dict[str, Any]:
     return {"status": "unavailable", "reason": reason}
+
+
+def _diagnostic_attribution(directory: Path, document: dict[str, Any]) -> dict[str, Any]:
+    """Verify optional artifacts and the engine's cash bridge before attributing them."""
+    try:
+        accounting = document["positions_accounting"]
+        if document.get("positions") is not True or accounting["cash_columns"] != [
+            "session",
+            "pending",
+            "receivable",
+            "rounding",
+        ]:
+            raise ValueError("Positions accounting metadata is missing or invalid.")
+        for name in ("positions", "equity", "fills"):
+            if file_sha256(directory / f"{name}.csv") != accounting[f"{name}_sha256"]:
+                raise ValueError(f"{name}.csv does not match its recorded hash.")
+        with (directory / "equity.csv").open(encoding="utf-8", newline="") as handle:
+            curve = list(csv.DictReader(handle))
+        sessions = [date.fromisoformat(row["session"]) for row in curve]
+        equity = [Decimal(row["equity"]) for row in curve]
+        settled = [Decimal(row["settled_cash"]) for row in curve]
+        initial = Decimal(str(document["spec"]["account"]["initial_cash"]))
+        metrics = document["metrics"]
+        if (
+            len(sessions) != metrics["sessions"]
+            or not equity
+            or equity[-1] != Decimal(metrics["final_equity"])
+        ):
+            raise ValueError("Equity curve does not match the run's metrics.")
+        positions: list[PositionRow] = []
+        with (directory / "positions.csv").open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            if reader.fieldnames != ["session", "symbol", "quantity", "mark", "value"]:
+                raise ValueError("positions.csv has an invalid header.")
+            for row in reader:
+                if row["symbol"] not in document["spec"]["data"]["symbols"]:
+                    raise ValueError("positions.csv contains a symbol outside the run.")
+                positions.append(
+                    (
+                        date.fromisoformat(row["session"]),
+                        row["symbol"],
+                        Decimal(row["quantity"]),
+                        Decimal(row["mark"]),
+                        Decimal(row["value"]),
+                    )
+                )
+        totals: dict[date, Decimal] = dict.fromkeys(sessions, Decimal(0))
+        for session, _, _, _, value in positions:
+            totals[session] += value
+        cash_rows = accounting["cash_components"]
+        if len(cash_rows) != len(sessions):
+            raise ValueError("Positions cash components are not aligned.")
+        for session, level, cash, cash_row in zip(sessions, equity, settled, cash_rows, strict=True):
+            component_session, pending, receivable, rounding = cash_row
+            parts = [Decimal(str(value)) for value in (pending, receivable, rounding)]
+            if (
+                component_session != session.isoformat()
+                or any(not value.is_finite() for value in [cash, *parts])
+                or totals[session] + cash + sum(parts, Decimal(0)) != level
+            ):
+                raise ValueError(f"Positions and cash do not reconcile to equity on {session}.")
+        fills: list[FillRow] = []
+        with (directory / "fills.csv").open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                fills.append(
+                    (
+                        date.fromisoformat(row["session"]),
+                        row["symbol"],
+                        row["side"],
+                        Decimal(row["quantity"]),
+                        Decimal(row["price"]),
+                        Decimal(row["fee"]),
+                    )
+                )
+        if len(fills) != metrics["fills"] or sum((row[-1] for row in fills), Decimal(0)) != Decimal(
+            metrics["fees"]
+        ):
+            raise ValueError("Fills do not match the run's metrics.")
+        return attribution(sessions, equity, initial, positions, fills)
+    except (OSError, KeyError, ValueError, ArithmeticError, TypeError) as exc:
+        return _unavailable(
+            f"Positions artifacts are missing, invalid or do not reconcile to the recorded run: {exc}"
+        )
 
 
 def _diagnostic_regimes(directory: Path, series: RunSeries) -> dict[str, Any]:
@@ -770,6 +908,7 @@ def diagnose(
         else _unavailable("No recorded sweep contains this configuration.")
     )
     sections = {"regimes": regimes, "costs": costs, "folds": folds, "parameters": parameters}
+    next_actions: list[dict[str, str]] = []
     exposure_data: dict[str, Any] = {}
     warnings: list[str] = []
     if symbols:
@@ -784,6 +923,18 @@ def diagnose(
                 betas={row["name"]: row["beta"] for row in regression["references"]},
             )
         exposure_data["exposure"] = compact
+    if (directory / "positions.csv").is_file() or document.get("positions") is True:
+        sections["attribution"] = _diagnostic_attribution(directory, document)
+        exposure_data["attribution"] = {"status": sections["attribution"]["status"]}
+        if sections["attribution"]["status"] != "ok":
+            exposure_data["attribution"]["reason"] = sections["attribution"]["reason"]
+    else:
+        next_actions.append(
+            {
+                "command": f"sqy backtest --strategy {strategy_id} --positions",
+                "why": "Record per-session holdings and marks for descriptive attribution.",
+            }
+        )
     diagnostics_id = unique_run_id(root, run_id, kind="diagnostics")
     artifacts = write_run(
         root,
@@ -817,6 +968,7 @@ def diagnose(
         evidence=document["evidence"],
         artifacts=artifacts,
         warnings=warnings,
+        next_actions=next_actions,
         data={
             "run_id": run_id,
             "diagnostics_id": diagnostics_id,

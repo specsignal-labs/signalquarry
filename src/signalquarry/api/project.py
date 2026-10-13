@@ -377,6 +377,7 @@ def backtest(
     end: date | None = None,
     params: Sequence[str] = (),
     label: str | None = None,
+    positions: bool = False,
     project: Path | None = None,
 ) -> Envelope:
     """Backtest a strategy and write its run directory.
@@ -384,7 +385,7 @@ def backtest(
     ``params`` (``NAME=VALUE``) overrides parameters for this run only: ``strategy.yaml`` is
     not changed, the run has its own configuration hash, and on real data it is a trial like
     any other, refused beforehand when it would exceed the family's budget. ``label`` is a
-    short name stored with the run.
+    short name stored with the run. ``positions`` records per-session equity holdings and marks.
     """
     from signalquarry.api.evidence import budget_shortfall, budget_warnings, family_seal
     from signalquarry.api.resolve import resolve
@@ -436,7 +437,9 @@ def backtest(
         )  # the sealed holdout is only reachable through `sqy evaluate --holdout`
         warnings.append("HOLDOUT_CLIPPED")
     try:
-        run = execute_run(resolved, command="backtest", start=start, end=end, label=label)
+        run = execute_run(
+            resolved, command="backtest", start=start, end=end, label=label, positions=positions
+        )
     except EngineError as exc:
         return Envelope(command="backtest", status="invalid", reason_codes=[_code_of(exc)], summary=str(exc))
     metrics = run.metrics

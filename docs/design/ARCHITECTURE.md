@@ -58,6 +58,15 @@ resolved by the API and simulated as passive curves on the recorded run's sessio
 only after its configuration and dataset identities match; the exposure section
 is absent when none are requested. Reports render the stored regression and rolling
 beta ranges, and these post-run fits remain in-sample hypothesis generation.
+The stdlib-only pure `validation.attribution` module splits equity changes into
+symbol P&L, negative fill fees and an explicit cash remainder, globally and by year,
+and describes closing exposure and concentration. Optional engine positions preserve
+the actual closing quantities and marks; pending proceeds, dividend receivables and
+rounding bridge the unchanged settled-cash ledger to equity. `api.runs` verifies the
+hashed position/fill/equity artifacts and that bridge for every session before
+attributing a recorded run. Position collection is off by default, stays outside
+the ledger hash and changes no accounting or execution path. Reports render the
+stored attribution only; cash flows in the remainder are never assigned to symbols.
 Cost simulations require matching configuration and dataset identities and a
 reproduced base return, and never record trials or write backtest runs. Reports
 render the newest verified diagnostics from artifacts only. These diagnostics
@@ -462,7 +471,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 |---|---|
 | `cli` | `api`, `data`, `contracts` |
 | `api` | `paper`, `evidence`, `publish`, `validation`, `factors`, `engine`, `data`, `project`, `sdk`, `plugins`, `contracts`, `canonical` |
-| `research` | `evidence`, `validation`, `data`, `project` |
+| `research` | `evidence`, `validation`, `data`, `project`, `canonical` |
 | `paper` | `validation`, `engine`, `data`, `project`, `options`, `sdk`, `contracts`, `canonical` |
 | `evidence` | `engine`, `canonical` |
 | `publish` | `validation`, `engine`, `contracts`, `canonical` |
@@ -490,7 +499,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `paper` | `(package)`, `activity_capture`, `activity_decoder`, `activity_observations`, `arm`, `brokers`, `brokers.alpaca_options`, `brokers.alpaca_paper`, `brokers.fake`, `brokers.fake_options`, `isolate`, `journal`, `lease`, `lifecycle`, `models`, `options_runner`, `parity`, `runner`, `schedule` |
 | `evidence` | `(package)`, `report`, `run_spool`, `runs`, `verify` |
 | `publish` | `(package)`, `commit`, `export` |
-| `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `exposure`, `factor_conformance`, `factor_holdouts`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
+| `validation` | `(package)`, `attribution`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `exposure`, `factor_conformance`, `factor_holdouts`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
 | `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |

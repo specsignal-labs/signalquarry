@@ -426,6 +426,7 @@ Backtest a strategy and write run artifacts.
 | `--end` | last session (YYYY-MM-DD) |
 | `--param` | NAME=VALUE parameter override for this run only (repeatable); strategy.yaml is not changed |
 | `--label` | short name stored with the run |
+| `--positions` | record per-session equity holdings and marks for attribution |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy evidence`

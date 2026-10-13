@@ -33,10 +33,11 @@ def simulate_equity_ticks(
     *,
     start: date | None = None,
     end: date | None = None,
+    positions: bool = False,
 ) -> Generator[BacktestTick, None, BacktestEnd]:
     if is_options(spec) or definition.kind != "equity":
         raise EngineError("STRATEGY_KIND_MISMATCH")
-    return iter_equity_backtest(spec, definition, params, dataset, start=start, end=end)
+    return iter_equity_backtest(spec, definition, params, dataset, start=start, end=end, positions=positions)
 
 
 def simulate(
