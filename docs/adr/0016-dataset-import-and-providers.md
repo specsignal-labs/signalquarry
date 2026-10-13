@@ -1,7 +1,7 @@
 # 0016. Dataset import and data providers
 
-Status: proposed (2026-10-09). Nothing here is implemented. It becomes accepted when the owner
-settles the questions under "Open questions" and the acceptance tests below pass.
+Status: accepted (2026-10-13) as amended under "Decisions". Implementation follows the rollout
+given there; the acceptance tests below are its exit criteria.
 
 ## Context
 
@@ -96,15 +96,36 @@ it stay `unverified` (ADR 0010, ADR 0013).
 6. No manifest, report or exported bundle contains a price from imported data.
 7. Existing manifests and existing configuration hashes are unchanged.
 
-## Open questions for the owner
+## Decisions
 
-1. **The grade table in section 4**, in particular whether imported raw data with
-   user-supplied provenance may reach `holdout_passed`, and whether `historical_adjusted` is
-   the right name and ceiling.
-2. **Licence text.** Whether `--source` and `--license` are free text recorded as given, or a
-   required choice from a short list.
-3. **Publication.** Whether results on imported data may ever enter a public bundle, or stay
-   default-deny regardless of the declared licence.
+Settled on 2026-10-13. The owner delegated these decisions to the maintainer of this change; the reasoning is written down so that each one can be revisited.
+
+1. **Two grades, decided by what the file can support, not by who supplied it.**
+
+   | Data | Grade | Ceiling |
+   |---|---|---|
+   | fetched through a provider, raw with dated actions | `historical` | as today |
+   | imported, declared `raw`, with an actions file | `historical`, and every report states "provenance supplied by the user" | as today, including `holdout_passed` |
+   | imported, declared `adjusted`; or declared `raw` with no actions file | `historical_adjusted` | `in_sample` |
+
+   The gates exist to protect the researcher's own decision, and a file they are entitled to
+   use is as good for that as a vendor API. What an import cannot do is make a back-adjusted
+   series point-in-time, and a raw series without its splits and dividends is wrong on every
+   ex-date. Those two cases share one grade and one ceiling; section 4's separate "raw, no
+   actions" row is withdrawn. An import with no actions must say so (`--no-actions`), so the
+   lower ceiling is chosen rather than discovered.
+2. **Source is required free text; licence is optional free text.** Both are recorded as
+   given. The framework cannot verify either, and a short list of choices would only invite a
+   wrong answer.
+3. **Results on imported data are never published.** Export stays default-deny for them
+   whatever the declared licence says, until 1.0 reconsiders publication as a whole.
+4. **Rollout: the local import first, the plugin group later.** `sqy data import` and the
+   `local` feed are built on the existing library, manifest and replay path. The
+   `data_providers` plugin group of section 2 is deferred until a second network provider is
+   actually wanted: an extension point with one implementation is a guess about the second.
+   Section 1 still holds as the shape the import must fit (raw pages in, a normalized dataset
+   out), so the later step is a refactor and not a redesign.
+5. **`sqy universe import` follows the bar import** and keeps the labels of section 6.
 
 ## Consequences
 

@@ -153,6 +153,24 @@ Settled by the owner on 2026-10-06, following the recommendations proposed here.
 5. **T1 results never appear in published evidence.**
 6. **Benjamini-Hochberg is applied per family,** as the search core does now, not across families.
 
+Added on 2026-10-13 (the owner delegated these two; they remove what blocked steps (c) and (d)):
+
+7. **A universe build verified against a prefix of the selected dataset is valid for it.** A
+   build is replayed against a dataset that ends before the build's decision session, which is
+   what makes it point-in-time. Requiring that same dataset to be the one a search or an
+   evaluation runs on left no session inside the training window with a membership. A build is
+   therefore accepted for dataset `D` when the dataset it was verified against is a *prefix* of
+   `D`: the same symbols' bars, splits and dividends, identical on every session the earlier
+   dataset has, checked by hashing `D` truncated to that span. Nothing later than the build's
+   own cutoff can have influenced it, so no look-ahead is added. A build whose dataset is not a
+   prefix is refused as before.
+8. **`sqy factor emit` generates code.** A factor module may import only the SDK, which sits
+   below the expression interpreter. Emission therefore writes a plain Python factor that
+   computes the expression with SDK operators, with the canonical expression and its identity
+   in the header, and `sqy check` must show that the emitted factor reproduces the
+   interpreter's scores on the training panel before the file is kept. The layer contract is
+   unchanged.
+
 Related change, also decided 2026-10-06: a factor trial's identity is (family, configuration) in
 every evidence layout, so evaluating the same configuration under a second family is that family's
 own trial.

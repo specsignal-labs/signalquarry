@@ -1,7 +1,7 @@
 # 0015. Research studies: declared, comparable sets of runs
 
-Status: proposed (2026-10-09). It becomes accepted when the owner settles the questions under
-"Open questions" and the acceptance tests below pass.
+Status: accepted (2026-10-13). The questions are settled under "Decisions" and the acceptance
+tests pass (`tests/e2e/test_study_flow.py`, `tests/e2e/test_parallel_jobs.py`).
 
 ## Context
 
@@ -126,7 +126,7 @@ a budget and opening a holdout stay human-only, as today.
 
 ## Implementation status
 
-Implemented as proposed, pending the open questions: the contract, `study init | check | run |
+Implemented as decided: the contract, `study init | check | run |
 ls | show`, the study log and its verification, resume and `--rerun`. The acceptance tests
 above are in `tests/e2e/test_study_flow.py`. `study run --jobs N` simulates arms in worker
 processes and leaves every append with the parent, in the declared order
@@ -135,19 +135,31 @@ single process writes. A simulation that finished in a worker after an earlier a
 discarded unseen and is not a trial, as an arm that was never reached is not. Not yet built:
 `study compare` as a separate re-render (a run always writes its comparison) and per-arm
 walk-forward folds.
-Each open question below is one decision in the code: whether an arm `counts` in
+Each decision below is one place in the code: whether an arm `counts` in
 `api.study`, and the outcome rule in `validation.compare.verdict`.
 
-## Open questions for the owner
+## Decisions
 
-1. **Sensitivity arms are not trials.** Proposed above. The stricter alternative counts every
-   arm that changes a hashed setting.
-2. **Strategy baselines count in their own family.** Proposed above, because that is what
-   running them by hand does. The alternative treats a baseline as free when its configuration
-   is already frozen.
-3. **`insufficient` when the interval contains zero.** Proposed above. The lenient alternative
-   reports `supported` on the point estimate and shows the interval beside it.
-4. **Interval level.** 90 percent, matching `sharpe_annual_90`.
+Settled on 2026-10-13. The owner delegated these decisions to the maintainer of this change; the reasoning is written down so that each one can be revisited.
+
+1. **Sensitivity arms are not trials.** A sensitivity arm may change execution and cost
+   settings only (the contract refuses one that changes a parameter), it can never be frozen
+   from a study, and its result cannot be the subject of the verdict. It asks "how fragile is
+   the subject?", not "which configuration is best?", so counting it would charge the
+   researcher for checking robustness and teach them to skip it. Any arm that changes a
+   parameter is a candidate or an ablation and is counted.
+2. **Strategy baselines count in their own family.** A baseline is a configuration whose
+   result the researcher sees; running it by hand would count, so running it in a study does.
+   Recording is idempotent, so a baseline that was already evaluated on the same data costs
+   nothing more.
+3. **`insufficient` when the interval contains zero.** A better point estimate that cannot be
+   told from noise is the most common way a backtest misleads. The verdict has to say so
+   itself; a reader should not need to inspect the interval to find out.
+4. **The interval is 90 percent,** the level used for `sharpe_annual_90`, so one project has
+   one convention.
+5. **Benchmark-relative results are never a gate.** They are descriptive in runs, studies,
+   reports and diagnostics. The gates G1 to G5 stay absolute and risk-based: a gate that
+   depends on a benchmark invites choosing the benchmark.
 
 ## Consequences
 

@@ -131,7 +131,8 @@ sequenceDiagram
 **Non-goals (up to 1.0)**
 - Live trading. No live URL exists anywhere, and brokers must declare `paper_only`.
 - Intraday equities, crypto, futures, multi-leg options (these come in 1.x).
-- ML feature stores, optimizers, a hosted cloud, a GUI.
+- Model training and ML feature stores (imported point-in-time feature datasets are in scope,
+  ADR 0017), optimizers, a hosted cloud, a GUI.
 - Generic order and account tools (Alpaca's MCP and CLI already do this).
 - Windows (the paper kernel relies on POSIX `flock`).
 

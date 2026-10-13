@@ -1,9 +1,8 @@
 # 0017. Point-in-time features and fitted models
 
-Status: proposed (2026-10-09). Nothing here is implemented, and it changes scope: "ML feature
-stores" is listed among the non-goals up to 1.0 in `docs/design/ARCHITECTURE.md`. Accepting
-this ADR means the owner has decided to lift that non-goal to the extent described here, and
-no further.
+Status: accepted in part (2026-10-13), see "Decisions". Point-in-time feature datasets and
+as-of access are accepted and not yet implemented. Fitted models stay out of scope until after
+1.0. The non-goal in `docs/design/ARCHITECTURE.md` is narrowed accordingly, and no further.
 
 ## Context
 
@@ -89,14 +88,26 @@ as-of rule and a fail-closed staleness check, is a separate decision.
 7. Existing strategies, their configuration hashes and their ledger hashes are unchanged.
 8. No command in the backtest, evaluation or paper path makes a network or model call.
 
-## Open questions for the owner
+## Decisions
 
-1. **Whether to lift the non-goal at all before 1.0.**
-2. **The default lag** for sources without knowledge timestamps (proposed: declared per
-   dataset, with no default, so the choice is always explicit).
-3. **Which libraries a fit function may import** (the strategy import allow-list does not
-   apply to it; proposed: anything installed, recorded by version in the model manifest).
-4. **Whether fit configurations share the strategy's trial budget** (proposed: yes).
+Settled on 2026-10-13. The owner delegated these decisions to the maintainer of this change; the reasoning is written down so that each one can be revisited.
+
+1. **Lift the non-goal for feature datasets, not for models.** Importing dated, revisioned
+   feature rows and reading them as-of the decision cutoff is a small extension of what the
+   data library and the look-ahead check already do, and without it no research beyond prices
+   is possible. `sqy model fit` is different in kind: it runs arbitrary user code per fold and
+   makes the framework responsible for a training loop. A researcher can already fit a model
+   outside the framework and import its per-date predictions as a feature dataset with
+   `observed_at` set to when each prediction was made; that path is honest and enough before
+   1.0. The model sections of this ADR are deferred, not rejected.
+2. **No default lag.** A source without knowledge timestamps must declare its lag per dataset.
+   A default would be wrong for most sources and would never be noticed.
+3. **Not applicable until models are in scope** (which libraries a fit function may import).
+4. **A strategy that reads features spends its family's ordinary trial budget.** Each distinct
+   configuration is a trial as today; the feature dataset's identity is part of the dataset
+   identity, so the same parameters on revised features are a new trial.
+5. **Research only at first.** `paper preflight` blocks a strategy that declares features
+   until a later decision covers how features are captured live.
 
 ## Consequences
 
