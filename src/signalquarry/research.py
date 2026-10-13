@@ -198,7 +198,9 @@ class Run:
         try:
             pandas = importlib.import_module("pandas")
         except ImportError as exc:
-            raise ResearchError("PANDAS_NOT_INSTALLED", "Install pandas to use Run.to_pandas()") from exc
+            raise ResearchError(
+                "PANDAS_NOT_INSTALLED", "Run.to_pandas() needs pandas: pip install 'signalquarry[notebook]'"
+            ) from exc
         return pandas.DataFrame(self.to_arrow().to_pydict()).set_index("session")
 
 
@@ -394,7 +396,9 @@ class Panel:
         try:
             pandas = importlib.import_module("pandas")
         except ImportError as exc:
-            raise ResearchError("PANDAS_NOT_INSTALLED", "Install pandas to use Panel.to_pandas()") from exc
+            raise ResearchError(
+                "PANDAS_NOT_INSTALLED", "Panel.to_pandas() needs pandas: pip install 'signalquarry[notebook]'"
+            ) from exc
         return pandas.DataFrame(self.to_arrow().to_pydict()).set_index(["session", "symbol"])
 
 

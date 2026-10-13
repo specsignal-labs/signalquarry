@@ -7,6 +7,8 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- A `notebook` extra (`pip install 'signalquarry[notebook]'`) with pandas and matplotlib for
+  `signalquarry.research`. The core's runtime dependencies are unchanged.
 - `sqy study init --metric M --direction D` writes the comparison rule and a hypothesis that
   matches it. Without them the scaffold leaves both as `TODO` and `study check` and `study run`
   refuse it (`STUDY_SPEC_INVALID`): the scaffold no longer defaults to "higher Sharpe" beside a

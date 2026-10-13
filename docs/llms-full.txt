@@ -441,7 +441,7 @@ from signalquarry import research
 run = research.latest_run("sma-trend")  # or research.load_run(RUN_ID)
 run.metrics["sharpe"], run.params
 run.to_arrow()  # session, equity, returns, benchmark
-run.to_pandas()  # the same as a DataFrame, if pandas is installed
+run.to_pandas()  # the same as a DataFrame; pip install 'signalquarry[notebook]'
 
 sweep = research.load_sweep(SWEEP_ID)
 sweep.to_arrow()  # one row per grid point
