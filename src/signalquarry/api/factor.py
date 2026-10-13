@@ -17,8 +17,10 @@ from signalquarry._internal.canonical import canonical_hash, file_sha256
 from signalquarry._internal.contracts.factor_spec import FactorEvaluationSpecV1
 from signalquarry._internal.contracts.reason_codes import REASON_CODES
 from signalquarry._internal.contracts.spec import HoldoutSpec
+from signalquarry._internal.data.dataset import Dataset
 from signalquarry._internal.data.library import LibraryError, dataset_from_manifest
 from signalquarry._internal.data.panel import PanelStore
+from signalquarry._internal.data.prefix import is_dataset_prefix
 from signalquarry._internal.data.synthetic import synthetic_memberships, synthetic_panel
 from signalquarry._internal.data.universe_build import verify_universe_manifest
 from signalquarry._internal.evidence.report import (
@@ -278,6 +280,7 @@ def _load_evaluation_membership(
     root: Path,
     paths: Sequence[Path],
     dataset_manifest: dict[str, Any],
+    dataset: Dataset,
 ) -> tuple[UniverseAt, ...]:
     """Load only explicitly selected, hash-valid and replayable universe builds."""
     if not paths:
@@ -303,7 +306,26 @@ def _load_evaluation_membership(
             or raw.get("dataset_identity") != dataset_manifest.get("dataset_identity")
             or raw.get("dataset_manifest_hash") != dataset_manifest.get("manifest_hash")
         ):
-            raise LibraryError("DATA_MANIFEST_INVALID", "universe manifest does not match selected dataset")
+            library = library_for(root)
+            earlier_manifest = next(
+                (
+                    item
+                    for item in library.manifests()
+                    if item.get("dataset_id") == raw.get("dataset_id")
+                    and item.get("dataset_identity") == raw.get("dataset_identity")
+                    and item.get("manifest_hash") == raw.get("dataset_manifest_hash")
+                ),
+                None,
+            )
+            if earlier_manifest is None or not is_dataset_prefix(
+                dataset_from_manifest(library, earlier_manifest),
+                dataset,
+                start=date.fromisoformat(earlier_manifest["start"]),
+                end=date.fromisoformat(earlier_manifest["end"]),
+            ):
+                raise LibraryError(
+                    "DATA_MANIFEST_INVALID", "universe dataset is not an exact prefix of selected dataset"
+                )
         try:
             session_value = raw["decision_session"]
             known_at_value = raw["known_at"]
@@ -419,7 +441,7 @@ def factor_evaluate(
                     )
                 dataset_manifest = manifests[0]
                 dataset = dataset_from_manifest(library, dataset_manifest)
-                memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest)
+                memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest, dataset)
                 panel_store = PanelStore(library.cache_dir)
             panel_store.build(dataset)
             selected_symbols = tuple(
@@ -687,7 +709,7 @@ def _factor_search_locked(
         raise LibraryError("DATA_MANIFEST_INVALID", "expected one selected dataset manifest")
     dataset_manifest = manifests[0]
     dataset = dataset_from_manifest(library, dataset_manifest)
-    memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest)
+    memberships = _load_evaluation_membership(root, universe_manifests, dataset_manifest, dataset)
     check_factor_training_window(
         training_cutoff=training_cutoff,
         seal_start=date.fromisoformat(seal["holdout_start"]),

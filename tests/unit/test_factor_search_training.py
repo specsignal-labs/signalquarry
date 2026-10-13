@@ -9,6 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 import numpy as np
 import pytest
 
+from signalquarry import api
 from signalquarry._internal.canonical import canonical_hash
 from signalquarry._internal.data.synthetic import synthetic_panel
 from signalquarry._internal.factors.evaluate import UniverseAt
@@ -17,6 +18,9 @@ from signalquarry._internal.factors.training import accepted_training_scores, fo
 from signalquarry._internal.validation import ledger
 from signalquarry._internal.validation.factor_search import search_trial_accounting, verify_search_trials
 from signalquarry.sdk import FactorCtx, Params, factor
+
+from .factor_replay import build_universe, record_dataset
+from .test_factor_evaluate_api import _project
 
 
 def _panel(seed=7, planted=0.5):
@@ -161,45 +165,48 @@ def test_resume_invalid_search_rows_and_duplicate_trials_refuse(tmp_path):
 
 
 @pytest.mark.slow
-def test_slow_null_200_panels_use_real_ledger_accounting(tmp_path):
-    """Deselect with -m 'not slow'; 64 unique formulas on each of 200 panels."""
-    (tmp_path / "signalquarry.toml").write_text("")
-    ledger.append(
-        tmp_path,
-        "factor_holdouts",
-        "null",
-        {
-            "kind": "seal",
-            "family": "null",
-            "holdout_start": "2023-06-15",
-            "trial_budget": 128,
-            "holdout": {"months": 0, "training_cutoff": "2023-06-14"},
-        },
-    )
+def test_slow_null_200_panels_use_real_ledger_accounting(tmp_path, monkeypatch, capsys):
+    """64 unique formulas on each of 200 independently recorded/replayed panels."""
+    monkeypatch.setenv("SIGNALQUARRY_CACHE_DIR", str(tmp_path / "cache"))
     start = time.perf_counter()
     discoveries = 0
     for seed in range(200):
         dataset = _panel(seed=seed, planted=0)
         cutoff = dataset.sessions[-20]
-        data = formula_training_input(dataset, _members(dataset), training_cutoff=cutoff, horizon=1)
-        accounting, recorded = search_trial_accounting(tmp_path, "null", canonical_hash({"seed": seed}))
-        assert not recorded
-        config = FormulaSearchConfig(
-            cutoff,
-            1,
-            seed,
-            64,
-            family_budget=accounting.effective_budget,
-            family_trials_used=accounting.family_trials_used,
-            project_trials_used=accounting.project_trials_used,
-            previous_family_p_values=accounting.previous_family_p_values,
+        root = _project(tmp_path / f"panel-{seed}")
+        spec = next(root.glob("src/*/factor.yaml"))
+        spec.write_text(
+            spec.read_text()
+            + f"  trial_budget: 128\n  holdout:\n    months: 0\n    training_cutoff: '{dataset.sessions[-10]}'\n"
         )
-        report = search_expressions(data, config)
-        assert report.trials_evaluated == 64
-        discoveries += bool(report.discoveries)
+        paths = [
+            build_universe(
+                root, record_dataset(root, dataset, dataset.sessions[index - 1]), dataset.sessions[index]
+            )
+            for index in (20, 40)
+        ]
+        manifest = record_dataset(root, dataset, dataset.sessions[-1])
+        assert api.factor_holdout_seal("momentum", manifest["dataset_id"], project=root).status == "ok"
+        result = api.factor_search(
+            "momentum",
+            manifest["dataset_id"],
+            universe_manifests=paths,
+            training_cutoff=cutoff,
+            horizon=1,
+            seed=seed,
+            budget=64,
+            project=root,
+        )
+        assert result.status == "ok", result.as_dict()
+        trials = ledger.factor_trials(root).entries()
+        assert len(trials) == result.data["trials_evaluated"] == 64
+        discoveries += any(row["metrics"]["candidate"]["discovery"] for row in trials)
     elapsed = time.perf_counter() - start
-    print(f"null discovery fraction: {discoveries}/200 = {discoveries / 200:.3%}; elapsed: {elapsed:.3f}s")
-    # Local pytest output survives -q and is also available for the final report.
+    with capsys.disabled():
+        print(
+            f"null discovery fraction: {discoveries}/200 = {discoveries / 200:.3%}; elapsed: {elapsed:.3f}s"
+        )
+    # Retain the measurement locally as well as in uncaptured acceptance output.
     (tmp_path / "null-result.json").write_text(
         json.dumps({"discoveries": discoveries, "panels": 200, "seconds": elapsed})
     )

@@ -56,6 +56,7 @@ forward-label calculation and diagnostics remain marked `unverified`: replay
 proves internal consistency, not provider completeness, action-history
 completeness, instrument continuity, or delisting outcomes. The command does not
 write either trial ledger, compute significance or a grade, or access a holdout.
+ADR 0014 decision 7 permits replay-verified builds whose datasets are exact prefixes of the selected dataset.
 Listing and checking registered factors likewise do not consume trials or
 produce grades.
 

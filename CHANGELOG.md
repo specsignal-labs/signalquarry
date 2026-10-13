@@ -112,7 +112,9 @@ change provisional surfaces after deprecation).
 - T1 `sqy factor search` and `api.factor_search` foundations: prior-only calculated labels,
   sealed ledger-derived budgets, checked crash resume, and exploratory proposals
   with grade `none`; no holdout opening, factor registration, MCP tool or publication.
-  Replay-verified success remains blocked by the existing universe dataset-end constraint.
+  Replay-verified universe builds on exact dataset prefixes now support end-to-end
+  recorded-data search, evaluation and reports (ADR 0014 decision 7); mismatched
+  bars, source, missing data or in-span actions fail closed.
 - Human-only `sqy factor holdout seal` and read-only `status`, with fixed conservative
   family declarations, a verified chained seal log, and internal ledger-derived
   trial accounting, formula append, budget and training-window checks (ADR 0014 steps a/b).

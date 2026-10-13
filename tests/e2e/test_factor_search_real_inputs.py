@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Actual cached-page and universe replay refusal coverage; no substituted verifiers."""
+"""Cached-page universe replay, successful T1 search and read-only refusals."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import asyncio
 import gzip
 import hashlib
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -14,9 +15,15 @@ from pathlib import Path
 import pytest
 
 from signalquarry import api
+from signalquarry._internal.data.library import dataset_from_manifest
 from signalquarry._internal.data.universe import ASSETS_PARAMS, ASSETS_PATH, AssetPage, make_asset_manifest
 from signalquarry._internal.data.universe_build import CLASSIFICATION_SCHEMA
+from signalquarry._internal.factors.training import formula_training_input
+from signalquarry._internal.validation import ledger
 from signalquarry.api.universe import _store
+from signalquarry.cli.main import main
+from tests.unit.factor_replay import build_universe, record_dataset
+from tests.unit.test_factor_search_api import search_project  # noqa: F401
 
 from .test_factor_holdout import project  # noqa: F401
 
@@ -24,7 +31,7 @@ from .test_factor_holdout import project  # noqa: F401
 def _protected_bytes(root):
     return {
         str(path.relative_to(root)): path.read_bytes() if path.is_file() else None
-        for base in (root / "evidence", root / "families", root / ".signalquarry/factor_searches")
+        for base in (root / "evidence", root / "families", root / ".signalquarry")
         if base.exists()
         for path in (base, *base.rglob("*"))
     }
@@ -157,3 +164,142 @@ def test_factor_search_mcp_tool_is_absent():
             assert not any("factor_search" in name or "factor_emit" in name for name in names)
 
     asyncio.run(exercise())
+
+
+def test_factor_search_cli_succeeds_with_sequence_of_genuinely_replayed_prefixes(search_project, capsys):  # noqa: F811
+    root, args = search_project
+    builds = [json.loads((root / path).read_text()) for path in args["universe_manifests"]]
+    assert len({build["dataset_id"] for build in builds}) == 3
+    assert all(build["dataset_id"] != args["dataset_id"] for build in builds)
+    assert api.universe_verify(project=root).status == "ok"
+    argv = ["--json", "factor", "search", "--project", str(root)]
+    for key, value in args.items():
+        if key == "universe_manifests":
+            for path in value:
+                argv.extend(["--universe-manifest", str(path)])
+        else:
+            argv.extend(["--" + key.replace("_", "-"), str(value)])
+    assert main(argv) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["data"]["scope"] == "exploratory"
+    assert payload["data"]["evidence_grade"] == "none"
+    assert payload["data"]["holdout_accessed"] is False
+    report = json.loads((root / payload["artifacts"][0]["path"]).read_text())
+    planted = next(
+        row for row in report["candidates"] if row["expression"] == "rank((volume / ts_mean(volume, 5)))"
+    )
+    assert planted["discovery"] and planted["mean_ic"] > 0.2
+    assert len(ledger.factor_trials(root).entries()) == args["budget"]
+    before = _protected_bytes(root)
+    assert main(argv) == 0
+    repeated = json.loads(capsys.readouterr().out)
+    assert repeated["data"] == payload["data"] and repeated["artifacts"] == payload["artifacts"]
+    assert _protected_bytes(root) == before
+
+
+@pytest.mark.parametrize("command", ["evaluate", "report"])
+def test_factor_recorded_diagnostics_accept_prefix_builds_and_keep_unverified_labels(search_project, command):  # noqa: F811
+    root, args = search_project
+    before = ledger.factor_trials(root).entries(), ledger.factor_holdouts(root).entries()
+    result = getattr(api, "factor_" + command)(
+        "price-momentum", args["dataset_id"], universe_manifests=args["universe_manifests"], project=root
+    )
+    assert result.status == "ok", result.as_dict()
+    assert result.data["scope"] == "unverified"
+    assert result.data["horizons"]
+    if command == "evaluate":
+        assert result.data["authority"] == {
+            "provenance_verified": False,
+            "trial_recorded": False,
+            "evidence_grade": None,
+            "holdout_accessed": False,
+        }
+        assert len(result.data["decision_sessions"]) == 3
+    else:
+        report = (root / result.artifacts[0]["path"]).read_text()
+        assert "unverified" in report
+        assert "No trial was recorded, no evidence grade assigned and no holdout accessed" in report
+    assert before == (ledger.factor_trials(root).entries(), ledger.factor_holdouts(root).entries())
+
+
+@pytest.mark.parametrize("damage", ["bar", "missing-bar", "source", "split", "dividend", "pay-date"])
+@pytest.mark.parametrize("command", ["search", "evaluate", "report"])
+def test_non_prefix_recorded_dataset_refuses_before_any_output(search_project, damage, command):  # noqa: F811
+    root, args = search_project
+    library = api.factor.library_for(root)
+    manifest = next(row for row in library.manifests() if row["dataset_id"] == args["dataset_id"])
+    dataset = dataset_from_manifest(library, manifest)
+    item = dataset.series[dataset.symbols[0]]
+    if damage == "bar":
+        item.micro["close"][0] += 1_000_000
+    elif damage == "missing-bar":
+        item.present[0] = False
+    elif damage == "split":
+        dataset.splits = (replace(dataset.splits[0], ratio=Decimal(3)),)
+    elif damage == "dividend":
+        dataset.dividends = (replace(dataset.dividends[0], amount=Decimal(1)),)
+    elif damage == "pay-date":
+        dataset.dividends = (replace(dataset.dividends[0], pay_date=dataset.sessions[-1]),)
+    changed = record_dataset(root, dataset, dataset.sessions[-1], feed="iex" if damage == "source" else "sip")
+    before = _protected_bytes(root)
+    if command == "search":
+        result = api.factor_search(project=root, **{**args, "dataset_id": changed["dataset_id"]})
+    else:
+        result = getattr(api, "factor_" + command)(
+            "price-momentum",
+            changed["dataset_id"],
+            universe_manifests=args["universe_manifests"],
+            project=root,
+        )
+    assert result.reason_codes == ["DATA_MANIFEST_INVALID"], result.as_dict()
+    assert _protected_bytes(root) == before
+
+
+def test_prefix_build_membership_is_unchanged_by_post_cutoff_bars(search_project):  # noqa: F811
+    root, args = search_project
+    library = api.factor.library_for(root)
+    manifest = next(row for row in library.manifests() if row["dataset_id"] == args["dataset_id"])
+    dataset = dataset_from_manifest(library, manifest)
+    paths = args["universe_manifests"][:1]
+    first = api.factor._load_evaluation_membership(root, paths, manifest, dataset)
+    cutoff = first[0].decision_cutoff.date()
+    for index, session in enumerate(dataset.sessions):
+        if session > cutoff:
+            for item in dataset.series.values():
+                for values in (*item.micro.values(), item.volume):
+                    values[index] *= 2
+    changed = record_dataset(root, dataset, dataset.sessions[-1])
+    replayed = dataset_from_manifest(library, changed)
+    second = api.factor._load_evaluation_membership(root, paths, changed, replayed)
+    assert first == second
+    data = formula_training_input(replayed, second, training_cutoff=args["training_cutoff"], horizon=1)
+    first_index = data.context.sessions.index(first[0].session)
+    assert not data.eligible[:first_index].any()
+    assert data.eligible[first_index:].all()
+
+
+def test_genuine_prefix_membership_uses_latest_build_and_never_backfills(search_project):  # noqa: F811
+    root, args = search_project
+    library = api.factor.library_for(root)
+    manifests = {row["dataset_id"]: row for row in library.manifests()}
+    selected = manifests[args["dataset_id"]]
+    dataset = dataset_from_manifest(library, selected)
+    paths = []
+    for path, percentile in zip(args["universe_manifests"], (50, 0, 75), strict=True):
+        build = json.loads((root / path).read_text())
+        paths.append(
+            build_universe(
+                root,
+                manifests[build["dataset_id"]],
+                date.fromisoformat(build["decision_session"]),
+                percentile=percentile,
+            )
+        )
+    members = api.factor._load_evaluation_membership(root, paths[::-1], selected, dataset)
+    assert len(members[0].symbols) < len(members[1].symbols)
+    assert len(members[2].symbols) < len(members[1].symbols)
+    data = formula_training_input(dataset, members, training_cutoff=args["training_cutoff"], horizon=1)
+    for row, session in enumerate(data.context.sessions):
+        applicable = [member for member in members if member.session <= session]
+        expected = set(applicable[-1].symbols) if applicable else set()
+        assert data.eligible[row].tolist() == [symbol in expected for symbol in data.context.universe]

@@ -351,9 +351,14 @@ After a human seals the factor family, `sqy factor search --family F --dataset-i
 replays the selected dataset and dated universe builds. Repeat `--universe-manifest`
 for additional builds and `--accepted FACTOR_ID` for registered comparison factors.
 Any unavailable or unreplayable input refuses the search before recording trials.
-The current universe builder requires the matching dataset to end before its
-decision session. Such builds leave no eligible training rows; replay-verified
-search success remains blocked pending a change to that verification contract.
+Each build may use an earlier dataset that is an exact prefix of the selected
+dataset. Keep the earlier manifests and cached inputs: their replay remains
+mandatory. The selected data, truncated to the earlier sessions and symbols,
+must reproduce its full identity, including source, absent bars, and splits and
+dividends whose ex-dates fall inside the earlier request span. Revisions inside
+that span refuse the search. Later bars do not change a build's membership.
+For each training session, the latest accepted build at or before that session
+supplies membership; sessions before the first build are ineligible.
 
 Training bars and forward outcomes are strictly before the cutoff and the sealed
 holdout. Counts, prior p-values and the fixed family budget come from the ledger;

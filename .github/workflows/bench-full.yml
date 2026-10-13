@@ -6,6 +6,9 @@ name: bench-full
 # Apple Silicon; the shared runner measured 235-260 s for the same case, so this workflow passes a
 # 300-second ceiling for that one case (owner decision, 2026-10-06). The research panel and the 2 GB
 # memory ceiling are unchanged. A red run means a real regression against the runner's own baseline.
+#
+# The slow statistical acceptance tests run beside it on the same schedule (ADR 0018, decision 6):
+# today the 200-panel null test of ADR 0014, which records, seals and searches every panel.
 
 on:
   schedule:
@@ -52,3 +55,20 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+  slow-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.1"
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --python 3.12
+
+      - name: Slow statistical tests
+        run: SIGNALQUARRY_SLOW_TESTS=1 uv run python -m pytest tests/unit -m slow -p no:cacheprovider -q -s

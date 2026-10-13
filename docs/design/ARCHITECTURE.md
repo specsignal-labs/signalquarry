@@ -505,7 +505,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `exposure`, `factor_conformance`, `factor_holdouts`, `factor_search`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search`, `training` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
-| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |
+| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `prefix`, `quality`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |

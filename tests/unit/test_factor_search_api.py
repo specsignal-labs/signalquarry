@@ -7,6 +7,7 @@ import os
 import shutil
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -15,6 +16,7 @@ import pytest
 
 from signalquarry import api
 from signalquarry._internal.canonical import canonical_hash
+from signalquarry._internal.data.dataset import Dividend, Split
 from signalquarry._internal.data.library import LibraryError
 from signalquarry._internal.data.synthetic import synthetic_panel
 from signalquarry._internal.factors.search import search_expressions
@@ -22,7 +24,8 @@ from signalquarry._internal.validation import ledger
 from signalquarry._internal.validation.factor_trials import factor_trial_accounting
 from signalquarry.cli.main import command_catalog, main
 
-from .test_factor_evaluate_api import _project, _stub_data, _universe_manifests
+from .factor_replay import build_universe, record_dataset
+from .test_factor_evaluate_api import _project
 
 
 def _bytes(root: Path) -> dict[str, bytes | None]:
@@ -37,6 +40,7 @@ def _bytes(root: Path) -> dict[str, bytes | None]:
 @pytest.fixture
 def search_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, dict[str, Any]]:
     root = _project(tmp_path)
+    monkeypatch.setenv("SIGNALQUARRY_CACHE_DIR", str(tmp_path / "cache"))
     dataset = synthetic_panel(
         date(2023, 1, 2),
         date(2023, 10, 31),
@@ -48,22 +52,26 @@ def search_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Pat
         split_fraction=0,
         dividend_fraction=0,
     ).dataset
+    dataset.splits = (Split(dataset.symbols[0], dataset.sessions[10], Decimal(2)),)
+    dataset.dividends = (
+        Dividend(dataset.symbols[1], dataset.sessions[15], dataset.sessions[80], Decimal("0.1")),
+    )
     spec = next(root.glob("src/*/factor.yaml"))
     spec.write_text(
         spec.read_text()
         + f"  trial_budget: 50\n  holdout:\n    months: 0\n    training_cutoff: '{dataset.sessions[-10]}'\n"
     )
-    manifest = {
-        "dataset_id": "research-data",
-        "dataset_identity": dataset.identity(),
-        "manifest_hash": "sha256:" + "a" * 64,
-    }
-    _stub_data(monkeypatch, dataset, manifest)
-    paths = _universe_manifests(root, manifest, dataset)
-    assert api.factor_holdout_seal("momentum", "research-data", project=root).status == "ok"
+    paths = [
+        build_universe(
+            root, record_dataset(root, dataset, dataset.sessions[index - 1]), dataset.sessions[index]
+        )
+        for index in (30, 70, 110)
+    ]
+    manifest = record_dataset(root, dataset, dataset.sessions[-1])
+    assert api.factor_holdout_seal("momentum", manifest["dataset_id"], project=root).status == "ok"
     return root, {
         "family": "momentum",
-        "dataset_id": "research-data",
+        "dataset_id": manifest["dataset_id"],
         "universe_manifests": paths,
         "training_cutoff": dataset.sessions[-20],
         "horizon": 1,
@@ -340,17 +348,77 @@ def test_search_evaluator_isolation_and_cutoff_mutation(search_project, monkeypa
 
     monkeypatch.setattr(core, "evaluate_expression", isolated)
     monkeypatch.setattr(training, "derive_forward_return_labels", isolated_labels)
+    evidence_before = _bytes(root)
     first = _search(root, args, accepted=["price-momentum"], budget=7)
     assert first.status == "ok", first.as_dict()
     before = _bytes(root)
-    dataset = api.factor.dataset_from_manifest(None, None)
+    library = api.factor.library_for(root)
+    manifest = next(row for row in library.manifests() if row["dataset_id"] == args["dataset_id"])
+    dataset = api.factor.dataset_from_manifest(library, manifest)
     stop = dataset.sessions.index(args["training_cutoff"])
     for series in dataset.series.values():
-        for values in (*series.micro.values(), series.volume, series.present):
-            values[stop:] = 0
+        for values in (*series.micro.values(), series.volume):
+            values[stop:] *= 2
+    changed = record_dataset(root, dataset, dataset.sessions[-1])
+    args = {**args, "dataset_id": changed["dataset_id"]}
+    # Compare independent runs with identical sealed accounting. Full source
+    # provenance is deliberately bound into the search/trial identities (ADR 0014 §3).
+    shutil.rmtree(root / "evidence")
+    shutil.rmtree(root / ".signalquarry")
+    for name, content in evidence_before.items():
+        path = root / name
+        if content is None:
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
     second = _search(root, args, accepted=["price-momentum"], budget=7)
-    assert second.status == "ok" and second.data == first.data
-    assert observed and _bytes(root) == before
+    assert second.status == "ok", second.as_dict()
+    assert second.data["candidates"] == first.data["candidates"]
+    first_trials = next(content for name, content in before.items() if name.endswith("factor_trials.jsonl"))
+    for old, new in zip(
+        (json.loads(line) for line in first_trials.splitlines()),
+        ledger.factor_trials(root).entries(),
+        strict=True,
+    ):
+        for key in (
+            "factor_configuration_hash",
+            "dataset_identity",
+            "universe_identity",
+            "decision_sessions",
+            "evaluation",
+        ):
+            assert old[key] == new[key]
+        assert old["metrics"]["candidate"] == new["metrics"]["candidate"]
+    assert second.data["search_identity"] != first.data["search_identity"]
+    assert observed
+
+
+def test_future_rows_after_genuine_verification_change_no_score_or_trial(search_project, monkeypatch):
+    root, args = search_project
+    first = _search(root, args, budget=7, accepted=["price-momentum"])
+    assert first.status == "ok", first.as_dict()
+    before = _bytes(root)
+    original = api.factor._load_evaluation_membership
+    replayed = []
+
+    def perturb_after_replay(root, paths, manifest, dataset):
+        members = original(root, paths, manifest, dataset)
+        replayed.extend(member.identity for member in members)
+        # Adversarial instrumentation after actual cached-page/universe replay;
+        # recorded provenance is fixed. No verifier or replay result is substituted.
+        stop = dataset.sessions.index(args["training_cutoff"])
+        for item in dataset.series.values():
+            for values in (*item.micro.values(), item.volume, item.present):
+                values[stop:] = 0
+        return members
+
+    monkeypatch.setattr(api.factor, "_load_evaluation_membership", perturb_after_replay)
+    second = _search(root, args, budget=7, accepted=["price-momentum"])
+    assert second.status == "ok", second.as_dict()
+    assert second.data == first.data and second.artifacts == first.artifacts
+    assert len(replayed) == len(args["universe_manifests"])
+    assert _bytes(root) == before
 
 
 @pytest.mark.parametrize(
@@ -407,7 +475,7 @@ def test_search_per_family_records_indexed_trials_and_replays_without_writes(sea
     shutil.rmtree(root / "evidence")
     config = root / "signalquarry.toml"
     config.write_text(config.read_text() + '\n[evidence]\nlayout = "per_family"\n')
-    assert api.factor_holdout_seal("momentum", "research-data", project=root).status == "ok"
+    assert api.factor_holdout_seal("momentum", args["dataset_id"], project=root).status == "ok"
     first = _search(root, args, budget=7)
     assert first.status == "ok", first.as_dict()
     assert len(ledger.factor_trials(root, "momentum").entries()) == 7

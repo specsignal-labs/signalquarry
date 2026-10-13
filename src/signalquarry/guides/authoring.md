@@ -54,8 +54,11 @@ Use `sqy factor report --factor volume-shock --synthetic` to run the same evalua
 and write a readable `report.md`, `ic.svg` and `quintiles.svg` in a new directory
 under `.signalquarry/factor_reports/`. It accepts the same options as `factor evaluate`,
 including `--symbols`, `--seed`, `--planted-ic`, or a recorded `--dataset-id` with
-dated `--universe-manifest` paths. The report includes the factor's hypothesis,
-diagnostics by horizon, chronological-block IC and input identities. Recorded-data
+dated `--universe-manifest` paths. Each dated build may use a replay-verified exact
+prefix of the selected dataset: its original sessions, symbols, source, bar arrays
+and in-span actions must match. Keep its earlier manifest and cached inputs available
+for replay. The report includes the factor's hypothesis, diagnostics by horizon,
+chronological-block IC and input identities. Recorded-data
 diagnostics remain unverified; neither mode records a trial, assigns an evidence
 grade or accesses a holdout. Long-short spreads are statistics, not executable portfolios.
 
