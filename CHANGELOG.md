@@ -109,9 +109,19 @@ change provisional surfaces after deprecation).
 - ADR 0016 (proposed): a data-provider contract, a built-in local import and what imported or
   back-adjusted data may claim. ADR 0017 (proposed; it would lift a pre-1.0 non-goal):
   point-in-time feature datasets, as-of access and models fitted per fold. Documentation only.
+- T1 `sqy factor search` and `api.factor_search` foundations: prior-only calculated labels,
+  sealed ledger-derived budgets, checked crash resume, and exploratory proposals
+  with grade `none`; no holdout opening, factor registration, MCP tool or publication.
+  Replay-verified universe builds on exact dataset prefixes now support end-to-end
+  recorded-data search, evaluation and reports (ADR 0014 decision 7); mismatched
+  bars, source, missing data or in-span actions fail closed.
 - Human-only `sqy factor holdout seal` and read-only `status`, with fixed conservative
   family declarations, a verified chained seal log, and internal ledger-derived
   trial accounting, formula append, budget and training-window checks (ADR 0014 steps a/b).
+- A deterministic synthetic cross-sectional panel (`synthetic_panel`) with market and sector
+  structure, late listings, delistings, missing bars, splits, dividends and an optional planted
+  signal carried in volume, plus dated synthetic memberships. Existing synthetic data is
+  byte-identical. No command uses it yet.
 - Broader validation mutation coverage with independent reference cases for equity metrics,
   walk-forward and holdout gates, evidence history, and strategy conformance.
 - Engine mutation coverage with hand-worked order-planning, affordability, settlement, and

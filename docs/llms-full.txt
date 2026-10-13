@@ -181,8 +181,11 @@ Use `sqy factor report --factor volume-shock --synthetic` to run the same evalua
 and write a readable `report.md`, `ic.svg` and `quintiles.svg` in a new directory
 under `.signalquarry/factor_reports/`. It accepts the same options as `factor evaluate`,
 including `--symbols`, `--seed`, `--planted-ic`, or a recorded `--dataset-id` with
-dated `--universe-manifest` paths. The report includes the factor's hypothesis,
-diagnostics by horizon, chronological-block IC and input identities. Recorded-data
+dated `--universe-manifest` paths. Each dated build may use a replay-verified exact
+prefix of the selected dataset: its original sessions, symbols, source, bar arrays
+and in-span actions must match. Keep its earlier manifest and cached inputs available
+for replay. The report includes the factor's hypothesis, diagnostics by horizon,
+chronological-block IC and input identities. Recorded-data
 diagnostics remain unverified; neither mode records a trial, assigns an evidence
 grade or accesses a holdout. Long-short spreads are statistics, not executable portfolios.
 
@@ -651,6 +654,33 @@ table; drawdown episodes and trading activity are always shown.
 
 Report-section plugins (`signalquarry.report_sections`) append their own headed
 sections to `report.md`.
+
+## Exploratory factor search
+
+After a human seals the factor family, `sqy factor search --family F --dataset-id D
+--universe-manifest PATH --training-cutoff YYYY-MM-DD --horizon 1 --seed 7 --budget 20`
+replays the selected dataset and dated universe builds. Repeat `--universe-manifest`
+for additional builds and `--accepted FACTOR_ID` for registered comparison factors.
+Any unavailable or unreplayable input refuses the search before recording trials.
+Each build may use an earlier dataset that is an exact prefix of the selected
+dataset. Keep the earlier manifests and cached inputs: their replay remains
+mandatory. The selected data, truncated to the earlier sessions and symbols,
+must reproduce its full identity, including source, absent bars, and splits and
+dividends whose ex-dates fall inside the earlier request span. Revisions inside
+that span refuse the search. Later bars do not change a build's membership.
+For each training session, the latest accepted build at or before that session
+supplies membership; sessions before the first build are ineligible.
+
+Training bars and forward outcomes are strictly before the cutoff and the sealed
+holdout. Counts, prior p-values and the fixed family budget come from the ledger;
+the whole requested candidate budget must fit. Each evaluated expression is
+recorded before returning. Identical retries check recorded results and append
+only missing trials after an interrupted search.
+
+The compact envelope links to `.signalquarry/factor_searches/ID/search.json` with
+all candidates and accounting. These are T1 proposals, with scope `exploratory`,
+grade `none` and no holdout access. They register no factors, write no project
+code, have no MCP tool, and never enter evidence exports, including NDA bundles.
 
 ## Publishing evidence
 
@@ -1332,7 +1362,9 @@ returns stable configuration identities, and `sqy check --factor-id ID` runs
 synthetic conformance. To inspect a registered factor on cached data, run
 `sqy factor evaluate --factor ID --dataset-id DATASET --universe-manifest PATH`
 and repeat `--universe-manifest` for each dated membership decision. The
-command verifies and replays those manifests, then returns descriptive metrics
+command verifies and replays those manifests, accepting builds on exact prefixes
+of the selected dataset when their original bars, source and in-span actions match.
+Keep the earlier dataset manifests and cached inputs for replay. It returns descriptive metrics
 with `data.scope: "unverified"`. It does not record a trial, assign an evidence
 grade, or access a holdout. Source completeness, full action history, ticker
 continuity and delisting outcomes remain unverified, so the output is not
@@ -1471,6 +1503,22 @@ Evaluate a factor and write a descriptive Markdown report with SVG charts.
 | `--symbols` | synthetic panel symbol count (default: 200) |
 | `--seed` | synthetic panel random seed (default: 7) |
 | `--planted-ic` | synthetic signal loading (default: 0.05) |
+| `--project` | project directory (default: search upwards) |
+
+### `sqy factor search`
+
+Spend sealed trial budget on exploratory formula proposals; grade none.
+
+| Option | Meaning |
+|---|---|
+| `--family` | sealed factor family (required) |
+| `--dataset-id` | locally recorded dataset manifest ID (required) |
+| `--universe-manifest` | verified dated universe build path; repeat for each build (required) |
+| `--training-cutoff` | exclusive training boundary (YYYY-MM-DD), before the sealed holdout (required) |
+| `--horizon` | forward-return horizon in sessions (required) |
+| `--seed` | deterministic search seed (required) |
+| `--budget` | candidate trials to spend; cannot widen family budget (required) |
+| `--accepted` | registered comparison factor ID; repeat for each factor |
 | `--project` | project directory (default: search upwards) |
 
 ### `sqy factor holdout seal`
@@ -2161,6 +2209,7 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `FACTOR_SEARCH_CONFIG_INVALID` | usage | Formula-search settings are invalid or exceed the configured bounds. | Use a bounded seed, horizon, FDR threshold, and family trial budget. |
 | `FACTOR_SEARCH_INPUT_INVALID` | data | Formula search needs aligned, dated panel, universe, and synthetic outcome inputs. | Provide immutable training rows, dated eligibility, and forward-label end sessions through the cutoff. |
 | `FACTOR_SEARCH_INPUT_UNVERIFIED` | evidence | Formula-search inputs have not passed the required identity, provenance or significance checks. | Verify input manifests, bind normalized formula identity and grammar, and provide a finite p-value in [0, 1]. |
+| `FACTOR_SEARCH_NONDETERMINISTIC` | evidence | Recomputed formula-search trials or artifacts differ from the recorded results. | Keep the input identities, grammar, comparison factors and trial history fixed; investigate the mismatch before retrying. |
 | `FACTOR_SPEC_INVALID` | usage | A registered factor's metadata is invalid. | Fix the reported factor.yaml field and schema version. |
 | `FACTOR_SPEC_MISSING` | usage | factor.yaml is missing next to a registered factor module. | Add a factor.yaml with an id, family, version, hypothesis and parameters. |
 | `FACTOR_SPEC_NOT_A_MAPPING` | usage | factor.yaml must contain a YAML mapping. | Use key-value fields matching signalquarry.factor/v1. |

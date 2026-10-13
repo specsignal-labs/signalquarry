@@ -55,7 +55,9 @@ returns stable configuration identities, and `sqy check --factor-id ID` runs
 synthetic conformance. To inspect a registered factor on cached data, run
 `sqy factor evaluate --factor ID --dataset-id DATASET --universe-manifest PATH`
 and repeat `--universe-manifest` for each dated membership decision. The
-command verifies and replays those manifests, then returns descriptive metrics
+command verifies and replays those manifests, accepting builds on exact prefixes
+of the selected dataset when their original bars, source and in-span actions match.
+Keep the earlier dataset manifests and cached inputs for replay. It returns descriptive metrics
 with `data.scope: "unverified"`. It does not record a trial, assign an evidence
 grade, or access a holdout. Source completeness, full action history, ticker
 continuity and delisting outcomes remain unverified, so the output is not

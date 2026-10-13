@@ -131,7 +131,32 @@ Four independently reviewable changes: (a) reason codes plus `factor holdout sea
 Rollout steps (a) and (b) exist: explicit human `factor holdout seal|status`, the
 `factor_holdouts` chained log, ledger-derived factor trial accounting, budget
 preflight, formula-aware idempotent trial append, and session-based training-window
-validation. Search, emission and holdout opening remain outside these steps.
+validation. Step (c) adds the T1 search API/CLI, structurally copied training
+inputs, calculated forward labels, whole-budget preflight, checked deterministic
+resume, formula trials and separate exploratory artifacts. Grade remains none;
+emission, budget extension, T2 and holdout opening remain unimplemented.
+
+Step (c) now accepts replayed universe builds on exact prefixes of the selected
+dataset (decision 7). The earlier cached dataset is reconstructed and its initial
+session calendar must match the selected dataset; truncation keeps its symbols,
+the selected source string, every bar-array value and presence mask, and splits
+and dividends with ex-dates inside the earlier request span. The resulting full
+dataset identity must equal the build's recorded identity. Dividend pay dates
+remain hashed even beyond that span. Revised or newly recorded in-span actions
+are refused; there is no approximate comparison or provenance upgrade.
+
+Successful search orchestration, planted discovery, determinism, isolation,
+budget enforcement and crash/resume use genuine cached-page and universe replay.
+The 200-panel null acceptance also records, builds, seals and searches each panel
+through T1. Recorded evaluation/report retain their unverified scope. The
+eight acceptance tests cover this path; this status does not authorize step (d)
+or T2.
+
+Look-ahead instrumentation perturbs all future arrays after genuine verification
+with fixed recorded provenance and requires byte-identical trials and artifacts.
+Separately recording changed future bars preserves training results and trial
+inputs, but changes provenance, search and trial hashes: section 3 still binds
+the full source dataset. Such a recording is not an identical-search retry.
 
 ## Decisions
 
@@ -152,6 +177,12 @@ Settled by the owner on 2026-10-06, following the recommendations proposed here.
    budget, may produce any discovery.
 5. **T1 results never appear in published evidence.**
 6. **Benjamini-Hochberg is applied per family,** as the search core does now, not across families.
+7. A universe build verified against a prefix of the selected dataset is valid for it. A build
+   is accepted for dataset `D` when the dataset it was verified against is a *prefix* of `D`:
+   the same symbols' bars, splits and dividends, identical on every session the earlier dataset
+   has, checked by hashing `D` truncated to that span. Nothing later than the build's own cutoff
+   can have influenced it, so no look-ahead is added. A build whose dataset is not a prefix is
+   refused as before.
 
 Related change, also decided 2026-10-06: a factor trial's identity is (family, configuration) in
 every evidence layout, so evaluating the same configuration under a second family is that family's
