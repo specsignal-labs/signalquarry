@@ -18,15 +18,15 @@ def _base():
 def test_attribution_report_top_ten_rest_and_exact_currency_totals():
     day = date(2025, 1, 6)
     block = attribution(
-        [day], [D(166)], D(100), [(day, f"S{i:02}", D(1), D(i), D(i)) for i in range(1, 12)], []
+        [day], [D(166)], D(100), [(day, f"SYM{i:02}", D(1), D(i), D(i)) for i in range(1, 12)], []
     )
     doc = _base()
     original = "\n".join(diagnostic_lines(doc))
     doc["attribution"] = block
     text = "\n".join(diagnostic_lines(doc))
     assert "## Attribution" in text and "Descriptive and in-sample" in text
-    assert text.index("| S11 |") < text.index("| S10 |") < text.index("| S02 |")
-    assert "| S01 |" not in text and "Remaining 1 symbols: P&L 1.00." in text
+    assert text.index("| SYM11 |") < text.index("| SYM10 |") < text.index("| SYM02 |")
+    assert "| SYM01 |" not in text and "Remaining 1 symbols: P&L 1.00." in text
     assert "Total P&L 66 = symbols 66 + fees 0 + remainder 0" in text
     assert "| 2025 | 66 | 0 | 0 | 66 |" in text
     assert "Herfindahl" in text and "largest single weight" in text
