@@ -58,7 +58,10 @@ def test_diagnose_backtest_cli_and_report(lab: tuple[Path, str], capsys: pytest.
     payload = json.loads(capsys.readouterr().out)
     assert payload["command"] == "diagnose" and payload["data"]["run_id"] == run_id
     assert payload["data"]["available"] == ["regimes", "costs"]
-    assert payload["next_actions"] == []
+    # The run has no positions artifact, so the one suggestion is how to get attribution.
+    assert [action["command"] for action in payload["next_actions"]] == [
+        "sqy backtest --strategy sma-trend --positions"
+    ]
     document = json.loads((project / payload["artifacts"][0]["path"]).read_text())
     assert result_hash_ok(document) and document["schema"] == "signalquarry.diagnostics/v1"
     result = json.loads((run_dir / "result.json").read_text())

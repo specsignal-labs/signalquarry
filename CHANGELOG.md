@@ -7,6 +7,9 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- Optional equity `sqy backtest --positions` artifacts and `research.Run.positions`, with
+  verified descriptive attribution by symbol and year, exact P&L reconciliation, closing
+  exposure and concentration in diagnose and reports; existing ledger hashes are unchanged.
 - `sqy study init --metric M --direction D` writes the comparison rule and a hypothesis that
   matches it. Without them the scaffold leaves both as `TODO` and `study check` and `study run`
   refuse it (`STUDY_SPEC_INVALID`): the scaffold no longer defaults to "higher Sharpe" beside a

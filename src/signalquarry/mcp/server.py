@@ -114,11 +114,13 @@ def sqy_backtest(
     end: str | None = None,
     params: list[str] | None = None,
     label: str | None = None,
+    positions: bool = False,
 ) -> dict[str, Any]:
     """Run a strategy backtest with optional ISO session boundaries.
 
     ``params`` are NAME=VALUE overrides for this run only (strategy.yaml is not changed; on
     real data a new configuration is a trial). ``label`` is a short name stored with the run.
+    ``positions`` records per-session equity holdings and marks for descriptive attribution.
     """
     first = _date(start, "backtest")
     last = _date(end, "backtest")
@@ -128,7 +130,13 @@ def sqy_backtest(
         return _result(last)
     return _result(
         api.backtest(
-            strategy_id, start=first, end=last, params=params or (), label=label, project=_path(project)
+            strategy_id,
+            start=first,
+            end=last,
+            params=params or (),
+            label=label,
+            positions=positions,
+            project=_path(project),
         )
     )
 

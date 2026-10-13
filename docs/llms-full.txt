@@ -390,6 +390,20 @@ label. On real data a new configuration is a trial like any other, and the run i
 refused beforehand if it would exceed the family's budget. Evaluation always reads
 `strategy.yaml`: to keep a variant, write its parameters there and freeze.
 
+Equity backtests can record closing holdings with `sqy backtest --strategy ID --positions`
+(or `api.backtest(..., positions=True)`). The additional `positions.csv` artifact contains
+`session,symbol,quantity,mark,value`, using the engine's own marks, including its fallback
+for missing bars and its split adjustments. The run's `result.json` then records
+`positions: true` and hashed accounting metadata: hashes of positions, fills and equity,
+plus per-session pending sale proceeds, dividend receivables and cash rounding residuals.
+`equity.csv` continues to record settled cash; these components bridge it to total equity.
+Collection is off by default and never changes the ledger hash. Options do not support it.
+
+A full backtest run contains `result.json`, `equity.csv`, `fills.csv` and `decisions.jsonl`,
+plus `benchmark.csv` when a benchmark is available and `positions.csv` when requested.
+Sweeps and studies write runs with position collection off. A summary run requested through
+the run API with positions retains fills, which attribution needs, but omits decisions.
+
 ### Parameter sweeps
 
 `sqy sweep --strategy <id> --param period=50,100,150` backtests a grid (up to 200
@@ -442,6 +456,7 @@ run = research.latest_run("sma-trend")  # or research.load_run(RUN_ID)
 run.metrics["sharpe"], run.params
 run.to_arrow()  # session, equity, returns, benchmark
 run.to_pandas()  # the same as a DataFrame, if pandas is installed
+run.positions  # closing holdings as an Arrow table, or None without positions.csv
 
 sweep = research.load_sweep(SWEEP_ID)
 sweep.to_arrow()  # one row per grid point
@@ -636,6 +651,29 @@ includes the newest verified diagnostics for its run when available.
   (design condition number above 1e12). Missing passive curves produce the warning
   `EXPOSURE_DATA_MISSING` and name every missing symbol; fetch those symbols on the
   strategy's feed over its sessions to retry.
+
+- **Attribution (with recorded positions):** symbol P&L is the sum of each closing
+  value minus its previous closing value minus buys less sells at fill prices.
+  It includes both realized and unrealized P&L, with each symbol's share of initial
+  cash, closing sessions held and average closing weight while held. Total P&L is
+  explicitly split into symbols, negative fill fees and a remainder. The remainder
+  contains dividends (including accrued receivables), cash rounding and other cash
+  flows not explained by holdings and fees; these inputs cannot separate those
+  components. Settlement transfers create no P&L. The same split is shown for each
+  calendar year, carrying previous-year closing values into the next year.
+  Exposure reports average invested share, sessions with holdings, average and
+  maximum holding counts, invested-session Herfindahl concentration and the largest
+  single weight and its date. Herfindahl uses weights normalized within the invested
+  holdings; closing equity weights exclude sessions with nonpositive equity.
+  Currency totals reconcile exactly in Decimal; returns use eight decimals and
+  ratios six. Diagnose verifies the file hashes and every session's marked value
+  plus settled cash, pending proceeds, receivables and rounding against recorded
+  equity. Damaged or mismatched artifacts make attribution unavailable with a reason.
+  No closing positions rows gives `insufficient`. Runs without positions have no
+  attribution section and suggest rerunning `sqy backtest --strategy ID --positions`.
+  The report shows the ten largest absolute symbol P&Ls, the rest's total, the
+  reconciliation, annual split, exposure and concentration. All are descriptive
+  and in-sample.
 
 All diagnostics are descriptive and never change a claim, gate or trial count.
 Cost reruns write no runs or trials; the original run directory is never modified.
@@ -1798,6 +1836,7 @@ Backtest a strategy and write run artifacts.
 | `--end` | last session (YYYY-MM-DD) |
 | `--param` | NAME=VALUE parameter override for this run only (repeatable); strategy.yaml is not changed |
 | `--label` | short name stored with the run |
+| `--positions` | record per-session equity holdings and marks for attribution |
 | `--project` | project directory (default: search upwards from cwd) |
 
 ## `sqy evidence`

@@ -21,6 +21,7 @@ import numpy as np
 import pyarrow as pa
 from numpy.typing import NDArray
 
+from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.data.dataset import FIELDS, MICRO, Dataset
 from signalquarry._internal.data.library import Library, LibraryError, dataset_from_manifest, select_manifest
 from signalquarry._internal.data.synthetic import synthetic_dataset
@@ -101,6 +102,16 @@ _FILLS_SCHEMA = pa.schema(
     ]
 )
 
+_POSITIONS_SCHEMA = pa.schema(
+    [
+        ("session", pa.date32()),
+        ("symbol", pa.string()),
+        ("quantity", pa.float64()),
+        ("mark", pa.float64()),
+        ("value", pa.float64()),
+    ]
+)
+
 
 @dataclass(frozen=True)
 class Run:
@@ -138,6 +149,38 @@ class Run:
     def grade(self) -> str | None:
         evidence: Mapping[str, Any] = self.document.get("evidence") or {}
         return cast(str | None, evidence.get("grade"))
+
+    @property
+    def positions(self) -> pa.Table | None:
+        """Closing holdings as an Arrow table, or None when the artifact is absent.
+
+        Numeric columns are floats, as in ``fills()``; the CSV retains exact decimals.
+        """
+        path = self.path / "positions.csv"
+        if not path.is_file():
+            return None
+        rows: list[dict[str, Any]] = []
+        try:
+            accounting: Mapping[str, Any] = self.document.get("positions_accounting") or {}
+            if file_sha256(path) != accounting.get("positions_sha256"):
+                raise ValueError("positions.csv does not match its recorded hash")
+            with path.open(encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                if reader.fieldnames != ["session", "symbol", "quantity", "mark", "value"]:
+                    raise ValueError("invalid header")
+                for row in reader:
+                    rows.append(
+                        {
+                            "session": date.fromisoformat(row["session"]),
+                            "symbol": row["symbol"],
+                            **{key: float(row[key]) for key in ("quantity", "mark", "value")},
+                        }
+                    )
+        except (OSError, KeyError, ValueError) as exc:
+            raise ResearchError(
+                "RUN_ARTIFACT_INVALID", f"{self.run_id}: positions.csv is unreadable or mismatched"
+            ) from exc
+        return pa.Table.from_pylist(rows, schema=_POSITIONS_SCHEMA)
 
     def fills(self) -> pa.Table:
         """Read fill rows; summary runs return an empty table with the same schema."""

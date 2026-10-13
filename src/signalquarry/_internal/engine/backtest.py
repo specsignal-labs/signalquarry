@@ -156,11 +156,21 @@ def ledger_hash_rows(
 
 @dataclass(frozen=True)
 class BacktestTick:
+    """A session ledger row, plus optional closing marks outside the ledger hash.
+
+    ``cash`` stays settled cash. ``valuation_cash`` includes pending proceeds,
+    dividend receivables and the valuation rounding residual, so marked holdings
+    plus this cash equals ``equity`` exactly.
+    """
+
     session: date
     decision: dict[str, Any]
     fills: tuple[Fill, ...]
     equity: Decimal
     cash: Decimal
+    positions: dict[str, tuple[Decimal, Decimal]] | None = None
+    positions_cash: tuple[Decimal, Decimal, Decimal] | None = None  # pending, receivable, rounding
+    valuation_cash: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -267,6 +277,17 @@ def _close_mark(dataset: Dataset, views: _Views, symbol: str, index: int) -> Dec
     return price if price is not None else ZERO
 
 
+def _position_marks(
+    dataset: Dataset, views: _Views, quantities: Mapping[str, Decimal], index: int
+) -> dict[str, tuple[Decimal, Decimal]]:
+    """Optional closing quantities and the exact marks used in account valuation."""
+    return {
+        symbol: (quantity, _close_mark(dataset, views, symbol, index))
+        for symbol, quantity in quantities.items()
+        if quantity
+    }
+
+
 def _state_or_raise(state: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
     if state is None:
         return current
@@ -287,6 +308,7 @@ def iter_equity_backtest(
     *,
     start: date | None = None,
     end: date | None = None,
+    positions: bool = False,
 ) -> Generator[BacktestTick, None, BacktestEnd]:
     """Yield pure session results; the caller owns storage and artifact I/O."""
     symbols = spec.data.symbols
@@ -404,16 +426,30 @@ def iter_equity_backtest(
             )
 
         # 6. mark at the close
-        value = positions_value(i, at_close=True)
+        marks = _position_marks(dataset, views, account.quantity, i) if positions else None
+        value = (
+            positions_value(i, at_close=True)
+            if marks is None
+            else sum((quantity * mark for quantity, mark in marks.values()), ZERO)
+        )
         cash_total = account.settled + account.pending_total() + account.receivable_total()
+        equity = _quantize_cash(cash_total + value)
+        cash = _quantize_cash(account.settled)
+        cash_parts = None
+        if positions:
+            pending, receivable = account.pending_total(), account.receivable_total()
+            cash_parts = (pending, receivable, equity - value - cash - pending - receivable)
         fills = tuple(result.fills)
         result.fills.clear()
         yield BacktestTick(
             session,
             record,
             fills,
-            _quantize_cash(cash_total + value),
-            _quantize_cash(account.settled),
+            equity,
+            cash,
+            marks,
+            cash_parts,
+            equity - value if positions else None,
         )
 
     return BacktestEnd(
