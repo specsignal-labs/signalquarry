@@ -14,6 +14,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import zlib
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from signalquarry._internal.canonical import canonical_hash, hash_without, to_canonical
+from signalquarry._internal.data import local
 from signalquarry._internal.data.alpaca import RawPage, actions_from_pages, bars_from_pages
 from signalquarry._internal.data.dataset import FIELDS, MICRO, Dataset, SymbolSeries
 
@@ -54,12 +56,18 @@ class Library:
         path = self.page_path(reference["sha256"])
         try:
             body = gzip.decompress(path.read_bytes())
-        except OSError as exc:
+        except (OSError, EOFError, zlib.error) as exc:
             raise LibraryError("DATA_PAGE_MISSING", reference["sha256"]) from exc
         if hashlib.sha256(body).hexdigest() != reference["sha256"]:
             raise LibraryError("DATA_PAGE_CORRUPT", reference["sha256"])
         return RawPage(
-            reference["endpoint"], reference["params"], body, reference["sha256"], json.loads(body)
+            reference["endpoint"],
+            reference["params"],
+            body,
+            reference["sha256"],
+            {}
+            if reference["endpoint"] in (local.BARS_ENDPOINT, local.ACTIONS_ENDPOINT)
+            else json.loads(body),
         )
 
     def manifests(self) -> list[dict[str, Any]]:
@@ -78,11 +86,19 @@ class Library:
         return path
 
 
-def build_dataset(bar_pages: list[RawPage], action_pages: list[RawPage], *, source: str) -> Dataset:
-    bars = bars_from_pages(bar_pages)
+def build_dataset(
+    bar_pages: list[RawPage], action_pages: list[RawPage], *, source: str, parser: str = "alpaca"
+) -> Dataset:
+    if parser not in ("alpaca", local.PARSER):
+        raise LibraryError("DATA_MANIFEST_INVALID", "unknown parser")
+    bars = local.bars_from_pages(bar_pages) if parser == local.PARSER else bars_from_pages(bar_pages)
     if not bars:
         raise LibraryError("DATA_EMPTY")
-    splits, dividends = actions_from_pages(action_pages)
+    splits, dividends = (
+        local.actions_from_pages(action_pages, set(bars))
+        if parser == local.PARSER
+        else actions_from_pages(action_pages)
+    )
     sessions = tuple(sorted({row["session"] for rows in bars.values() for row in rows}))
     index = {session: i for i, session in enumerate(sessions)}
     series: dict[str, SymbolSeries] = {}
@@ -153,9 +169,32 @@ def dataset_from_manifest(library: Library, manifest: dict[str, Any]) -> Dataset
         raise LibraryError("DATA_MANIFEST_INVALID", "schema")
     if hash_without(manifest, "manifest_hash") != manifest.get("manifest_hash"):
         raise LibraryError("DATA_MANIFEST_INVALID", "manifest_hash")
+    if manifest["provider"] == "local":
+        supplied = manifest.get("actions_supplied")
+        adjustment = manifest.get("adjustment")
+        expected_grade = "historical" if adjustment == "raw" and supplied is True else "historical_adjusted"
+        if (
+            manifest.get("parser") != local.PARSER
+            or manifest.get("feed") != "local"
+            or adjustment not in ("raw", "adjusted")
+            or not isinstance(supplied, bool)
+            or (adjustment == "adjusted" and supplied)
+            or manifest.get("evidence_grade") != expected_grade
+            or len(manifest["bar_pages"]) != 1
+            or len(manifest["action_pages"]) != int(supplied)
+            or any(ref["endpoint"] != local.BARS_ENDPOINT for ref in manifest["bar_pages"])
+            or any(ref["endpoint"] != local.ACTIONS_ENDPOINT for ref in manifest["action_pages"])
+        ):
+            raise LibraryError("DATA_MANIFEST_INVALID", "local declarations or parser")
     bar_pages = [library.load_page(ref) for ref in manifest["bar_pages"]]
     action_pages = [library.load_page(ref) for ref in manifest["action_pages"]]
-    dataset = build_dataset(bar_pages, action_pages, source=f"{manifest['provider']}:{manifest['feed']}")
+    parser = manifest.get("parser", "alpaca")
+    try:
+        dataset = build_dataset(
+            bar_pages, action_pages, source=f"{manifest['provider']}:{manifest['feed']}", parser=parser
+        )
+    except local.ImportError as exc:
+        raise LibraryError(exc.code, str(exc)) from exc
     if dataset.identity() != manifest["dataset_identity"]:
         raise LibraryError("DATA_IDENTITY_MISMATCH", manifest["dataset_id"])
     return dataset
@@ -165,4 +204,12 @@ def select_manifest(library: Library, symbols: tuple[str, ...], feed: str) -> di
     candidates = [
         m for m in library.manifests() if m.get("feed") == feed and set(symbols) <= set(m.get("symbols", []))
     ]
-    return max(candidates, key=lambda m: (m["end"], m["fetched_at"]), default=None)
+    return max(
+        candidates,
+        key=lambda m: (
+            (datetime.fromisoformat(m["imported_at"]), m["dataset_id"])
+            if feed == "local"
+            else (m["end"], m["fetched_at"])
+        ),
+        default=None,
+    )

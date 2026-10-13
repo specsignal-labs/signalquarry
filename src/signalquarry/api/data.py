@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -11,7 +12,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
-from signalquarry._internal.canonical import file_sha256
+from signalquarry._internal.canonical import canonical_hash, file_sha256, hash_without
+from signalquarry._internal.data import local
 from signalquarry._internal.data.action_observations import store_action_capture, verify_action_capture
 from signalquarry._internal.data.alpaca import AlpacaDataClient, ProviderError, RawPage
 from signalquarry._internal.data.credentials import load_data_credentials
@@ -143,6 +145,156 @@ def data_fetch(
     if missing:
         envelope.warnings.append("DATASET_SYMBOLS_MISSING")
         envelope.data["missing_symbols"] = missing
+    return envelope
+
+
+def data_import(
+    *,
+    bars: Path,
+    source: str,
+    adjustment: str,
+    actions: Path | None = None,
+    no_actions: bool = False,
+    license: str | None = None,
+    project: Path | None = None,
+) -> Envelope:
+    """Validate and record unchanged CSV bytes for replay; never contact a provider."""
+    envelope = Envelope(command="data import")
+    if (
+        adjustment not in ("raw", "adjusted")
+        or not source.strip()
+        or (actions is not None) == no_actions
+        or (adjustment == "adjusted" and actions is not None)
+    ):
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "usage",
+            ["USAGE_INVALID"],
+            "give --source, --adjustment raw|adjusted, and exactly one of --actions or --no-actions; adjusted forbids actions",
+        )
+        return envelope
+    try:
+        root = find_root(project)
+    except ProjectError as exc:
+        envelope.status, envelope.reason_codes, envelope.summary = "invalid", [exc.code], exc.detail
+        return envelope
+    try:
+        bar_body = bars.read_bytes()
+        action_body = actions.read_bytes() if actions is not None else None
+    except OSError:
+        envelope.status, envelope.reason_codes, envelope.summary = (
+            "invalid",
+            ["DATA_IMPORT_FILE_UNREADABLE"],
+            "bars or actions file could not be read",
+        )
+        return envelope
+    bar_pages = [RawPage(local.BARS_ENDPOINT, {}, bar_body, hashlib.sha256(bar_body).hexdigest(), {})]
+    action_pages = (
+        [RawPage(local.ACTIONS_ENDPOINT, {}, action_body, hashlib.sha256(action_body).hexdigest(), {})]
+        if action_body is not None
+        else []
+    )
+    try:
+        dataset = build_dataset(bar_pages, action_pages, source="local:local", parser=local.PARSER)
+    except local.ImportError as exc:
+        envelope.status, envelope.reason_codes, envelope.summary = "invalid", [exc.code], str(exc)
+        return envelope
+    quality = assess(dataset)
+    metadata = {
+        "parser": local.PARSER,
+        "source": source,
+        "license": license,
+        "adjustment": adjustment,
+        "actions_supplied": actions is not None,
+        "evidence_grade": "historical"
+        if adjustment == "raw" and actions is not None
+        else "historical_adjusted",
+    }
+    now = datetime.now(UTC)
+    manifest = make_manifest(
+        provider="local",
+        feed="local",
+        symbols=dataset.symbols,
+        start=dataset.sessions[0],
+        end=dataset.sessions[-1],
+        bar_pages=bar_pages,
+        action_pages=action_pages,
+        dataset=dataset,
+        fetched_at=now,
+    )
+    manifest.update(metadata)
+    # Bind declarations and byte identities as well as normalized rows. A different
+    # declaration must not overwrite an existing manifest or silently change its grade.
+    import_hash = canonical_hash(
+        {**metadata, "bar_pages": manifest["bar_pages"], "action_pages": manifest["action_pages"]}
+    )
+    manifest["dataset_id"] = f"local-local-1day-{import_hash[7:]}"
+    manifest["imported_at"] = manifest["fetched_at"]
+    manifest["manifest_hash"] = hash_without(manifest, "manifest_hash")
+    library = library_for(root)
+    path = library.manifest_dir / f"{manifest['dataset_id']}.json"
+    if path.exists():
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            dataset_from_manifest(library, manifest)
+        except LibraryError as exc:
+            envelope.status, envelope.reason_codes, envelope.summary = "blocked", [exc.code], str(exc)
+            return envelope
+        except (OSError, KeyError, TypeError, ValueError):
+            envelope.status, envelope.reason_codes, envelope.summary = (
+                "blocked",
+                ["DATA_MANIFEST_INVALID"],
+                "existing import manifest is invalid",
+            )
+            return envelope
+    else:
+        try:
+            for reference in [*manifest["bar_pages"], *manifest["action_pages"]]:
+                if library.page_path(reference["sha256"]).exists():
+                    library.load_page(reference)
+        except LibraryError as exc:
+            envelope.status, envelope.reason_codes, envelope.summary = "blocked", [exc.code], str(exc)
+            return envelope
+        for page in [*bar_pages, *action_pages]:
+            library.store_page(page)
+        library.write_manifest(manifest)
+    envelope.summary = (
+        f"{manifest['dataset_id']}: {len(dataset.symbols)} symbols, {len(dataset.sessions)} sessions"
+    )
+    envelope.data = {
+        "dataset_id": manifest["dataset_id"],
+        "dataset_identity": dataset.identity(),
+        "manifest": str(path.relative_to(root)),
+        "coverage": {
+            "symbols": len(dataset.symbols),
+            "sessions": len(dataset.sessions),
+            "bars": sum(row["count"] for row in manifest["coverage"].values()),
+        },
+        "splits": manifest["splits"],
+        "dividends": manifest["dividends"],
+        "quality": {
+            "ok": quality["ok"],
+            "findings": quality["findings"],
+            "common_window": quality["common_window"],
+            "missing_trading_days": len(quality["sessions"]["missing_trading_days"]),
+            "symbols_with_findings": sum(bool(row["findings"]) for row in quality["symbols"].values()),
+        },
+    }
+    envelope.evidence = {
+        "grade": manifest["evidence_grade"],
+        "provenance": "provenance supplied by the user",
+        "adjustment": manifest["adjustment"],
+        "actions_supplied": manifest["actions_supplied"],
+    }
+    envelope.warnings = list(quality["findings"])
+    if manifest["evidence_grade"] == "historical_adjusted":
+        envelope.warnings.append("DATA_IMPORT_CLAIM_CAPPED")
+    envelope.artifacts = [
+        {
+            "path": str(path.relative_to(root)),
+            "kind": "dataset_manifest",
+            "sha256": manifest["manifest_hash"].removeprefix("sha256:"),
+        }
+    ]
     return envelope
 
 
@@ -372,6 +524,11 @@ def data_ls(*, project: Path | None = None) -> Envelope:
             key: manifest.get(key)
             for key in ("dataset_id", "provider", "feed", "symbols", "start", "end", "sessions", "fetched_at")
         }
+        | (
+            {key: manifest[key] for key in ("adjustment", "evidence_grade")}
+            if manifest["provider"] == "local"
+            else {}
+        )
         for manifest in library.manifests()
     ]
     chains: dict[str, dict[str, Any]] = {}

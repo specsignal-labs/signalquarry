@@ -2,6 +2,84 @@
 
 # Market data
 
+## Importing daily bars from a local CSV
+
+Use a file you are entitled to use. Import runs offline, validates the entire input before
+writing, and assesses data quality; quality findings are returned as warnings and do not
+block a valid import.
+The import envelope returns finding codes and counts. Use `sqy data quality --dataset-id ID`
+for the full dates and symbol details. This keeps the import response bounded so a repeated
+import needs no new output artifact, even when a sparse file has years of missing sessions.
+
+```bash
+sqy data import --bars bars.csv --actions actions.csv --adjustment raw \
+  --source "Research vendor export" --license "Licence text as supplied" --project my-project
+sqy data import --bars adjusted.csv --no-actions --adjustment adjusted \
+  --source "Adjusted vendor export" --project my-project
+sqy data import --bars raw.csv --no-actions --adjustment raw \
+  --source "Export without actions" --project my-project
+sqy data verify --project my-project
+sqy data ls --project my-project
+```
+
+`--source` is required free text and `--license` is optional free text. Both are recorded
+exactly as supplied; neither is verified. Choose exactly one of `--actions` and
+`--no-actions`. Adjusted bars cannot be combined with an actions file.
+
+The UTF-8 bars CSV has this exact header, in this order:
+
+```csv
+session,symbol,open,high,low,close,volume
+2024-01-02,SPY,100.123456,101,99,100.5,1000000
+```
+
+Sessions use `YYYY-MM-DD` and must be NYSE trading sessions within the verified calendar
+range, 2016–2035. Symbols use the strategy format: 1–10 uppercase letters, digits or dots,
+starting with a letter. Prices are positive decimal text with at most six decimal places
+and must fit integer micro-dollars. High and low enclose open and close. Volume is finite
+and nonnegative, and can be fractional. Rows can be in any order; a repeated
+`(session, symbol)` is refused with its line number. A missing symbol row stays an absent
+bar, as with fetched data.
+
+The actions CSV has this exact header:
+
+```csv
+symbol,type,ex_date,pay_date,ratio,amount
+SPY,split,2024-02-01,,2,
+SPY,dividend,2024-03-01,2024-03-15,,0.50
+```
+
+A split needs a positive ratio of new shares per old share, with empty `pay_date` and
+`amount`. A dividend needs a nonnegative amount per share, a pay date on or after its ex-date,
+and an empty `ratio`. Action dates use `YYYY-MM-DD`; action symbols must occur in the bars.
+A repeated action type, symbol and ex-date is refused. An actions file containing only the
+header explicitly declares that there are no events; a completely empty file is refused.
+
+| Declaration | Evidence grade | Claim ceiling |
+|---|---|---|
+| `raw` with an actions file | `historical` | Existing gates, including the sealed holdout |
+| `adjusted` with `--no-actions` | `historical_adjusted` | `in_sample` |
+| `raw` with `--no-actions` | `historical_adjusted` | `in_sample` |
+
+Adjusted prices can incorporate future actions; raw bars without actions omit split and
+dividend economics. These cases cannot open a holdout or pass `paper preflight`, even when
+the evaluation gates pass. Every imported-data evidence block and report states
+“provenance supplied by the user”. Backtests, sweeps and studies record real-data trials.
+Results produced on imported data cannot be exported under any licence or publication tier.
+
+Set the strategy's `data.feed` to `local`. Resolution picks the most recently imported
+manifest covering all its symbols. Imports store the original file bytes as content-addressed
+pages in the existing private cache; committed manifests contain hashes, declarations,
+symbols and coverage, never prices. Verification rebuilds from those bytes. Re-importing
+identical bytes with the same source, licence and declarations returns the original manifest
+and leaves its timestamp unchanged. Different declarations get separate manifests while
+the normalized dataset identity remains determined by the rows, actions and `local:local`
+source. No provider plugin, universe import or dataset pin is required.
+
+The equivalent Python entry point is `signalquarry.api.data_import(bars=Path(...),
+source="...", adjustment="raw", actions=Path(...), project=Path(...))`; use
+`no_actions=True` when omitting the actions file.
+
 ## Credentials
 
 Set `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`, or create

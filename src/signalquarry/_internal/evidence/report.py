@@ -25,6 +25,20 @@ DISCLAIMER = (
 )
 
 
+def _import_lines(evidence: dict[str, Any]) -> list[str]:
+    lines = []
+    if evidence.get("provenance"):
+        lines.append("> provenance supplied by the user.")
+    if evidence.get("grade") == "historical_adjusted":
+        reason = (
+            "adjusted prices can contain future corporate actions"
+            if evidence.get("adjustment") == "adjusted"
+            else "no actions file was supplied, so splits and dividends are not modelled"
+        )
+        lines.append(f"> Claims are capped at `in_sample` because {reason}.")
+    return lines
+
+
 def _percent(value: Any) -> str:
     return "–" if value is None else f"{float(value):.2%}"
 
@@ -237,6 +251,7 @@ def render_report(
     ]
     if grade == "synthetic":
         lines.append("> Synthetic data: these numbers say nothing about real markets.")
+    lines += _import_lines(evidence)
     lines += [
         "",
         "## Hypothesis",
@@ -390,6 +405,7 @@ def render_comparison(comparison: dict[str, Any], *, labels: dict[str, str], cha
     ]
     if "synthetic" in grades:
         lines.append("> Synthetic data: these numbers say nothing about real markets.")
+    lines += _import_lines(comparison.get("evidence") or {})
     if not comparison["comparable"]:
         lines += [
             ">",
@@ -482,6 +498,7 @@ def render_study(result: dict[str, Any], *, chart: bool) -> str:
     ]
     if grade == "synthetic":
         lines.append("> Synthetic data: these numbers say nothing about real markets.")
+    lines += _import_lines(result["evidence"])
     lines += [
         "",
         "## Hypothesis",

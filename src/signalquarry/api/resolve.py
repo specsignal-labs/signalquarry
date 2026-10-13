@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from signalquarry._internal.data.dataset import Dataset
 from signalquarry._internal.data.library import Library, LibraryError, dataset_from_manifest, select_manifest
@@ -38,6 +39,14 @@ class Resolved:
     dataset: Dataset
     grade: str
     dataset_id: str
+    import_metadata: dict[str, Any] | None = None
+
+    @property
+    def evidence_provenance(self) -> dict[str, Any]:
+        """Additive evidence declarations for imported data only."""
+        if self.import_metadata is None:
+            return {}
+        return {"provenance": "provenance supplied by the user", **self.import_metadata}
 
     def recorded_chains(self) -> dict[tuple[str, date], dict[str, tuple[Decimal, Decimal]]] | None:
         """Real recorded option quotes for options strategies on real data (never with synthetic bars)."""
@@ -78,7 +87,10 @@ class Resolved:
     def evidence_grade(self) -> str:
         """What results on this data may be called: options prices are modelled, so never better
         than ``low_evidence_options`` (``synthetic`` stays ``synthetic``)."""
-        if self.grade != "synthetic" and self.strategy.spec.kind == "options_single_leg":
+        if (
+            self.grade not in ("synthetic", "historical_adjusted")
+            and self.strategy.spec.kind == "options_single_leg"
+        ):
             return "low_evidence_options"
         return self.grade
 
@@ -101,7 +113,7 @@ def resolve(command: str, strategy_id: str, project: Path | None) -> Resolved | 
             summary=strategy_id,
             data={"strategies": sorted(strategies)},
         )
-    if config.provider == "synthetic":
+    if config.provider == "synthetic" and strategy.spec.data.feed != "local":
         return Resolved(
             root,
             strategy,
@@ -112,15 +124,20 @@ def resolve(command: str, strategy_id: str, project: Path | None) -> Resolved | 
     library = library_for(root)
     manifest = select_manifest(library, strategy.spec.data.symbols, strategy.spec.data.feed)
     if manifest is None:
+        is_local = strategy.spec.data.feed == "local"
         return Envelope(
             command=command,
             status="unavailable",
             reason_codes=["PROVIDER_UNAVAILABLE"],
-            summary=f"no fetched {strategy.spec.data.feed} dataset covers {', '.join(strategy.spec.data.symbols)}",
+            summary=f"no {'imported' if is_local else 'fetched'} {strategy.spec.data.feed} dataset covers {', '.join(strategy.spec.data.symbols)}",
             next_actions=[
                 {
-                    "command": f"sqy data fetch --strategy {strategy_id}",
-                    "why": "Fetch and record the data first.",
+                    "command": "sqy data import --help"
+                    if is_local
+                    else f"sqy data fetch --strategy {strategy_id}",
+                    "why": "Import and record the data first."
+                    if is_local
+                    else "Fetch and record the data first.",
                 }
             ],
         )
@@ -136,4 +153,29 @@ def resolve(command: str, strategy_id: str, project: Path | None) -> Resolved | 
                 {"command": "sqy data verify", "why": "The cached data no longer matches its manifest."}
             ],
         )
-    return Resolved(root, strategy, dataset, "historical", manifest["dataset_id"])
+    metadata = (
+        {key: manifest[key] for key in ("adjustment", "actions_supplied")}
+        if manifest["provider"] == "local"
+        else None
+    )
+    resolved = Resolved(
+        root,
+        strategy,
+        dataset,
+        manifest.get("evidence_grade", "historical"),
+        manifest["dataset_id"],
+        metadata,
+    )
+    if command == "paper preflight" and resolved.grade == "historical_adjusted":
+        return Envelope(
+            command=command,
+            status="blocked",
+            reason_codes=["DATA_IMPORT_CLAIM_CAPPED"],
+            summary="paper preflight requires raw data with dated actions; this import is capped at in_sample",
+            evidence={
+                "grade": resolved.evidence_grade,
+                "claim_level": "in_sample",
+                **resolved.evidence_provenance,
+            },
+        )
+    return resolved

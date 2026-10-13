@@ -68,6 +68,11 @@ def report(strategy_id: str, *, run_id: str | None = None, project: Path | None 
     result_dir, result = backtests[-1] if backtests else (None, None)
     configuration = (result or evaluations[-1][1])["configuration_hash"]
     matching = [item for item in evaluations if item[1]["configuration_hash"] == configuration]
+    recorded: dict[str, Any] = (result or {}).get("evidence") or {}
+    if result is not None and recorded.get("provenance"):
+        # Two imports of the same bars can differ only in what was declared about them, and so
+        # in what they may claim: an evaluation counts for this run only on the same dataset.
+        matching = [item for item in matching if item[1].get("dataset_id") == result["dataset_id"]]
     evaluation = matching[-1][1] if matching else None
     if evaluation is None:
         envelope.next_actions.append(

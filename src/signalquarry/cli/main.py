@@ -235,6 +235,23 @@ def _configure_diagnose(parser: argparse.ArgumentParser) -> None:
 
 def _configure_data(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", required=True, parser_class=_Parser)
+    importer = actions.add_parser("import", help="Import entitled daily-bar CSV files for local replay.")
+    importer.add_argument(
+        "--bars", required=True, type=Path, help="bars CSV: session,symbol,open,high,low,close,volume"
+    )
+    importer.add_argument("--source", required=True, help="source description recorded exactly as supplied")
+    importer.add_argument("--license", help="optional licence text recorded exactly as supplied")
+    importer.add_argument(
+        "--adjustment",
+        required=True,
+        choices=("raw", "adjusted"),
+        help="raw with actions: historical; adjusted or no actions: in_sample ceiling",
+    )
+    action_choice = importer.add_mutually_exclusive_group(required=True)
+    action_choice.add_argument("--actions", type=Path, help="dated splits/dividends CSV (raw only)")
+    action_choice.add_argument(
+        "--no-actions", action="store_true", help="explicitly omit actions; claim ceiling is in_sample"
+    )
     quality = actions.add_parser("quality", help="Inspect dataset completeness and consistency.")
     selection = quality.add_mutually_exclusive_group(required=True)
     selection.add_argument("--strategy", help="assess the dataset and history available to this strategy")
@@ -286,6 +303,16 @@ def _configure_data(parser: argparse.ArgumentParser) -> None:
 
 
 def _data(args: argparse.Namespace) -> Envelope:
+    if args.action == "import":
+        return api.data_import(
+            bars=args.bars,
+            source=args.source,
+            adjustment=args.adjustment,
+            actions=args.actions,
+            no_actions=args.no_actions,
+            license=args.license,
+            project=args.project,
+        )
     if args.action == "quality":
         return api.data_quality(strategy_id=args.strategy, dataset_id=args.dataset_id, project=args.project)
     if args.action == "fetch":

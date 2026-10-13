@@ -133,3 +133,37 @@ Any daily data a user is entitled to use becomes usable, under the same replay a
 point-in-time rules as fetched data, and the difference between a raw and an adjusted series is
 visible in what a result is allowed to claim. The cost is a second code path for data and one
 more grade to explain.
+
+## Implementation status
+
+The core import/replay path is present. First-rollout acceptance is not complete: the
+research evidence writers still need provenance fields, the panel loader still needs the
+manifest's grade, and imported reports need to match evaluations by dataset as well as
+configuration. These integrations must land before shipping this rollout.
+
+The first rollout implements the local daily CSV import on the existing page-cache,
+manifest and replay path. It uses `--bars`, requires `--source`, `--adjustment` and exactly
+one of `--actions` or `--no-actions`, and records the optional licence verbatim. Local
+manifests name the versioned parser and evidence grade; legacy Alpaca manifests keep their
+format and default parser.
+
+Raw bars with an actions file support `historical`; adjusted bars or raw bars without
+actions support `historical_adjusted`, capped at `in_sample`. Imported results declare
+user-supplied provenance and cannot be exported, including the NDA tier. Capped imports
+cannot open the holdout or pass paper preflight. The provider plugin group, Parquet,
+universe import and `data.dataset` pin are deferred.
+
+The fixed format accepts unordered rows and fractional volume. It rejects duplicate bars
+and duplicate action keys, invalid OHLC values and unknown action symbols before writing.
+An actions header alone declares no events; an entirely empty actions file is invalid.
+Sessions outside the repository's verified NYSE calendar (2016–2035) are refused instead
+of being accepted with weekend-only validation. Local selection uses import time rather
+than coverage end date. Re-importing the same bytes and declarations preserves the
+original manifest and timestamp; changed declarations get a separate manifest, so an
+adjustment change cannot overwrite evidence for an earlier import.
+
+Acceptance compares normalized decisions, fills and equity between FakeAlpaca fetches and
+CSV imports: source participates in dataset identity, and the strategy feed participates
+in configuration identity, so complete ledger hashes differ across those sources. Two
+projects importing the same bytes and declarations have identical dataset identities and
+ledger hashes. The demo configuration hash and synthetic identity remain unchanged.

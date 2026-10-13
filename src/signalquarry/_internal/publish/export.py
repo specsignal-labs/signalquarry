@@ -53,6 +53,34 @@ class StrategyEvidence:
     configuration_hash: str
 
 
+def refuse_imported_evidence(root: Path, family: str, strategy_ids: set[str]) -> None:
+    """Refuse the entire family before touching an output, including older evidence.
+
+    Trial dataset ids survive a changed feed or deleted manifest. Run declarations
+    also cover studies/baselines that did not record a strategy trial.
+    """
+
+    def imported(document: dict[str, Any]) -> bool:
+        evidence = document.get("evidence") or {}
+        return (
+            str(document.get("dataset_id", "")).startswith("local-local-1day-")
+            or evidence.get("provenance") == "provenance supplied by the user"
+            or evidence.get("grade") == "historical_adjusted"
+        )
+
+    for entry in all_entries(root, "trials"):
+        if entry.get("family") == family and imported(entry):
+            raise ExportError("DATA_IMPORT_EXPORT_REFUSED", "family has evidence on imported data")
+    for strategy_id in strategy_ids:
+        for name in ("result.json", "evaluation.json"):
+            if any(imported(document) for _, document in _runs(root, name, strategy_id)):
+                raise ExportError("DATA_IMPORT_EXPORT_REFUSED", "family has evidence on imported data")
+    for path in (root / ".signalquarry" / "studies").glob("*/study.json"):
+        document = json.loads(path.read_text(encoding="utf-8"))
+        if (document.get("family") == family or document.get("base") in strategy_ids) and imported(document):
+            raise ExportError("DATA_IMPORT_EXPORT_REFUSED", "family has a study on imported data")
+
+
 def _write(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -311,6 +339,11 @@ def build_bundle(
     ]
     if wrong_family:
         raise ExportError("PUBLICATION_FAMILY_MISMATCH", ",".join(wrong_family))
+    refuse_imported_evidence(
+        root,
+        publication.family,
+        {key for key, value in strategies.items() if value.spec.family == publication.family},
+    )
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)

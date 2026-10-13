@@ -28,7 +28,7 @@ class Hypothesis(_Strict):
 class DataSpec(_Strict):
     symbols: tuple[str, ...] = Field(min_length=1, max_length=500)
     fields: tuple[Literal["open", "high", "low", "close", "volume"], ...] = ("close",)
-    feed: Literal["sip", "iex", "synthetic"] = "sip"
+    feed: Literal["sip", "iex", "synthetic", "local"] = "sip"
     price_basis: Literal["pit_split"] = "pit_split"
     max_staleness_sessions: int = Field(default=3, ge=0, le=30)
 

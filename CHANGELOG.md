@@ -7,6 +7,10 @@ change provisional surfaces after deprecation).
 ## [Unreleased] — 0.2.0
 
 ### Added
+- `sqy data import` and `signalquarry.api.data_import` validate entitled daily-bar CSV files
+  and dated actions, store unchanged bytes for replay, and resolve strategies with `feed: local`.
+  Imported evidence states user-supplied provenance, is never exported, and is capped at
+  `in_sample` for adjusted bars or omitted actions.
 - `sqy study init --metric M --direction D` writes the comparison rule and a hypothesis that
   matches it. Without them the scaffold leaves both as `TODO` and `study check` and `study run`
   refuse it (`STUDY_SPEC_INVALID`): the scaffold no longer defaults to "higher Sharpe" beside a
