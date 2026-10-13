@@ -66,3 +66,4 @@ nav:
       - "0015 Research studies (proposed)": adr/0015-research-studies.md
       - "0016 Dataset import and providers (proposed)": adr/0016-dataset-import-and-providers.md
       - "0017 Point-in-time features and models (proposed)": adr/0017-point-in-time-features-and-models.md
+      - "0018 Scope before 1.0": adr/0018-scope-before-1-0.md
