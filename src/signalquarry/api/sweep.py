@@ -240,6 +240,7 @@ def sweep(
     length = min(len(s) for s in series)
     pbo = pbo_cscv(np.column_stack([s[-length:] for s in series])) if len(series) >= 2 else None
     envelope.evidence = {
+        **resolved.evidence_provenance,
         "grade": resolved.evidence_grade,
         "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
         "trial": None

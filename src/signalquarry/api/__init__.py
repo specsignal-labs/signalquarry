@@ -183,6 +183,7 @@ from signalquarry.api.commit import commit_create, commit_reveal, commit_verify 
 from signalquarry.api.data import (  # noqa: E402
     data_capture_actions,
     data_fetch,
+    data_import,
     data_ls,
     data_probe_options,
     data_quality,
@@ -254,6 +255,7 @@ __all__ = [
     "commit_verify",
     "data_capture_actions",
     "data_fetch",
+    "data_import",
     "data_ls",
     "data_probe_options",
     "data_quality",

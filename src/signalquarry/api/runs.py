@@ -237,6 +237,7 @@ def commit_run(
         )
     run_id = unique_run_id(root, new_run_id(strategy.configuration_hash, datetime.now(UTC)))
     evidence = {
+        **resolved.evidence_provenance,
         "grade": resolved.evidence_grade,
         "claim_level": "none" if resolved.grade == "synthetic" else "in_sample",
         "holdout": holdout_state(root, spec.family),
@@ -514,6 +515,14 @@ def runs_compare(run_ids: Sequence[str], *, project: Path | None = None) -> Enve
             for directory, series in loaded
         ]
     )
+    imported = [
+        series.document["evidence"] for _, series in loaded if series.document["evidence"].get("provenance")
+    ]
+    provenance = {}
+    if imported:
+        source = next((item for item in imported if item["grade"] == "historical_adjusted"), imported[0])
+        provenance = {key: source[key] for key in ("provenance", "adjustment", "actions_supplied")}
+        comparison["evidence"] = {"grade": source["grade"], **provenance}
     comparison_id = unique_run_id(root, f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}-compare", kind="comparisons")
     files: dict[str, str | bytes | Iterable[str | bytes]] = {
         "comparison.json": result_document(
@@ -535,6 +544,7 @@ def runs_compare(run_ids: Sequence[str], *, project: Path | None = None) -> Enve
             else f"{len(run_ids)} runs are not comparable: {', '.join(comparison['reasons'])}"
         ),
         evidence={
+            **provenance,
             "grade": grades.pop() if len(grades) == 1 else "mixed",
             "claim_level": min(
                 claims, key=lambda claim: _CLAIM_ORDER.index(claim) if claim in _CLAIM_ORDER else 0

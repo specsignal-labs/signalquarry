@@ -233,6 +233,8 @@ def evaluate(
 def claim_level(evaluation: Evaluation, *, grade: str, frozen: bool, conformance_ok: bool) -> str:
     if grade == "synthetic" or not conformance_ok:
         return "none"
+    if grade == "historical_adjusted":
+        return "in_sample"
     # Plugin gates are add-only: a failing one caps the claim, a passing one unlocks nothing.
     if any(not gate.get("ok") for name, gate in evaluation.gates.items() if name.startswith("plugin:")):
         return "in_sample"

@@ -439,7 +439,7 @@ def load_panel(
         raise ResearchError("STRATEGY_NOT_FOUND", strategy)
     spec = loaded.spec
     dataset: Dataset
-    if config.provider == "synthetic":
+    if config.provider == "synthetic" and spec.data.feed != "local":
         wanted = spec.data.symbols + (
             (spec.benchmark,) if spec.benchmark and spec.benchmark not in spec.data.symbols else ()
         )
@@ -456,7 +456,7 @@ def load_panel(
             dataset = dataset_from_manifest(library, manifest)
         except LibraryError as exc:
             raise ResearchError(exc.code, str(exc)) from exc
-        dataset_id, grade = str(manifest["dataset_id"]), "historical"
+        dataset_id, grade = str(manifest["dataset_id"]), str(manifest.get("evidence_grade", "historical"))
     seal = _family_seal(root, spec.family)
     if grade != "synthetic" and seal is None:
         raise ResearchError(

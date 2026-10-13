@@ -237,6 +237,16 @@ def decide(ctx: Ctx, p: P) -> Decision:
 | 10-fold walk-forward | < 15 s |
 
 **Data**
+- **Local daily CSV imports (ADR 0016, first rollout):** `data.local` is a pure parser for
+  fixed bars/actions headers with coded, line-numbered refusals. `api.data.data_import`
+  validates and assesses before storing unchanged bytes through `data.library`; local
+  manifests declare `parser: local-csv/v1`, adjustment, supplied actions and evidence grade.
+  Replay dispatches to that parser; manifests without a parser retain the existing Alpaca
+  path and hashes. The `local` feed selects the latest covering import. User-declared
+  provenance accompanies evidence and reports; adjusted or action-free imports stop at
+  `in_sample` and cannot open a holdout or pass paper preflight. Publication refuses families
+  with imported-data evidence before touching an output. Provider plugins, universe import
+  and dataset pins are deferred.
 - **`MarketDataProvider` protocol:** capabilities, bars, corporate_actions, calendar, assets, option_contracts (incl. expired), option_bars, option_snapshot, normalize. Every call returns `RawPage{endpoint, params, bytes, sha256}`. Providers register under `signalquarry.providers`, and capabilities gate features.
 - **Alpaca adapter** (seeded from `research_data/client.py`):
   - explicit `feed`, `adjustment=raw`, `asof`, `limit=10000`, at most 100 symbols per request;
@@ -494,7 +504,7 @@ Parsed from the source, so this is what the code does, not what it should do.
 | `validation` | `(package)`, `benchmark`, `compare`, `conformance`, `diagnostics`, `evaluate`, `exposure`, `factor_conformance`, `factor_holdouts`, `factor_trials`, `ledger`, `metrics`, `regimes`, `sensitivity`, `stats` |
 | `factors` | `(package)`, `evaluate`, `expr`, `labels`, `search` |
 | `engine` | `(package)`, `asset_backtest`, `backtest`, `factors`, `lifecycle`, `options_sim`, `reference`, `run` |
-| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |
+| `data` | `(package)`, `action_observations`, `alpaca`, `asset_dataset`, `credentials`, `dataset`, `identity`, `library`, `lifecycle`, `local`, `panel`, `quality`, `synthetic`, `universe`, `universe_build` |
 | `project` | `(package)`, `agents_md`, `factors`, `project` |
 | `options` | `(package)`, `chains`, `contracts`, `resolver`, `wheel` |
 | `sdk` | `(package)`, `context`, `decision`, `factors`, `options`, `portfolio`, `strategy`, `ta`, `xs` |
@@ -524,6 +534,7 @@ flowchart LR
   c_factor --> c_factor_holdout_seal["holdout seal"]
   c_factor --> c_factor_holdout_status["holdout status"]
   sqy --> c_data["data"]
+  c_data --> c_data_import["import"]
   c_data --> c_data_quality["quality"]
   c_data --> c_data_fetch["fetch"]
   c_data --> c_data_capture_actions["capture-actions"]

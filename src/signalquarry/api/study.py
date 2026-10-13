@@ -364,13 +364,21 @@ def _grade(document: Mapping[str, Any]) -> Any:
 
 
 def _strategy_document(arm: _Arm, document: Mapping[str, Any]) -> dict[str, Any]:
+    evidence: Mapping[str, Any] = document.get("evidence") or {}
     return {
         "run_id": arm.id,
         "source_run": document.get("run_id"),
         "strategy_id": document.get("strategy_id"),
         "configuration_hash": document.get("configuration_hash"),
         "dataset_identity": document.get("dataset_identity"),
-        "evidence": {"grade": _grade(document)},
+        "evidence": {
+            "grade": _grade(document),
+            **{
+                key: evidence[key]
+                for key in ("provenance", "adjustment", "actions_supplied")
+                if key in evidence
+            },
+        },
         "metrics": document.get("metrics") or {},
         "params": document.get("params") or {},
         "spec": document.get("spec") or {},
@@ -544,7 +552,7 @@ def _benchmark_arm(plan: _Plan, arm: _Arm, subject: _Done, dataset_identity: str
         "strategy_id": f"{arm.kind}:{arm.symbol}",
         "configuration_hash": None,
         "dataset_identity": dataset_identity,
-        "evidence": {"grade": plan.subject.evidence_grade},
+        "evidence": {"grade": plan.subject.evidence_grade, **plan.subject.evidence_provenance},
         "metrics": summarize(sessions, equity, initial, fills=fills, fees=fees),
     }
     return _Done(
@@ -758,7 +766,11 @@ def study_run(study_id: str, *, rerun: bool = False, jobs: int = 1, project: Pat
     if len(candidates) >= 2 and len({len(item.series.returns) for item in candidates}) == 1:
         pbo = pbo_cscv(np.column_stack([item.series.returns for item in candidates]))
     claim = "none" if not real else "in_sample"
-    evidence = {"grade": plan.subject.evidence_grade, "claim_level": claim}
+    evidence = {
+        "grade": plan.subject.evidence_grade,
+        "claim_level": claim,
+        **plan.subject.evidence_provenance,
+    }
     result: dict[str, Any] = {
         "study_id": study_id,
         "study_hash": plan.study_hash,

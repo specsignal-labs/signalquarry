@@ -1289,6 +1289,80 @@ _CODES += (
         "Rerun `sqy factor report` with the factor configuration held fixed.",
     ),
 )
+_CODES += (
+    ReasonCode(
+        "DATA_IMPORT_HEADER_INVALID",
+        Category.DATA,
+        "The local CSV header is missing or differs from the fixed format.",
+        "Use the documented bars or actions header in the stated order.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_VALUE_INVALID",
+        Category.DATA,
+        "A local CSV value cannot be represented or violates its field constraints.",
+        "Correct the named field on the reported line using the documented CSV format.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_PRECISION",
+        Category.DATA,
+        "A local price has more than six decimal places.",
+        "Use decimal price text with at most six fractional digits.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_PRICE_NONPOSITIVE",
+        Category.DATA,
+        "A local price is zero or negative.",
+        "Correct the price on the reported line; prices must be positive.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_OHLC_INVALID",
+        Category.DATA,
+        "A local bar's high and low do not enclose its open and close.",
+        "Correct the bar on the reported line.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_DUPLICATE",
+        Category.DATA,
+        "The local CSV repeats a bar or dated action key.",
+        "Remove the duplicate row at the reported line.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_SESSION_INVALID",
+        Category.DATA,
+        "A bar date is closed on the NYSE or outside the verified calendar range.",
+        "Supply NYSE trading sessions within the documented calendar range.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_ACTION_SYMBOL",
+        Category.DATA,
+        "An imported action refers to a symbol absent from the bars.",
+        "Correct the action symbol or include that symbol's bars.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_EMPTY",
+        Category.DATA,
+        "The imported file is empty or the bars contain no rows.",
+        "Provide bars with the required header and at least one row; an actions header alone declares no events.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_FILE_UNREADABLE",
+        Category.DATA,
+        "The local bars or actions file could not be read.",
+        "Check the file path and read permissions.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_CLAIM_CAPPED",
+        Category.EVIDENCE,
+        "Adjusted prices or omitted actions cap imported evidence at in_sample and cannot open a holdout or pass paper preflight.",
+        "For stronger claims use raw bars with a dated actions file.",
+    ),
+    ReasonCode(
+        "DATA_IMPORT_EXPORT_REFUSED",
+        Category.EVIDENCE,
+        "Evidence produced on imported data cannot be published or exported.",
+        "Keep this family's imported-data research local, regardless of the declared licence.",
+    ),
+)
 REASON_CODES: dict[str, ReasonCode] = {item.code: item for item in _CODES}
 
 

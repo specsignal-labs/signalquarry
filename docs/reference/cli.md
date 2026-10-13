@@ -124,6 +124,20 @@ Read factor seals and ledger-derived trial usage.
 
 Fetch, verify and list recorded market data.
 
+### `sqy data import`
+
+Import entitled daily-bar CSV files for local replay.
+
+| Option | Meaning |
+|---|---|
+| `--bars` | bars CSV: session,symbol,open,high,low,close,volume (required) |
+| `--source` | source description recorded exactly as supplied (required) |
+| `--license` | optional licence text recorded exactly as supplied |
+| `--adjustment` | raw with actions: historical; adjusted or no actions: in_sample ceiling (required; one of `raw`, `adjusted`) |
+| `--actions` | dated splits/dividends CSV (raw only) |
+| `--no-actions` | explicitly omit actions; claim ceiling is in_sample |
+| `--project` | project directory (default: search upwards from cwd) |
+
 ### `sqy data quality`
 
 Inspect dataset completeness and consistency.

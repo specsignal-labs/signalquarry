@@ -199,6 +199,7 @@ def spec_freeze(strategy_id: str, *, project: Path | None = None) -> Envelope:
             "vcs_dirty": entry["vcs_dirty"],
         },
         evidence={
+            **resolved.evidence_provenance,
             "grade": resolved.grade,
             "claim_level": "none",
             "holdout": holdout_state(root, spec.family),
@@ -225,6 +226,17 @@ def evaluate_command(
     root, strategy = resolved.root, resolved.strategy
     spec = strategy.spec
     envelope = Envelope(command="evaluate")
+    if resolved.grade == "historical_adjusted":
+        envelope.warnings.append("DATA_IMPORT_CLAIM_CAPPED")
+        envelope.evidence = {
+            "grade": resolved.evidence_grade,
+            "claim_level": "in_sample",
+            **resolved.evidence_provenance,
+        }
+        if open_holdout:
+            envelope.status, envelope.reason_codes = "blocked", ["DATA_IMPORT_CLAIM_CAPPED"]
+            envelope.summary = "adjusted prices or omitted actions cap this import at in_sample; the holdout cannot be opened"
+            return envelope
     freeze = ledger.latest_freeze(root, spec.id)
     frozen = freeze is not None and freeze["configuration_hash"] == strategy.configuration_hash
     if freeze is not None and not frozen:
@@ -341,6 +353,7 @@ def evaluate_command(
         if key in result.oos
     }
     envelope.evidence = {
+        **resolved.evidence_provenance,
         "grade": resolved.evidence_grade,
         "claim_level": claim,
         "holdout": holdout_state(root, spec.family),

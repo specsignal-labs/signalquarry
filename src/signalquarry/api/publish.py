@@ -13,7 +13,12 @@ from signalquarry._internal.canonical import file_sha256
 from signalquarry._internal.contracts.publication import load_publication, publication_path
 from signalquarry._internal.evidence.verify import verify_bundle
 from signalquarry._internal.project.project import ProjectError, find_root, load_config, load_strategies
-from signalquarry._internal.publish.export import ExportError, StrategyEvidence, build_bundle
+from signalquarry._internal.publish.export import (
+    ExportError,
+    StrategyEvidence,
+    build_bundle,
+    refuse_imported_evidence,
+)
 from signalquarry._internal.validation.ledger import ChainedLog, LedgerError
 from signalquarry.api.envelope import Envelope
 
@@ -41,6 +46,13 @@ def evidence_export(
             [exc.code],
             exc.detail or exc.code,
         )
+        return envelope
+    try:
+        refuse_imported_evidence(
+            root, family, {key for key, value in strategies.items() if value.spec.family == family}
+        )
+    except (ExportError, LedgerError) as exc:
+        envelope.status, envelope.reason_codes, envelope.summary = "blocked", [exc.code], str(exc)
         return envelope
     path = publication_path(root, family)
     if path is None:

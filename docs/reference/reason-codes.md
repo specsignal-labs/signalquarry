@@ -36,6 +36,18 @@ Codes are append-only: never renamed or removed. `sqy explain <CODE>` prints one
 | `DATA_CREDENTIALS_REJECTED` | environment | Alpaca rejected the market-data credentials (HTTP 401/403). | Check APCA_API_KEY_ID/APCA_API_SECRET_KEY; paper keys work for market data. |
 | `DATA_EMPTY` | data | The provider returned no bars for the request. | Check symbols and the date range. |
 | `DATA_IDENTITY_MISMATCH` | data | Cached pages rebuild to a different dataset than the manifest records. | Re-fetch; never edit manifests by hand. |
+| `DATA_IMPORT_ACTION_SYMBOL` | data | An imported action refers to a symbol absent from the bars. | Correct the action symbol or include that symbol's bars. |
+| `DATA_IMPORT_CLAIM_CAPPED` | evidence | Adjusted prices or omitted actions cap imported evidence at in_sample and cannot open a holdout or pass paper preflight. | For stronger claims use raw bars with a dated actions file. |
+| `DATA_IMPORT_DUPLICATE` | data | The local CSV repeats a bar or dated action key. | Remove the duplicate row at the reported line. |
+| `DATA_IMPORT_EMPTY` | data | The imported file is empty or the bars contain no rows. | Provide bars with the required header and at least one row; an actions header alone declares no events. |
+| `DATA_IMPORT_EXPORT_REFUSED` | evidence | Evidence produced on imported data cannot be published or exported. | Keep this family's imported-data research local, regardless of the declared licence. |
+| `DATA_IMPORT_FILE_UNREADABLE` | data | The local bars or actions file could not be read. | Check the file path and read permissions. |
+| `DATA_IMPORT_HEADER_INVALID` | data | The local CSV header is missing or differs from the fixed format. | Use the documented bars or actions header in the stated order. |
+| `DATA_IMPORT_OHLC_INVALID` | data | A local bar's high and low do not enclose its open and close. | Correct the bar on the reported line. |
+| `DATA_IMPORT_PRECISION` | data | A local price has more than six decimal places. | Use decimal price text with at most six fractional digits. |
+| `DATA_IMPORT_PRICE_NONPOSITIVE` | data | A local price is zero or negative. | Correct the price on the reported line; prices must be positive. |
+| `DATA_IMPORT_SESSION_INVALID` | data | A bar date is closed on the NYSE or outside the verified calendar range. | Supply NYSE trading sessions within the documented calendar range. |
+| `DATA_IMPORT_VALUE_INVALID` | data | A local CSV value cannot be represented or violates its field constraints. | Correct the named field on the reported line using the documented CSV format. |
 | `DATA_MANIFEST_INVALID` | data | A dataset manifest is malformed or its manifest_hash does not match. | Restore the manifest from version control or re-fetch. |
 | `DATA_PAGE_CORRUPT` | data | A cached raw page no longer matches its recorded hash. | Delete the cache entry and re-fetch. |
 | `DATA_PAGE_MISSING` | data | A raw page referenced by a manifest is not in the local cache. | Re-run `sqy data fetch` for that dataset. |
