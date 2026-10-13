@@ -31,6 +31,8 @@ dependencies = [
 [project.optional-dependencies]
 ots = ["opentimestamps-client>=0.7,<1"]
 mcp = ["mcp>=2.2,<3"]
+# For signalquarry.research in notebooks; the core does not import either.
+notebook = ["pandas>=2.2,<4", "matplotlib>=3.8,<4"]
 
 [project.scripts]
 signalquarry = "signalquarry.cli.main:main"
